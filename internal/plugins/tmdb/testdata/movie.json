@@ -1,0 +1,33 @@
+{
+  "id": 603,
+  "imdb_id": "tt0133093",
+  "title": "The Matrix",
+  "original_title": "The Matrix",
+  "overview": "A hacker learns the truth.",
+  "release_date": "1999-03-30",
+  "runtime": 136,
+  "status": "Released",
+  "poster_path": "/poster.jpg",
+  "genres": [{"id": 28, "name": "Action"}, {"id": 878, "name": "Science Fiction"}],
+  "external_ids": {"imdb_id": "tt0133093", "tvdb_id": null},
+  "alternative_titles": {"titles": [
+    {"iso_3166_1": "DE", "title": "Matrix"},
+    {"iso_3166_1": "US", "title": "The Matrix"},
+    {"iso_3166_1": "FR", "title": "Matrix"},
+    {"iso_3166_1": "JP", "title": ""}
+  ]},
+  "release_dates": {"results": [
+    {"iso_3166_1": "US", "release_dates": [
+      {"type": 1, "release_date": "1999-03-24T00:00:00.000Z"},
+      {"type": 3, "release_date": "1999-03-31T00:00:00.000Z"},
+      {"type": 4, "release_date": "2008-12-01T00:00:00.000Z"},
+      {"type": 5, "release_date": "1999-09-21T00:00:00.000Z"},
+      {"type": 5, "release_date": "bad-date"}
+    ]},
+    {"iso_3166_1": "GB", "release_dates": [
+      {"type": 2, "release_date": "1999-06-11T00:00:00.000Z"},
+      {"type": 3, "release_date": "1999-06-12T00:00:00.000Z"},
+      {"type": 4, "release_date": "2007-01-01T00:00:00.000Z"}
+    ]}
+  ]}
+}

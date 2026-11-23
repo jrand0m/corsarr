@@ -1,0 +1,24 @@
+# One container. Downloads and the library must be mounted at the SAME path the
+# download client uses, on one filesystem, so imports are hardlinks, not copies.
+services:
+  corsarr:
+    image: ghcr.io/jrand0m/corsarr:latest
+    restart: unless-stopped
+    ports: ["8090:8090"]
+    user: "65532:65532"            # /data must be writable by this user
+    command: ["--configFile=/etc/corsarr/corsarr.yml"]
+    environment:
+      TMDB_API_KEY: ${TMDB_API_KEY}
+      INDEXER_API_KEY: ${INDEXER_API_KEY}
+      PLEX_TOKEN: ${PLEX_TOKEN}
+      NTFY_URL: ${NTFY_URL}
+    secrets: [qbit_password]
+    volumes:
+      - ./corsarr.example.yml:/etc/corsarr/corsarr.yml:ro
+      - corsarr-data:/data
+      - /srv/media:/media            # downloads + library on one filesystem
+secrets:
+  qbit_password:
+    file: ./qbit_password.txt
+volumes:
+  corsarr-data: {}

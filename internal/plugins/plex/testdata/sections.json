@@ -1,0 +1,5 @@
+{"MediaContainer":{"size":3,"allowSync":false,"Directory":[
+  {"key":"1","type":"movie","title":"Movies","Location":[{"id":1,"path":"/media/movies"}]},
+  {"key":"2","type":"movie","title":"Kids Movies","Location":[{"id":2,"path":"/media/movies/kids"},{"id":5,"path":"/media/kids2/"}]},
+  {"key":"3","type":"show","title":"TV","Location":[{"id":3,"path":"/media/tv"}]}
+]}}

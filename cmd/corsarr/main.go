@@ -1,0 +1,99 @@
+// Command corsarr is the single-binary media automation server.
+//
+//	corsarr [serve]                         run the server (default)
+//	corsarr healthcheck                     exit 0 when the running server is ready
+//	corsarr config validate [--plan]        validate the active config source
+//	corsarr config export [--format=yaml|env] [--full]
+//	corsarr config schema                   print the JSON Schema
+//	corsarr version
+//
+// Configuration args (`--server.address=:8090`, `--configFile=…`) may follow
+// any subcommand; exactly one configuration source is used per start.
+package main
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+
+	"github.com/jrand0m/corsarr/internal/config"
+	"github.com/jrand0m/corsarr/internal/plugin"
+
+	_ "github.com/jrand0m/corsarr/internal/plugins" // registers every built-in plugin
+)
+
+var version = "dev"
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
+	os.Exit(run(ctx, os.Args[1:], os.Environ(), os.Stdout, os.Stderr))
+}
+
+// cli is one parsed invocation.
+type cli struct {
+	cmd     []string // e.g. ["config", "export"]
+	flags   map[string]string
+	cfgArgs []string
+	in      config.Inputs
+	stdout  io.Writer
+	stderr  io.Writer
+}
+
+// commandFlags are subcommand flags, kept out of the config args.
+var commandFlags = map[string]bool{"plan": true, "format": true, "full": true}
+
+func parse(args, environ []string, stdout, stderr io.Writer) cli {
+	c := cli{flags: map[string]string{}, stdout: stdout, stderr: stderr}
+	for _, a := range args {
+		name, val, _ := strings.Cut(strings.TrimPrefix(a, "--"), "=")
+		switch {
+		case !strings.HasPrefix(a, "-"):
+			c.cmd = append(c.cmd, a)
+		case commandFlags[name]:
+			c.flags[name] = val
+		default:
+			c.cfgArgs = append(c.cfgArgs, a)
+		}
+	}
+	c.in = config.OSInputs(c.cfgArgs)
+	c.in.Environ = environ
+	return c
+}
+
+func run(ctx context.Context, args, environ []string, stdout, stderr io.Writer) int {
+	c := parse(args, environ, stdout, stderr)
+	switch strings.Join(c.cmd, " ") {
+	case "", "serve":
+		return c.serve(ctx, nil)
+	case "healthcheck":
+		return c.healthcheck()
+	case "version":
+		fmt.Fprintln(stdout, "corsarr", version)
+		return 0
+	case "config validate":
+		return c.validate()
+	case "config export":
+		return c.export()
+	case "config schema":
+		_, _ = stdout.Write(config.NewSchema(plugin.Default).JSONSchema())
+		return 0
+	}
+	fmt.Fprintf(stderr, "unknown command %q (serve | healthcheck | config validate|export|schema | version)\n", strings.Join(c.cmd, " "))
+	return 2
+}
+
+// load reads the active config source; errors are printed one per line.
+func (c cli) load() (*config.Config, bool) {
+	cfg, err := config.Load(c.in, plugin.Default)
+	if err != nil {
+		fmt.Fprintln(c.stderr, "configuration invalid:")
+		fmt.Fprintln(c.stderr, err)
+		return nil, false
+	}
+	return cfg, true
+}

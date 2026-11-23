@@ -1,0 +1,191 @@
+/*
+ * corsarr design tokens. Normative source; DESIGN.md documents them.
+ * Theme: OS default via `color-scheme: light dark`; the user override sets
+ * <html data-theme="light|dark">. Every colour token is light-dark(light, dark).
+ * Browsers resolve light-dark() where the custom property is declared, so the
+ * tokens are re-declared on any element carrying data-theme: that is how a
+ * subtree (a story panel, an always-dark region) gets its own theme.
+ * Components use only the semantic tokens below (never raw oklch values).
+ */
+:root,
+[data-theme] {
+  color-scheme: light dark;
+
+  /* ── Surfaces: galvanised steel ─────────────────────────────────────── */
+  --surface-ground: light-dark(oklch(0.972 0.003 75), oklch(0.17 0.005 60));
+  --surface-raised: light-dark(oklch(0.995 0.001 75), oklch(0.205 0.006 60));
+  --surface-sunken: light-dark(oklch(0.945 0.004 75), oklch(0.15 0.005 60));
+  --surface-overlay: light-dark(oklch(1 0 0), oklch(0.235 0.007 60));
+  --surface-hover: light-dark(oklch(0.93 0.005 75), oklch(0.265 0.007 60));
+  --surface-pressed: light-dark(oklch(0.9 0.006 75), oklch(0.3 0.008 60));
+  --surface-selected: light-dark(oklch(0.94 0.028 255), oklch(0.28 0.05 255));
+  --surface-inverse: light-dark(oklch(0.25 0.008 60), oklch(0.93 0.006 75));
+
+  /* ── Ink ────────────────────────────────────────────────────────────── */
+  --ink: light-dark(oklch(0.22 0.008 60), oklch(0.93 0.006 75));
+  --ink-muted: light-dark(oklch(0.43 0.01 60), oklch(0.76 0.008 75));
+  --ink-subtle: light-dark(oklch(0.5 0.01 60), oklch(0.68 0.008 75));
+  --ink-disabled: light-dark(oklch(0.66 0.006 60), oklch(0.48 0.006 75));
+  --ink-inverse: light-dark(oklch(0.97 0.003 75), oklch(0.2 0.006 60));
+  --ink-on-accent: light-dark(oklch(0.99 0 0), oklch(0.16 0.02 255));
+
+  /* ── Lines ──────────────────────────────────────────────────────────── */
+  --line: light-dark(oklch(0.89 0.005 75), oklch(0.3 0.006 60));
+  --line-strong: light-dark(oklch(0.6 0.008 60), oklch(0.56 0.008 75));
+
+  /* ── Accent: container cobalt (action, selection, focus, links) ─────── */
+  --accent: light-dark(oklch(0.5 0.15 255), oklch(0.72 0.12 255));
+  --accent-hover: light-dark(oklch(0.44 0.135 255), oklch(0.78 0.11 255));
+  --accent-pressed: light-dark(oklch(0.39 0.12 255), oklch(0.83 0.075 255));
+  --accent-ink: light-dark(oklch(0.47 0.15 255), oklch(0.78 0.11 255));
+  --accent-tint: light-dark(oklch(0.95 0.022 255), oklch(0.27 0.05 255));
+  --danger: light-dark(oklch(0.5 0.18 27), oklch(0.72 0.14 25));
+  --danger-hover: light-dark(oklch(0.44 0.16 27), oklch(0.78 0.12 25));
+  --ink-on-danger: light-dark(oklch(0.99 0 0), oklch(0.17 0.03 25));
+  --focus-ring: light-dark(oklch(0.52 0.17 255), oklch(0.75 0.13 255));
+
+  /* ── Shell: Corten oxide rail ───────────────────────────────────────── */
+  --shell-bg: light-dark(oklch(0.33 0.065 42), oklch(0.235 0.04 42));
+  --shell-ink: light-dark(oklch(0.96 0.012 70), oklch(0.93 0.012 70));
+  --shell-ink-muted: light-dark(oklch(0.83 0.025 60), oklch(0.77 0.02 60));
+  --shell-hover: light-dark(oklch(0.39 0.07 42), oklch(0.29 0.045 42));
+  --shell-active: light-dark(oklch(0.45 0.08 42), oklch(0.34 0.05 42));
+  --shell-line: light-dark(oklch(0.42 0.06 42), oklch(0.32 0.04 42));
+
+  /* ── State tones. ink = text/icon on tint or surface (≥4.5:1);
+        tint = badge/banner fill; line = tinted border; solid = bars, dots,
+        bay cells (≥3:1 on surfaces). ────────────────────────────────── */
+  --tone-ok-ink: light-dark(oklch(0.43 0.11 150), oklch(0.82 0.12 150));
+  --tone-ok-tint: light-dark(oklch(0.95 0.04 150), oklch(0.26 0.04 150));
+  --tone-ok-line: light-dark(oklch(0.8 0.08 150), oklch(0.42 0.07 150));
+  --tone-ok-solid: light-dark(oklch(0.56 0.13 150), oklch(0.7 0.14 150));
+
+  --tone-warn-ink: light-dark(oklch(0.47 0.1 65), oklch(0.85 0.12 80));
+  --tone-warn-tint: light-dark(oklch(0.95 0.05 85), oklch(0.27 0.045 75));
+  --tone-warn-line: light-dark(oklch(0.8 0.1 80), oklch(0.45 0.07 75));
+  --tone-warn-solid: light-dark(oklch(0.63 0.14 65), oklch(0.78 0.14 75));
+
+  --tone-error-ink: light-dark(oklch(0.49 0.17 27), oklch(0.8 0.11 25));
+  --tone-error-tint: light-dark(oklch(0.95 0.022 25), oklch(0.27 0.05 25));
+  --tone-error-line: light-dark(oklch(0.8 0.08 25), oklch(0.45 0.09 25));
+  --tone-error-solid: light-dark(oklch(0.56 0.19 27), oklch(0.68 0.17 25));
+
+  --tone-info-ink: light-dark(oklch(0.46 0.075 225), oklch(0.82 0.08 225));
+  --tone-info-tint: light-dark(oklch(0.95 0.025 225), oklch(0.26 0.035 225));
+  --tone-info-line: light-dark(oklch(0.8 0.05 225), oklch(0.43 0.06 225));
+  --tone-info-solid: light-dark(oklch(0.56 0.1 225), oklch(0.7 0.1 225));
+
+  --tone-neutral-ink: light-dark(oklch(0.43 0.01 60), oklch(0.78 0.008 75));
+  --tone-neutral-tint: light-dark(oklch(0.93 0.005 75), oklch(0.26 0.006 60));
+  --tone-neutral-line: light-dark(oklch(0.82 0.006 75), oklch(0.4 0.007 60));
+  --tone-neutral-solid: light-dark(oklch(0.58 0.008 60), oklch(0.62 0.008 75));
+
+  --tone-managed-ink: light-dark(oklch(0.46 0.15 300), oklch(0.8 0.1 300));
+  --tone-managed-tint: light-dark(oklch(0.95 0.025 300), oklch(0.27 0.05 300));
+  --tone-managed-line: light-dark(oklch(0.8 0.07 300), oklch(0.44 0.09 300));
+  --tone-managed-solid: light-dark(oklch(0.54 0.16 300), oklch(0.7 0.13 300));
+
+  /* ── Media kind hues (fallback art, calendar chips). Never the only cue. */
+  --kind-tv: light-dark(oklch(0.5 0.085 200), oklch(0.74 0.1 200));
+  --kind-movie: light-dark(oklch(0.5 0.12 20), oklch(0.74 0.11 20));
+  --kind-music: light-dark(oklch(0.5 0.13 320), oklch(0.74 0.11 320));
+  --kind-book: light-dark(oklch(0.5 0.1 110), oklch(0.74 0.1 110));
+  /* Fills for missing-art fallbacks: quieter in dark, always with --ink-on-kind. */
+  --kind-tv-fill: light-dark(oklch(0.5 0.085 200), oklch(0.42 0.06 200));
+  --kind-movie-fill: light-dark(oklch(0.5 0.12 20), oklch(0.42 0.08 20));
+  --kind-music-fill: light-dark(oklch(0.5 0.13 320), oklch(0.42 0.08 320));
+  --kind-book-fill: light-dark(oklch(0.5 0.1 110), oklch(0.42 0.06 110));
+  --ink-on-kind: light-dark(oklch(0.99 0 0), oklch(0.97 0.005 75));
+
+  /* ── Type ───────────────────────────────────────────────────────────── */
+  --font-sans: system-ui, -apple-system, 'Segoe UI Variable Text', 'Segoe UI', Roboto, 'Noto Sans', Ubuntu, Cantarell, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Noto Sans Mono', Menlo, Consolas, monospace;
+  --text-2xs: 0.6875rem; /* 11px: bay-cell labels, kbd only */
+  --text-xs: 0.75rem;    /* 12px: meta, captions, badge (compact) */
+  --text-sm: 0.8125rem;  /* 13px: compact table cells, badges */
+  --text-md: 0.875rem;   /* 14px: table cells, controls, labels */
+  --text-base: 1rem;     /* 16px: body, phone controls, prose */
+  --text-lg: 1.125rem;   /* 18px: section title */
+  --text-xl: 1.375rem;   /* 22px: page title */
+  --text-2xl: 1.75rem;   /* 28px: entity title, first-run */
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ── Space (4 px base) ──────────────────────────────────────────────── */
+  --space-0: 0;
+  --space-px: 1px;
+  --space-0-5: 0.125rem; /* 2 */
+  --space-1: 0.25rem;    /* 4 */
+  --space-1-5: 0.375rem; /* 6 */
+  --space-2: 0.5rem;     /* 8 */
+  --space-3: 0.75rem;    /* 12 */
+  --space-4: 1rem;       /* 16 */
+  --space-5: 1.25rem;    /* 20 */
+  --space-6: 1.5rem;     /* 24 */
+  --space-8: 2rem;       /* 32 */
+  --space-10: 2.5rem;    /* 40 */
+  --space-12: 3rem;      /* 48 */
+  --space-16: 4rem;      /* 64 */
+
+  /* ── Sizing and density ─────────────────────────────────────────────── */
+  --target-min: 2.75rem;     /* 44px: phone touch target */
+  --control-h-sm: 1.75rem;   /* 28 */
+  --control-h-md: 2.25rem;   /* 36 */
+  --control-h-lg: 2.75rem;   /* 44 */
+  --row-h-comfortable: 2.75rem; /* 44 */
+  --row-h-compact: 2rem;        /* 32, desktop only */
+  --icon-sm: 0.875rem;  /* 14 */
+  --icon-md: 1rem;      /* 16 */
+  --icon-lg: 1.25rem;   /* 20 */
+  --measure: 68ch;
+  --rail-w: 13.5rem;
+  --bp-phone: 768px;    /* documentation only: media queries use (width < 48rem) */
+
+  /* ── Shape ──────────────────────────────────────────────────────────── */
+  --radius-xs: 2px;   /* bay cells, kbd, progress */
+  --radius-sm: 3px;   /* badges, chips, checkbox */
+  --radius-md: 5px;   /* buttons, inputs, menus */
+  --radius-lg: 8px;   /* cards, dialogs, drawers */
+  --radius-round: 999px; /* switch, avatar, status dot */
+  --border-w: 1px;
+  --focus-w: 2px;
+  --focus-offset: 2px;
+
+  /* ── Elevation (overlays only; surfaces are flat) ───────────────────── */
+  --shadow-sm: 0 1px 2px light-dark(oklch(0.2 0.01 60 / 0.1), oklch(0 0 0 / 0.4));
+  --shadow-md: 0 4px 12px -2px light-dark(oklch(0.2 0.01 60 / 0.14), oklch(0 0 0 / 0.5));
+  --shadow-lg: 0 12px 32px -6px light-dark(oklch(0.2 0.01 60 / 0.2), oklch(0 0 0 / 0.6));
+  /* Backdrop of modal dialogs, drawers and the palette: a flat veil, never blurred. */
+  --scrim: light-dark(oklch(0.2 0.01 60 / 0.36), oklch(0.05 0 0 / 0.62));
+  --z-sticky: 10;
+  --z-drawer: 40;
+  --z-dialog: 50;
+  --z-toast: 60;
+  --z-tooltip: 70;
+
+  /* ── Motion ─────────────────────────────────────────────────────────── */
+  --dur-instant: 80ms;
+  --dur-fast: 140ms;
+  --dur-base: 200ms;
+  --dur-slow: 280ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-linear: linear;
+}
+
+[data-theme='light'] { color-scheme: light; }
+[data-theme='dark'] { color-scheme: dark; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0ms;
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+  }
+}

@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: UI — install, check, test, build
+        working-directory: ui
+        run: |
+          npm ci --no-audit --no-fund
+          npm run check
+          npm run test
+          npm run build
+      - name: Go — format and vet
+        run: |
+          test -z "$(gofmt -l cmd internal)" || { gofmt -l cmd internal; exit 1; }
+          go vet ./...
+      - name: Go — tests (race detector)
+        run: go test -race -timeout 900s ./...
+      - name: Complexity gate (CRAP < 10)
+        run: scripts/quality.sh
+      - name: Size and idle-memory budget
+        run: |
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o bin/corsarr-linux-amd64 ./cmd/corsarr
+          scripts/budget.sh bin/corsarr-linux-amd64
+
+  cross-compile:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build and vet ${{ matrix.goos }}/${{ matrix.goarch }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          go vet ./...
+          go build -trimpath -ldflags "-s -w" -o /dev/null ./cmd/corsarr

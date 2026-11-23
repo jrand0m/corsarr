@@ -1,0 +1,13 @@
+/bin/
+/dist/
+/data/
+*.db
+*.db-wal
+*.db-shm
+node_modules/
+ui/storybook-static/
+internal/web/dist/*
+!internal/web/dist/.keep
+coverage.out
+.DS_Store
+.env

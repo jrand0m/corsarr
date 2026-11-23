@@ -1,0 +1,306 @@
+// Wire types of the corsarr /api/v1 surface the web UI reads (Go: internal/domain, internal/api,
+// internal/{movies,queue,automation,importer,plugin}). Only the fields the screens use are typed.
+import type { MediaKind } from '../../lib/tokens';
+
+export interface ItemRef { kind: MediaKind; id: number }
+
+export interface Movie {
+  id: number;
+  tmdbId: number;
+  imdbId?: string;
+  title: string;
+  originalTitle?: string;
+  year: number;
+  runtimeMin?: number;
+  inCinemas?: string;
+  digital?: string;
+  physical?: string;
+  monitored: boolean;
+  minAvailability: 'announced' | 'inCinemas' | 'released';
+  profileKey: string;
+  rootFolder: string;
+  path: string;
+  fileId?: number;
+  addedAt: string;
+}
+
+export interface MovieRecord {
+  ids: Record<string, string>;
+  title: string;
+  originalTitle?: string;
+  year: number;
+  overview?: string;
+  runtimeMin?: number;
+  status?: string;
+  inCinemas?: string;
+  digital?: string;
+  physical?: string;
+  posterUrl?: string;
+  genres?: string[];
+}
+
+export interface AddMovieRequest {
+  tmdbId: number;
+  rootFolder: string;
+  profileKey: string;
+  monitored: boolean;
+  minAvailability: string;
+  searchNow: boolean;
+}
+
+// ── TV ─────────────────────────────────────────────────────────────────
+
+export type SeriesStatus = 'continuing' | 'ended' | 'upcoming' | '';
+export type SeriesType = 'standard' | 'anime' | 'daily';
+export type MonitorMode = 'all' | 'future' | 'missing' | 'existing' | 'firstSeason' | 'latestSeason' | 'pilot' | 'none';
+
+export interface Series {
+  id: number;
+  tmdbId: number;
+  tvdbId?: number;
+  imdbId?: string;
+  title: string;
+  sortTitle?: string;
+  year: number;
+  status: SeriesStatus;
+  network?: string;
+  overview?: string;
+  genres?: string[] | null;
+  runtimeMin?: number;
+  altTitles?: string[] | null;
+  posterUrl?: string;
+  rootFolder: string;
+  path: string;
+  profileKey: string;
+  tags?: string[] | null;
+  seriesType: SeriesType;
+  seasonFolders: boolean;
+  monitorNew: 'all' | 'none';
+  monitored: boolean;
+  addedAt: string;
+}
+
+export interface SeriesStats {
+  seasonCount: number;
+  /** Monitored episodes that have aired. */
+  episodeCount: number;
+  episodeFileCount: number;
+  totalEpisodeCount: number;
+  sizeOnDisk: number;
+  nextAiring?: string | null;
+  previousAiring?: string | null;
+}
+
+export interface SeriesSummary extends Series { stats: SeriesStats }
+
+export interface SeriesRecord {
+  ids: { tmdb: string; tvdb?: string; imdb?: string };
+  title: string;
+  year: number;
+  network?: string;
+  status?: SeriesStatus;
+  overview?: string;
+  posterUrl?: string;
+  seasonCount?: number;
+  genres?: string[] | null;
+  runtimeMin?: number;
+  /** 0 when the series is not in the library. */
+  libraryId: number;
+}
+
+export interface Season {
+  number: number;
+  monitored: boolean;
+  episodeCount: number;
+  airedCount: number;
+  monitoredCount: number;
+  fileCount: number;
+  sizeOnDisk: number;
+}
+
+export type EpisodeStatus = 'downloaded' | 'missing' | 'notAired' | 'unmonitored';
+
+export interface Episode {
+  id: number;
+  seriesId: number;
+  season: number;
+  number: number;
+  absolute?: number;
+  title: string;
+  airAt: string | null;
+  runtimeMin?: number;
+  monitored: boolean;
+  fileId?: number;
+  inMetadata: boolean;
+  status: EpisodeStatus;
+  file?: { path: string; size: number; quality: string; cutoffMet: boolean };
+}
+
+export interface SeriesDetail { series: SeriesSummary; seasons: Season[] | null; episodes: Episode[] | null }
+
+export interface WantedEpisode {
+  episode: Episode;
+  series: { id: number; title: string; year: number; posterUrl?: string };
+  reason: 'missing' | 'cutoff_unmet';
+  available: boolean;
+}
+
+export interface QualityProfile { key: string; name: string; kind: string; cutoff: string; upgrades: boolean; isDefault: boolean }
+
+export interface RootFolder {
+  path: string; kind: MediaKind; accessible: boolean; freeSpace: number;
+  writable?: boolean; problem?: '' | 'missing' | 'read-only' | 'full'; lastChecked?: string;
+}
+
+export type DownloadState =
+  | 'queued' | 'downloading' | 'stalled' | 'completed' | 'import-pending' | 'importing' | 'import-blocked' | 'imported' | 'failed' | 'removed';
+
+export interface Download {
+  id: number;
+  downloader: string;
+  downloadId: string;
+  protocol: string;
+  kind: MediaKind;
+  grabId: number;
+  title: string;
+  state: DownloadState;
+  links: { item: ItemRef; status: string }[] | null;
+  progress: number;
+  size: number;
+  downloaded: number;
+  speed: number;
+  eta: number;
+  seeders: number;
+  peers: number;
+  category: string;
+  held: boolean;
+  statusReason?: string;
+  addedAt: string;
+}
+
+export type ReasonCategory = 'safety' | 'permanent' | 'preference' | 'temporary';
+export interface Reason { ruleId: string; category: ReasonCategory; message: string }
+
+export interface Release {
+  id: string;
+  title: string;
+  protocol: 'torrent' | 'usenet' | 'source';
+  size: number;
+  publishedAt: string;
+  indexers: { key: string; name: string }[] | null;
+  infoHash?: string;
+  guid?: string;
+  seeders: number;
+  peers: number;
+}
+
+export interface Decision {
+  releaseId: string;
+  accepted: boolean;
+  reasons: Reason[] | null;
+  quality: string;
+  resolution: number;
+  formatScore: number;
+  rankKey: string;
+  override: 'allowed' | 'confirm' | 'never';
+}
+
+export interface Decided { release: Release; decision: Decision }
+
+/** One line of GET /movies/{id}/releases (NDJSON). */
+export type ReleaseLine =
+  | { record: Decided }
+  | { error: { source: string; message: string } }
+  | { summary: { done: true; count: number; errors: number; indexers: number; failed: number; releases: number; accepted: number } };
+
+export interface SearchSummary { searches?: number; indexers: number; failed: number; releases: number; accepted: number; grabbed?: string; shadowed?: string }
+
+export interface SearchState {
+  lastSearched?: string;
+  nextEligible?: string;
+  misses: number;
+  lastResult?: { indexers: number; failed: number; releases: number; accepted: number; grabbed?: string };
+}
+
+export interface WantedEntry { movie: Movie; reason: string; available: boolean; search?: SearchState }
+
+export interface BlocklistEntry {
+  id: number;
+  item: ItemRef;
+  release: { indexer?: string; guid?: string; infoHash?: string; title: string };
+  source: string;
+  reason: string;
+  addedAt: string;
+}
+
+export interface LiveEvent {
+  eventId: string;
+  type: string;
+  occurredAt: string;
+  actor: string;
+  mediaKind?: MediaKind;
+  items?: { ref: ItemRef & { variant?: string }; title: string; series?: string }[];
+  data?: Record<string, unknown>;
+}
+
+export interface HistoryEntry { id: number; event: LiveEvent }
+
+export type HealthStatus = 'ok' | 'degraded' | 'backed_off' | 'failing' | 'action_needed' | 'disabled';
+export interface IntegrationHealth {
+  ref: { type: string; key: string };
+  status: HealthStatus;
+  since: string;
+  lastOkAt?: string;
+  lastErrorClass?: string;
+  lastErrorMessage?: string;
+  consecutiveFailures: number;
+  nextRetryAt?: string;
+  fixHint?: string;
+}
+
+export interface JobState {
+  name: string;
+  enabled: boolean;
+  heavy: boolean;
+  running: boolean;
+  lastStart?: string;
+  lastFinish?: string;
+  lastResult: '' | 'ok' | 'failed';
+  lastError?: string;
+  failures: number;
+  nextRun?: string;
+  intervalSeconds: number;
+}
+
+export interface SystemStatus {
+  version: string;
+  uptimeSeconds: number;
+  configSource: { kind: 'file' | 'args' | 'env' | 'defaults' | string; path?: string; ignored?: string[] };
+  enabledKinds: MediaKind[];
+  pluginCount: number;
+}
+
+export interface PluginField {
+  key: string;
+  type: 'text' | 'secret' | 'number' | 'bool' | 'enum' | 'multiselect' | 'duration' | 'size' | 'url' | 'path' | 'regex' | 'list' | 'map';
+  label: string;
+  help?: string;
+  required?: boolean;
+  default?: unknown;
+  options?: string[];
+  showIf?: string;
+  min?: number;
+  max?: number;
+  secret?: boolean;
+}
+
+export interface PluginManifest {
+  id: string;
+  kind: string;
+  version: string;
+  apiVersion: number;
+  name: string;
+  delivery: string;
+  capabilities?: string[];
+  settings: PluginField[];
+}

@@ -1,0 +1,48 @@
+# corsarr example configuration: one of three equivalent sources (this file,
+# --named.args, or CORSARR_* environment variables; `corsarr config export`
+# converts between them).
+# Object keys (qbit, myindexer, …) must match [a-z][a-z0-9]*; secrets are references.
+version: 1
+server:
+  address: ":8090"
+data:
+  dir: /data
+mediaKinds:
+  movie: { mode: active }
+rootFolders:
+  - path: /media/movies
+    kind: movie
+metadata:
+  tmdb:
+    type: tmdb
+    apiKey: ${env:TMDB_API_KEY}
+indexers:
+  myindexer:
+    type: torznab
+    name: My indexer
+    url: https://indexer.example/api
+    apiKey: ${env:INDEXER_API_KEY}
+    queryLimit: 100               # searches per queryLimitPer (hour or day); 0 = no limit
+    queryLimitPer: day
+downloadClients:
+  qbit:
+    type: qbittorrent
+    url: http://qbittorrent:8080
+    username: admin
+    password: ${file:/run/secrets/qbit_password}
+mediaServers:
+  plex:
+    type: plex
+    url: http://plex:32400        # pinned address, never rewritten
+    token: ${env:PLEX_TOKEN}
+notifications:
+  phone:
+    type: shoutrrr
+    urls: ["${env:NTFY_URL}"]     # e.g. ntfy://ntfy.sh/my-topic or pushover://shoutrrr:TOKEN@USER/
+    on: [grab, import, health]
+    template:                     # optional; Go text/template, .Title/.Body are the built-in text
+      title: "[corsarr] {{.Title}}"
+      body: "{{.Body}}"
+automation:
+  rules:
+    recyclepurge: { mode: dry-run }   # off | dry-run | live; deletes recycled files after 7 days when live
