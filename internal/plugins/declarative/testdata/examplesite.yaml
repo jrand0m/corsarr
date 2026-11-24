@@ -1,0 +1,49 @@
+# An HTML tracker with a login form, used to test the HTML engine end to end.
+schema: 1
+id: examplesite
+name: Example Site
+description: Small HTML tracker behind a login form.
+language: en
+privacy: semi-private
+links: [https://example-site.test/]
+rateLimit: {interval: 1ms}
+settings:
+  - {key: username, type: text, label: Username}
+  - {key: password, type: password, label: Password}
+  - {key: sort, type: select, label: Sort, options: [added, seeders], default: added}
+login:
+  method: form
+  path: /takelogin.php
+  fields: {user: "{{settings.username}}", pass: "{{settings.password}}"}
+  success: {selector: "a[href*=logout]"}
+  failure: {selector: "div.login-error"}
+  expired: {redirect: login.php}
+caps:
+  modes:
+    search: [q]
+    music: [q]
+  categories:
+    - {site: "10", standard: 3000, name: Music}
+    - {site: "11", standard: 3040, name: Lossless}
+search:
+  requests:
+    - path: /browse.php
+      query: {search: "{{keywords}}", c: "{{categories}}", sort: "{{settings.sort}}"}
+  response:
+    type: html
+    rows: "table.torrents > tbody > tr.t"
+    fields:
+      title: {selector: "td.name > a"}
+      details: {selector: "td.name > a", attr: href}
+      size: {selector: "td.size"}
+      seeders: {selector: "td.seed"}
+      leechers: {selector: "td.leech"}
+      grabs: {selector: "td.done", filters: [digits]}
+      category: {selector: "td.cat a", attr: href, filters: [{regex: "cat=(\\d+)"}]}
+      date: {selector: "td.added", filters: [trim]}
+      downloadFactor: {selector: "td.name img.free", attr: data-factor, default: "1"}
+download:
+  selector: "a.dl"
+test:
+  query: ""
+  minRows: 1

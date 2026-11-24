@@ -278,7 +278,7 @@ func TestSizesNumbersDates(t *testing.T) {
 		"1746000000":          time.Unix(1746000000, 0).UTC(),
 		"1746000000000":       time.UnixMilli(1746000000000).UTC(),
 		"3 hours ago":         now.Add(-3 * time.Hour),
-		"a day ago":           now.Add(-24 * time.Hour),
+		"a day ago":           time.Date(2026, 5, 9, 0, 0, 0, 0, time.UTC),
 		"today 08:30":         time.Date(2026, 5, 10, 8, 30, 0, 0, time.UTC),
 		"yesterday":           time.Date(2026, 5, 9, 0, 0, 0, 0, time.UTC),
 		"":                    {},

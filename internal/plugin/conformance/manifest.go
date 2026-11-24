@@ -39,8 +39,8 @@ func ManifestProblems(m plugin.Manifest, kind plugin.Kind) []string {
 	if m.APIVersion != plugin.APIVersion {
 		add("apiVersion %d, host %d", m.APIVersion, plugin.APIVersion)
 	}
-	if m.Delivery != "builtin" {
-		add("built-in delivery must be %q, got %q", "builtin", m.Delivery)
+	if m.Delivery != "builtin" && m.Delivery != "declarative" {
+		add("built-in delivery must be %q or %q, got %q", "builtin", "declarative", m.Delivery)
 	}
 	seen := map[string]bool{}
 	for _, f := range m.Settings {

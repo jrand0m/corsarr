@@ -128,7 +128,10 @@ func relativeDate(s string, now time.Time) time.Time {
 	if v, err := strconv.Atoi(m[1]); err == nil {
 		n = v
 	}
-	return now.UTC().Add(-time.Duration(n) * relUnits[strings.ToLower(m[2])])
+	// Truncating to the unit keeps the date stable between reads, so a page
+	// saying "2 hours ago" does not look newer on every feed read.
+	unit := relUnits[strings.ToLower(m[2])]
+	return now.UTC().Truncate(min(unit, 24*time.Hour)).Add(-time.Duration(n) * unit)
 }
 
 var clockPattern = regexp.MustCompile(`(\d{1,2}):(\d{2})`)

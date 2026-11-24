@@ -1,0 +1,60 @@
+# Knaben is a public meta-search over many trackers with a JSON search API:
+# a POST of a JSON query returns {"hits": [...]}, each hit carrying a title,
+# size in bytes, seeders, peers, an ISO date, an info hash, a magnet link and
+# the tracker it was found on.
+schema: 1
+id: knaben
+version: "1"
+name: Knaben
+description: Public meta-search across many torrent trackers, answered from a JSON API.
+language: en
+privacy: public
+links: [https://api.knaben.org/]
+rateLimit: {interval: 1s}
+headers: {Accept: application/json}
+settings:
+  - key: hideUnsafe
+    type: checkbox
+    label: Hide unsafe results
+    help: Leave out results the service marks as unsafe.
+    default: true
+caps:
+  modes:
+    search: [q]
+    tv: [q]
+    movie: [q]
+    music: [q]
+    book: [q]
+  categories:
+    - {site: "1000000", standard: 3000, name: Audio}
+    - {site: "1001000", standard: 3010, name: Audio/MP3}
+    - {site: "1002000", standard: 3040, name: Audio/Lossless}
+    - {site: "1003000", standard: 3030, name: Audio/Audiobook}
+    - {site: "2000000", standard: 5000, name: TV}
+    - {site: "3000000", standard: 2000, name: Movies}
+search:
+  requests:
+    - method: POST
+      path: v1
+      contentType: application/json
+      body: >-
+        {"search_type": "100%", "search_field": "title", "query": {{keywords|json}},
+        "order_by": "date", "order_direction": "desc", "categories": {{categories|jsonarray}},
+        "from": 0, "size": 100, "hide_unsafe": {{settings.hideUnsafe|default:true}}, "hide_xxx": true}
+  response:
+    type: json
+    rows: hits
+    fields:
+      title: {path: title}
+      infohash: {path: hash}
+      magnet: {path: magnetUrl}
+      download: {path: link}
+      details: {path: details}
+      size: {path: bytes}
+      seeders: {path: seeders}
+      peers: {path: peers}
+      date: {path: date}
+      category: {path: categoryId}
+test:
+  query: ""
+  minRows: 1

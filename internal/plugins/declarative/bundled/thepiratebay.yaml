@@ -1,0 +1,63 @@
+# The Pirate Bay answers searches from a public JSON API: GET /q.php?q=…&cat=…
+# returns an array of results with id, name, info_hash, seeders, leechers,
+# size in bytes, added (unix seconds), category and an IMDb id. An empty
+# search answers with one placeholder row whose id is "0". Searching for an
+# IMDb id (tt…) as the query finds releases tagged with it.
+schema: 1
+id: thepiratebay
+version: "1"
+name: The Pirate Bay
+description: Large public tracker, searched through its JSON API.
+language: en
+privacy: public
+links: [https://apibay.org/]
+rateLimit: {interval: 1s}
+magnetTrackers:
+  - udp://tracker.opentrackr.org:1337/announce
+  - udp://open.stealth.si:80/announce
+  - udp://tracker.torrent.eu.org:451/announce
+caps:
+  modes:
+    search: [q]
+    tv: [q]
+    movie: [q, imdbid]
+    music: [q]
+    book: [q]
+  categories:
+    - {site: "101", standard: 3000, name: Audio/Music}
+    - {site: "102", standard: 3030, name: Audio/Audiobooks}
+    - {site: "104", standard: 3040, name: Audio/Lossless}
+    - {site: "201", standard: 2000, name: Movies}
+    - {site: "207", standard: 2040, name: Movies/HD}
+    - {site: "211", standard: 2045, name: Movies/UHD}
+    - {site: "205", standard: 5000, name: TV}
+    - {site: "208", standard: 5040, name: TV/HD}
+    - {site: "212", standard: 5045, name: TV/UHD}
+    - {site: "601", standard: 7020, name: Books/Ebook}
+search:
+  requests:
+    - modes: [movie]
+      when: imdbid
+      path: q.php
+      query: {q: "{{imdbid}}", cat: "{{categories}}"}
+    - path: q.php
+      query: {q: "{{keywords|default:top100:recent}}", cat: "{{categories}}"}
+  response:
+    type: json
+    rows: ""
+    skip: [{field: _id, equals: "0"}]
+    fields:
+      _id: {path: id}
+      title: {path: name}
+      infohash: {path: info_hash}
+      size: {path: size}
+      seeders: {path: seeders}
+      leechers: {path: leechers}
+      date: {path: added}
+      category: {path: category}
+      imdb: {path: imdb}
+      files: {path: num_files}
+      details: {value: "https://thepiratebay.org/description.php?id={{_id}}"}
+test:
+  query: ubuntu
+  minRows: 1

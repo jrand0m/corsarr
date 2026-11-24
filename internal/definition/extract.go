@@ -184,7 +184,11 @@ func (c Check) holdsOn(doc *html.Node, body []byte) bool {
 }
 
 // Message returns the text of the check's selector on the page ("" when absent).
-func (c Check) Message(body []byte) string {
+func (c Check) Message(body []byte) string { return c.Attr(body, "") }
+
+// Attr returns an attribute (or, for "", the text) of the first element
+// matching the check's selector ("" when absent).
+func (c Check) Attr(body []byte, name string) string {
 	if c.Selector == "" {
 		return ""
 	}
@@ -193,10 +197,14 @@ func (c Check) Message(body []byte) string {
 	if err != nil || serr != nil {
 		return ""
 	}
-	if n := sel.First(doc); n != nil {
+	n := sel.First(doc)
+	switch {
+	case n == nil:
+		return ""
+	case name == "":
 		return Text(n)
 	}
-	return ""
+	return attr(n, strings.ToLower(name))
 }
 
 // Link is where a release's payload comes from.
