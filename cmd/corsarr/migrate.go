@@ -90,26 +90,38 @@ func (c cli) migrateRequest() (migrate.Request, error) {
 		return req, err
 	}
 	req.Sources = []migrate.Endpoint{ep}
-	if req.Options.Scope, err = migrate.ParseScope(c.flags["scope"]); err != nil {
-		return req, err
+	req.Options, err = c.migrateOptions()
+	return req, err
+}
+
+func (c cli) migrateOptions() (migrate.Options, error) {
+	var o migrate.Options
+	var err error
+	if o.Scope, err = migrate.ParseScope(c.flags["scope"]); err != nil {
+		return o, err
 	}
-	if req.Options.Rewrite, err = migrate.ParseRewrite(c.flags["path-rewrite"]); err != nil {
-		return req, err
+	if o.Rewrite, err = migrate.ParseRewrite(c.flags["path-rewrite"]); err != nil {
+		return o, err
 	}
 	if v := c.flags["history-days"]; v != "" {
-		if req.Options.HistoryDays, err = strconv.Atoi(v); err != nil || req.Options.HistoryDays < 1 {
-			return req, fmt.Errorf("--history-days must be a positive number of days")
+		if o.HistoryDays, err = strconv.Atoi(v); err != nil || o.HistoryDays < 1 {
+			return o, fmt.Errorf("--history-days must be a positive number of days")
 		}
-		req.Options.Scope[migrate.CatHistory] = true
+		o.Scope[migrate.CatHistory] = true
 	}
-	req.Options.Activate = c.has("activate")
-	req.Options.Exclude = map[string]bool{}
-	for _, id := range strings.Split(c.flags["exclude"], ",") {
+	o.Activate = c.has("activate")
+	o.Exclude = excludeSet(c.flags["exclude"])
+	return o, nil
+}
+
+func excludeSet(list string) map[string]bool {
+	out := map[string]bool{}
+	for _, id := range strings.Split(list, ",") {
 		if id = strings.TrimSpace(id); id != "" {
-			req.Options.Exclude[id] = true
+			out[id] = true
 		}
 	}
-	return req, nil
+	return out
 }
 
 // apiKey reads the source key from a file or an environment variable,

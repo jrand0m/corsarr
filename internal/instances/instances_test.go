@@ -128,14 +128,14 @@ func (c *closer) Close() error { c.closed++; return errors.New("already gone") }
 
 func TestApplyRebuildsOnlyChangedInstances(t *testing.T) {
 	builds := map[domain.ObjectKey]int{}
-	var made []*closer
+	made := map[domain.ObjectKey][]*closer{} // by key: build order across kinds is not fixed
 	reg := plugin.NewRegistry()
 	for id, k := range map[string]plugin.Kind{"dl": plugin.KindDownloader, "note": plugin.KindNotifier} {
 		reg.MustRegister(plugin.Registration{Manifest: plugin.Manifest{ID: id, Kind: k, APIVersion: plugin.APIVersion},
 			New: func(inst plugin.Instance) (any, error) {
 				builds[inst.Key]++
 				c := &closer{}
-				made = append(made, c)
+				made[inst.Key] = append(made[inst.Key], c)
 				return c, nil
 			}})
 	}
@@ -149,7 +149,7 @@ func TestApplyRebuildsOnlyChangedInstances(t *testing.T) {
 	if m.All(plugin.KindDownloader)[0].Impl != before || builds["qbit"] != 1 || builds["phone"] != 2 {
 		t.Fatalf("qbit rebuilt on a notification change: %v", builds)
 	}
-	if made[1].closed != 1 || made[0].closed != 0 {
+	if made["phone"][0].closed != 1 || made["qbit"][0].closed != 0 {
 		t.Fatal("the replaced notifier is closed, the kept downloader not")
 	}
 	qbit.Name = "Renamed"
@@ -158,12 +158,12 @@ func TestApplyRebuildsOnlyChangedInstances(t *testing.T) {
 		t.Fatal("a changed instance is rebuilt")
 	}
 	m.Apply(cfg(phone)) // qbit removed
-	if len(m.All(plugin.KindDownloader)) != 0 || made[3].closed != 1 {
+	if len(m.All(plugin.KindDownloader)) != 0 || made["qbit"][1].closed != 1 {
 		t.Fatal("a removed instance is closed")
 	}
 	phone.Enabled = false
 	m.Apply(cfg(phone))
-	if len(m.All(plugin.KindNotifier)) != 0 || made[2].closed != 1 {
+	if len(m.All(plugin.KindNotifier)) != 0 || made["phone"][1].closed != 1 {
 		t.Fatal("a disabled instance is closed")
 	}
 	if !Same(Running{PluginID: "x", Settings: plugin.Settings{}}, config.Instance{Type: "x", Settings: plugin.Settings{}}) {
