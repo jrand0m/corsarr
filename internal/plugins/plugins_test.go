@@ -11,6 +11,7 @@ func TestEveryBuiltInIsRegisteredAndValid(t *testing.T) {
 	want := map[string]plugin.Kind{
 		"torznab": plugin.KindIndexer, "qbittorrent": plugin.KindDownloader, "tmdb": plugin.KindMetadata,
 		"plex": plugin.KindMediaServer, "native": plugin.KindNotifier, "shoutrrr": plugin.KindNotifier,
+		"musicbrainz": plugin.KindMetadata,
 	}
 	for id, kind := range want {
 		reg, ok := plugin.Default.Get(id)
