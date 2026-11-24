@@ -34,9 +34,10 @@ type Deps struct {
 	HTTP        Doer
 	Config      func() *config.Config
 	Downloaders func() []Downloader
-	Stat        func(path string) (int64, bool) // nil = the local filesystem
-	Publish     func(domain.Event)              // nil = no events (offline CLI)
-	AfterApply  func(context.Context)           // nil = nothing (offline CLI)
+	Stat        func(path string) (int64, bool)        // nil = the local filesystem
+	Publish     func(domain.Event)                     // nil = no events (offline CLI)
+	AfterApply  func(context.Context)                  // nil = nothing (offline CLI); also after a mode change
+	Mode        func(domain.MediaKind) domain.KindMode // effective mode; nil = active
 	Now         func() time.Time
 	Log         *slog.Logger
 }

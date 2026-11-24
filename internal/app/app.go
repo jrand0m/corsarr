@@ -8,6 +8,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jrand0m/corsarr/internal/api"
@@ -19,6 +20,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/health"
 	"github.com/jrand0m/corsarr/internal/importer"
 	"github.com/jrand0m/corsarr/internal/instances"
+	"github.com/jrand0m/corsarr/internal/migrate"
 	"github.com/jrand0m/corsarr/internal/movies"
 	"github.com/jrand0m/corsarr/internal/notify"
 	"github.com/jrand0m/corsarr/internal/plugin"
@@ -73,11 +75,13 @@ type App struct {
 	Roots      *rootfolders.Checker
 	TV         *tv.Service
 	TVAuto     *tvauto.Service
+	Migrate    *migrate.Service
 	wg         sync.WaitGroup
 	cancel     context.CancelFunc
 	ctx        context.Context // the running pipeline's context (set by Start)
 	modesMu    sync.Mutex
 	modes      map[domain.MediaKind]domain.KindMode // last applied, for mode_changed
+	ov         atomic.Pointer[map[string]string]    // mode overrides (kind:<k>, rule:<id>)
 }
 
 // New builds every module and registers the jobs; call Start after the
@@ -89,7 +93,11 @@ func New(ctx context.Context, d Deps) (*App, error) {
 	if d.Options.PurgeMode == "" {
 		d.Options.PurgeMode = rules.ModeDryRun
 	}
-	a := &App{d: d, Instances: instances.New(d.Plugins, d.HTTP, d.Health, d.Log), modes: modesOf(d.Config())}
+	a := &App{d: d, Instances: instances.New(d.Plugins, d.HTTP, d.Health, d.Log)}
+	if err := a.loadOverrides(ctx); err != nil {
+		return nil, err
+	}
+	a.modes = modesWith(d.Config(), a.overrides())
 	a.Instances.Apply(d.Config())
 	a.build()
 	if err := a.Importer.RegisterRules(a.Rules, d.Options.PurgeMode); err != nil {
@@ -112,18 +120,24 @@ func (a *App) build() {
 	a.Automation = automation.New(automation.Deps{Movies: a.Movies, Files: st.Library(), Queue: a.Queue, Blocklist: st.Blocklist(),
 		Cursors: st.FeedCursors(), Searches: st.Searches(), Recent: st.RecentReleases(), Indexers: a.indexers, Pub: d.Bus, Modes: modes, Log: d.Log})
 	a.TVAuto = a.newTVAuto()
+	a.Migrate = a.newMigrate()
 	a.Notify = notify.New(notify.Deps{Outbox: st.Outbox(), Refreshes: st.Refreshes(), Connections: a.connections, Health: d.Health, Pub: d.Bus,
 		MediaServers: a.mediaServers, MergeWindow: d.Options.MergeWindow, Modes: modes, Log: d.Log})
 }
 
-// mode reads a kind's mode from the current config on every call, so a
-// config change applies without a restart.
-func (a *App) mode(k domain.MediaKind) domain.KindMode { return a.d.Config().MediaKinds[k] }
+// mode reads a kind's mode from the current config and overrides on every
+// call, so a config change or a cutover applies without a restart.
+func (a *App) mode(k domain.MediaKind) domain.KindMode {
+	return EffectiveMode(a.d.Config(), a.overrides(), k)
+}
 
 var allKinds = []domain.MediaKind{domain.KindTV, domain.KindMovie, domain.KindMusic, domain.KindBook}
 
-func modesOf(cfg *config.Config) map[domain.MediaKind]domain.KindMode {
-	look := domain.Modes(func(k domain.MediaKind) domain.KindMode { return cfg.MediaKinds[k] })
+func modesOf(cfg *config.Config) map[domain.MediaKind]domain.KindMode { return modesWith(cfg, nil) }
+
+// modesWith normalises every kind's effective mode under the overrides.
+func modesWith(cfg *config.Config, ov map[string]string) map[domain.MediaKind]domain.KindMode {
+	look := domain.Modes(func(k domain.MediaKind) domain.KindMode { return EffectiveMode(cfg, ov, k) })
 	out := map[domain.MediaKind]domain.KindMode{}
 	for _, k := range allKinds {
 		out[k] = look.Of(k)
@@ -213,11 +227,7 @@ func (a *App) Close() {
 // applyRuleModes hands the configured rule modes to the runner (validated by
 // the config schema); ids that name no rule are logged.
 func (a *App) applyRuleModes(cfg *config.Config) {
-	modes := map[string]rules.Mode{}
-	for id, m := range cfg.RuleModes {
-		modes[id] = rules.Mode(m)
-	}
-	if unknown := a.Rules.SetModes(modes); len(unknown) > 0 {
+	if unknown := a.Rules.SetModes(RuleModes(cfg.RuleModes, a.overrides(), a.Rules.IDs())); len(unknown) > 0 {
 		a.d.Log.Warn("automation.rules names unknown rules", "ids", unknown)
 	}
 }
@@ -236,13 +246,19 @@ func (a *App) OnConfig(cfg *config.Config) {
 	a.Instances.Apply(cfg)
 	a.applyRuleModes(cfg)
 	a.recheckRoots("")
-	next := modesOf(cfg)
+	a.publishModeChanges(cfg, "config")
+}
+
+// publishModeChanges publishes mediakind.mode_changed for each kind whose
+// effective mode changed and imports what waited for a kind now active.
+func (a *App) publishModeChanges(cfg *config.Config, actor string) {
+	next := modesWith(cfg, a.overrides())
 	a.modesMu.Lock()
 	changes, ctx := ModeChanges(a.modes, next), a.ctx
 	a.modes = next
 	a.modesMu.Unlock()
 	for _, c := range changes {
-		_, _ = a.d.Bus.Publish(domain.Event{Type: domain.EvMediaKindMode, Actor: "config", Kind: c.Kind, Data: c})
+		_, _ = a.d.Bus.Publish(domain.Event{Type: domain.EvMediaKindMode, Actor: actor, Kind: c.Kind, Data: c})
 		if c.To == domain.ModeActive && ctx != nil && ctx.Err() == nil {
 			a.goRun(func() { a.importWaiting(ctx, c.Kind) })
 		}
@@ -267,7 +283,7 @@ func (a *App) importWaiting(ctx context.Context, k domain.MediaKind) {
 // Mounts are the module API routes.
 func (a *App) Mounts() []func(api.Mounter) {
 	return []func(api.Mounter){a.Movies.Mount, a.Queue.Mount, a.Automation.Mount, a.Rules.Mount,
-		a.Roots.Mount, a.Notify.Mount, a.TV.Mount, a.TVAuto.Mount}
+		a.Roots.Mount, a.Notify.Mount, a.TV.Mount, a.TVAuto.Mount, a.Migrate.Mount}
 }
 
 func typeIn(types ...domain.EventType) func(domain.EventType) bool {

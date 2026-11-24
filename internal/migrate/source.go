@@ -14,6 +14,7 @@ package migrate
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -82,7 +83,12 @@ func (s Secret) MarshalJSON() ([]byte, error)  { return []byte(`"` + redacted + 
 func (s Secret) MarshalText() ([]byte, error)  { return []byte(redacted), nil }
 func (s *Secret) UnmarshalText(b []byte) error { *s = NewSecret(string(b)); return nil }
 func (s *Secret) UnmarshalJSON(b []byte) error {
-	return s.UnmarshalText([]byte(strings.Trim(string(b), `"`)))
+	var v string
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	*s = NewSecret(v)
+	return nil
 }
 
 // Endpoint is one source to read: its type, base address and API key.
