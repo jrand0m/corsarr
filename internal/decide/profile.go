@@ -183,15 +183,15 @@ func defaultSpecs(kind domain.MediaKind) []ProfileSpec {
 	}
 }
 
-// DefaultProfiles returns the shipped video profiles (Any, HD-1080p, Ultra-HD)
-// for TV or movies; none of them allows Unknown, pre-release sources, Remux,
-// disc images or 3D. Other kinds get none.
+// DefaultProfiles returns the shipped profiles of a kind: video (Any,
+// HD-1080p, Ultra-HD) for TV or movies, none of which allows Unknown,
+// pre-release sources, Remux, disc images or 3D; music (Any, Standard,
+// Lossless), none of which allows anything below MP3-128. Books get none.
 func DefaultProfiles(kind domain.MediaKind) []QualityProfile {
-	if kind != domain.KindMovie && kind != domain.KindTV {
-		return nil
-	}
+	specs := map[domain.MediaKind][]ProfileSpec{domain.KindMovie: defaultSpecs(kind), domain.KindTV: defaultSpecs(kind),
+		domain.KindMusic: musicSpecs()}[kind]
 	var out []QualityProfile
-	for _, s := range defaultSpecs(kind) {
+	for _, s := range specs {
 		p, err := NewQualityProfile(s)
 		if err != nil {
 			panic(err) // shipped data; covered by tests
