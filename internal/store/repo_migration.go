@@ -112,6 +112,11 @@ func (r Migration) Provenance(ctx context.Context, app, instance string) (map[Pr
 	return out, err
 }
 
+// Record upserts one provenance row (blocklist and history imports).
+func (r Migration) Record(ctx context.Context, p Provenance) error {
+	return r.s.Write(ctx, func(tx *sql.Tx) error { return putProvenance(ctx, tx, p) })
+}
+
 func putProvenance(ctx context.Context, tx *sql.Tx, p Provenance) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO migration_provenance (source_app, instance, object_type, object_id, target_kind,
 		target_id, source_hash, target_hash, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
