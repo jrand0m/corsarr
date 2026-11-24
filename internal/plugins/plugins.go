@@ -4,6 +4,7 @@
 package plugins
 
 import (
+	_ "github.com/jrand0m/corsarr/internal/plugins/declarative" // bundled tracker definitions
 	_ "github.com/jrand0m/corsarr/internal/plugins/notify"
 	_ "github.com/jrand0m/corsarr/internal/plugins/plex"
 	_ "github.com/jrand0m/corsarr/internal/plugins/qbittorrent"

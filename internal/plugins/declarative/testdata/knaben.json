@@ -1,0 +1,36 @@
+{
+  "total": {"relation": "eq", "value": 2},
+  "max_score": 1.0,
+  "hits": [
+    {
+      "id": "c0ffee01",
+      "title": "Field Recordings Vol 3 2024 FLAC",
+      "bytes": 734003200,
+      "seeders": 41,
+      "peers": 6,
+      "date": "2025-02-03T10:20:30+00:00",
+      "hash": "AAAABBBBCCCCDDDDEEEEFFFF0000111122223333",
+      "magnetUrl": "magnet:?xt=urn:btih:AAAABBBBCCCCDDDDEEEEFFFF0000111122223333&dn=Field+Recordings+Vol+3",
+      "link": null,
+      "details": "https://tracker-one.example.test/torrent/77",
+      "category": "Audio Lossless",
+      "categoryId": [1002000],
+      "tracker": "tracker-one"
+    },
+    {
+      "id": "c0ffee02",
+      "title": "Some Show S01E02 1080p WEB",
+      "bytes": 1503238553,
+      "seeders": 120,
+      "peers": 15,
+      "date": "2025-02-04T08:00:00+00:00",
+      "hash": "1111222233334444555566667777888899990000",
+      "magnetUrl": "magnet:?xt=urn:btih:1111222233334444555566667777888899990000&dn=Some+Show+S01E02",
+      "link": "https://tracker-two.example.test/dl/5.torrent",
+      "details": "https://tracker-two.example.test/t/5",
+      "category": "TV",
+      "categoryId": [2000000],
+      "tracker": "tracker-two"
+    }
+  ]
+}

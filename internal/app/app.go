@@ -18,6 +18,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/events"
 	"github.com/jrand0m/corsarr/internal/health"
 	"github.com/jrand0m/corsarr/internal/importer"
+	"github.com/jrand0m/corsarr/internal/indexers"
 	"github.com/jrand0m/corsarr/internal/instances"
 	"github.com/jrand0m/corsarr/internal/movies"
 	"github.com/jrand0m/corsarr/internal/notify"
@@ -73,11 +74,13 @@ type App struct {
 	Roots      *rootfolders.Checker
 	TV         *tv.Service
 	TVAuto     *tvauto.Service
-	wg         sync.WaitGroup
-	cancel     context.CancelFunc
-	ctx        context.Context // the running pipeline's context (set by Start)
-	modesMu    sync.Mutex
-	modes      map[domain.MediaKind]domain.KindMode // last applied, for mode_changed
+	// IndexerAdmin manages indexers added from the UI and the Torznab endpoint.
+	IndexerAdmin *indexers.Service
+	wg           sync.WaitGroup
+	cancel       context.CancelFunc
+	ctx          context.Context // the running pipeline's context (set by Start)
+	modesMu      sync.Mutex
+	modes        map[domain.MediaKind]domain.KindMode // last applied, for mode_changed
 }
 
 // New builds every module and registers the jobs; call Start after the
@@ -90,7 +93,10 @@ func New(ctx context.Context, d Deps) (*App, error) {
 		d.Options.PurgeMode = rules.ModeDryRun
 	}
 	a := &App{d: d, Instances: instances.New(d.Plugins, d.HTTP, d.Health, d.Log), modes: modesOf(d.Config())}
-	a.Instances.Apply(d.Config())
+	if err := a.newIndexerAdmin(ctx); err != nil {
+		return nil, err
+	}
+	a.applyInstances(d.Config())
 	a.build()
 	if err := a.Importer.RegisterRules(a.Rules, d.Options.PurgeMode); err != nil {
 		return nil, err
@@ -233,7 +239,7 @@ func (a *App) recheckRoots(string) {
 // OnConfig rebuilds the plugin instances from a changed config and publishes
 // mediakind.mode_changed for each kind whose mode changed.
 func (a *App) OnConfig(cfg *config.Config) {
-	a.Instances.Apply(cfg)
+	a.applyInstances(cfg)
 	a.applyRuleModes(cfg)
 	a.recheckRoots("")
 	next := modesOf(cfg)
@@ -267,7 +273,7 @@ func (a *App) importWaiting(ctx context.Context, k domain.MediaKind) {
 // Mounts are the module API routes.
 func (a *App) Mounts() []func(api.Mounter) {
 	return []func(api.Mounter){a.Movies.Mount, a.Queue.Mount, a.Automation.Mount, a.Rules.Mount,
-		a.Roots.Mount, a.Notify.Mount, a.TV.Mount, a.TVAuto.Mount}
+		a.Roots.Mount, a.Notify.Mount, a.TV.Mount, a.TVAuto.Mount, a.IndexerAdmin.Mount}
 }
 
 func typeIn(types ...domain.EventType) func(domain.EventType) bool {

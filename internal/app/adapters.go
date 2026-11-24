@@ -45,7 +45,7 @@ func (p plugins) Downloaders() []queue.Downloader {
 func (a *App) indexers() []automation.Indexer {
 	var out []automation.Indexer
 	for _, n := range usable[plugin.Indexer](a, plugin.KindIndexer) {
-		out = append(out, automation.Indexer{Key: n.Key, Impl: n.Impl,
+		out = append(out, automation.Indexer{Key: n.Key, Impl: reporting{Indexer: n.Impl, ref: n.Ref(), health: a.d.Health},
 			Limit: automation.ParseLimit(n.Settings.Int("queryLimit", 0), first(n.Settings.Strings("queryLimitPer")))})
 	}
 	return out

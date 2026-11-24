@@ -304,3 +304,60 @@ export interface PluginManifest {
   capabilities?: string[];
   settings: PluginField[];
 }
+
+/** An indexer from the config file or the web UI (secret values never included). */
+export interface IndexerRow {
+  key: string;
+  name: string;
+  plugin: string;
+  pluginName: string;
+  delivery: string;
+  source: 'config' | 'ui';
+  enabled: boolean;
+  running: boolean;
+  priority: number;
+  settings: Record<string, unknown>;
+  secretsSet: string[];
+  health?: IntegrationHealth;
+  torznab: string;
+}
+
+/** A tracker definition file: bundled or the owner's, valid or with its problems. */
+export interface DefinitionEntry {
+  id: string;
+  name: string;
+  description?: string;
+  language?: string;
+  privacy?: 'public' | 'semi-private' | 'private';
+  version?: string;
+  origin: 'bundled' | 'user';
+  file: string;
+  overrides?: boolean;
+  valid: boolean;
+  problems?: { path: string; line: number; message: string }[];
+  login?: string;
+  modes?: string[];
+}
+
+/** What a connection test found. */
+export interface IndexerTest {
+  ok: boolean;
+  class?: string;
+  message: string;
+  caps?: { modes: string[] | null; idParams: string[] | null; categories: Record<string, string> | null; limit: number };
+  elapsedMs: number;
+}
+
+/** A create or edit request; omitted fields keep their value on edit. */
+export interface IndexerInput {
+  key?: string;
+  plugin?: string;
+  name?: string;
+  enabled?: boolean;
+  settings?: Record<string, unknown>;
+}
+
+export interface TorznabState {
+  enabled: boolean;
+  all: string;
+}
