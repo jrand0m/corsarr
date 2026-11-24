@@ -159,15 +159,28 @@ func (s *Service) downloader(key domain.ObjectKey) (plugin.Downloader, bool) {
 	return nil, false
 }
 
-func (s *Service) pick(proto domain.Protocol) (Downloader, bool) {
+func (s *Service) pick(rel domain.Release) (Downloader, bool) {
 	for _, d := range s.d.Plugins.Downloaders() {
-		for _, p := range d.Impl.Protocols() {
-			if p == proto {
-				return d, true
-			}
+		if handles(d.Impl, rel) {
+			return d, true
 		}
 	}
 	return Downloader{}, false
+}
+
+// handles reports whether a downloader takes a release: it speaks the
+// release's protocol, and a downloader that owns releases (a direct
+// source) takes only its own.
+func handles(dl plugin.Downloader, rel domain.Release) bool {
+	if o, ok := dl.(interface{ Owns(domain.Release) bool }); ok && !o.Owns(rel) {
+		return false
+	}
+	for _, p := range dl.Protocols() {
+		if p == rel.Protocol {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) publish(t domain.EventType, actor string, items []domain.EventItem, data any) {

@@ -69,7 +69,7 @@ type facts struct {
 
 func derive(in Input) facts {
 	f := facts{in: in}
-	f.quality, f.confident = QualityOf(in.Parsed)
+	f.quality, f.confident = qualityFor(in)
 	f.rank, f.allowed = in.Item.Profile.Rank(f.quality.ID)
 	f.score, f.formats = in.Item.Profile.Score(in.Release.Title)
 	f.bounds = Bounds(in.Context.Definitions.For(f.quality.ID), in.Item.Ref.Kind, in.Item.RuntimeMinutes)

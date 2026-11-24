@@ -52,7 +52,7 @@ func actorOf(o domain.SearchOrigin) string {
 
 // send picks a downloader, resolves the payload and adds it.
 func (s *Service) send(ctx context.Context, req GrabRequest) (Downloader, string, string, error) {
-	dl, ok := s.pick(req.Release.Protocol)
+	dl, ok := s.pick(req.Release)
 	if !ok {
 		return dl, "", "", ErrNoDownloader
 	}

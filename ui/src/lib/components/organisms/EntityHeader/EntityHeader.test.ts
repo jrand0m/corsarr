@@ -20,6 +20,11 @@ describe('EntityHeader', () => {
     expect(getByRole('img', { name: 'The Long Haul' })).toBeTruthy();
   });
 
+  it('names the item with its own label when it is not the kind usual item', () => {
+    const { container } = render(EntityHeader, { title: 'Harbour Lights', kind: 'music', kindLabel: 'Artist', meta: 'Group', art: null });
+    expect(container.querySelector('.meta')!.textContent).toContain('Artist · Group');
+  });
+
   it('renders actions, the overflow menu and the monitor toggle', async () => {
     const onmenu = vi.fn();
     const onmonitor = vi.fn();

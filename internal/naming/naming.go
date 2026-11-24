@@ -38,6 +38,26 @@ const (
 	TokenAirDate      = "Air Date"
 )
 
+// Token names understood by music templates; track and medium values arrive
+// zero-padded.
+const (
+	TokenArtistName   = "Artist Name"
+	TokenAlbumTitle   = "Album Title"
+	TokenTrackTitle   = "Track Title"
+	TokenTrack        = "Track"
+	TokenMediumFormat = "Medium Format"
+	TokenMedium       = "Medium"
+)
+
+// Default music templates: the medium folder is used only when the edition
+// has more than one medium.
+const (
+	DefaultArtistFolder = "{Artist Name}"
+	DefaultAlbumFolder  = "{Album Title}{ (Release Year)}"
+	DefaultMediumFolder = "{Medium Format} {Medium}"
+	DefaultTrackFile    = "{Artist Name} - {Album Title} - {Track} - {Track Title}"
+)
+
 // Default movie templates.
 const (
 	DefaultMovieFolder = "{Movie Title}{ (Release Year)}"
@@ -65,6 +85,12 @@ type Values struct {
 	Episode      string
 	EpisodeTitle string
 	AirDate      string
+	ArtistName   string
+	AlbumTitle   string
+	TrackTitle   string
+	Track        string
+	MediumFormat string
+	Medium       string
 }
 
 func (v Values) byToken() map[string]string {
@@ -77,12 +103,15 @@ func (v Values) byToken() map[string]string {
 		TokenEdition: v.Edition, TokenReleaseGroup: v.ReleaseGroup, TokenIMDbID: v.IMDbID,
 		TokenSeriesTitle: v.SeriesTitle, TokenSeason: v.Season, TokenEpisodeTitle: v.EpisodeTitle,
 		TokenEpisode: v.Episode, TokenAirDate: v.AirDate,
+		TokenArtistName: v.ArtistName, TokenAlbumTitle: v.AlbumTitle, TokenTrackTitle: v.TrackTitle, TokenTrack: v.Track,
+		TokenMediumFormat: v.MediumFormat, TokenMedium: v.Medium,
 	}
 }
 
 // tokenNames is matched in order: a name that contains another comes first.
 var tokenNames = []string{TokenMovieTitle, TokenReleaseYear, TokenQualityFull, TokenEdition, TokenReleaseGroup, TokenIMDbID,
-	TokenSeriesTitle, TokenEpisodeTitle, TokenEpisode, TokenSeason, TokenAirDate}
+	TokenSeriesTitle, TokenEpisodeTitle, TokenEpisode, TokenSeason, TokenAirDate,
+	TokenArtistName, TokenAlbumTitle, TokenTrackTitle, TokenTrack, TokenMediumFormat, TokenMedium}
 
 // part is literal text (token == "") or a token with optional affixes.
 type part struct {

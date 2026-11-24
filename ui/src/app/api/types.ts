@@ -361,3 +361,97 @@ export interface TorznabState {
   enabled: boolean;
   all: string;
 }
+
+// ── music ──────────────────────────────────────────────────────────────────
+export type AlbumType = 'album' | 'ep' | 'single' | 'broadcast' | 'other';
+export type AlbumMonitor = 'all' | 'missing' | 'existing' | 'future' | 'first' | 'latest' | 'none';
+export type MonitorNewItems = 'all' | 'new' | 'none';
+export type AlbumStatus = 'downloaded' | 'partial' | 'missing' | 'notReleased' | 'unmonitored';
+
+export interface Artist {
+  id: number;
+  mbid: string;
+  name: string;
+  sortName: string;
+  disambiguation?: string;
+  type?: string;
+  country?: string;
+  rootFolder: string;
+  path: string;
+  profileKey: string;
+  metadataProfile: string;
+  monitorNew: MonitorNewItems;
+  monitored: boolean;
+  tags: string[];
+  addedAt: string;
+}
+
+export interface ArtistStats {
+  albumCount: number;
+  totalAlbums: number;
+  monitoredAlbums: number;
+  albumsWithFiles: number;
+  trackFileCount: number;
+  sizeOnDisk: number;
+  nextRelease: string | null;
+  lastRelease: string | null;
+}
+
+export interface ArtistSummary extends Artist { stats: ArtistStats }
+
+export interface ArtistRecord {
+  mbid: string;
+  name: string;
+  sortName: string;
+  disambiguation?: string;
+  type?: string;
+  country?: string;
+  beginYear?: number;
+  libraryId: number;
+}
+
+export interface Album {
+  id: number;
+  artistId: number;
+  mbid: string;
+  title: string;
+  primaryType: AlbumType;
+  secondaryTypes: string[] | null;
+  releaseDate: string | null;
+  monitored: boolean;
+  pinReason?: '' | 'owner' | 'list' | 'import';
+  editionMbid?: string;
+  editionLocked: boolean;
+  mediumCount: number;
+  trackCount: number;
+  durationSec: number;
+}
+
+export interface AlbumView extends Album {
+  status: AlbumStatus;
+  inProfile: boolean;
+  fileCount: number;
+  sizeOnDisk: number;
+  quality?: string;
+  cutoffMet: boolean;
+}
+
+export interface ArtistDetail { artist: ArtistSummary; albums: AlbumView[] | null }
+
+export interface Track {
+  id: number;
+  albumId: number;
+  recordingMbid?: string;
+  medium: number;
+  mediumFormat?: string;
+  number: number;
+  title: string;
+  durationSec: number;
+  fileId?: number;
+  file?: { path: string; size: number; quality: string };
+}
+
+export interface AlbumDetail { album: AlbumView; artist: { id: number; name: string }; tracks: Track[] | null }
+
+export interface MusicProfileOption { key: string; name: string }
+export interface MusicProfiles { quality: (MusicProfileOption & { cutoff: string; isDefault: boolean })[]; metadata: MusicProfileOption[] }

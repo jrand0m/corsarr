@@ -68,7 +68,7 @@ var bootstrapSections = map[string]bool{"server": true, "data": true, "log": tru
 // instanceSections are the MVP plugin-instance sections, in export order.
 var instanceSections = []plugin.Kind{
 	plugin.KindIndexer, plugin.KindDownloader, plugin.KindMetadata,
-	plugin.KindMediaServer, plugin.KindNotifier,
+	plugin.KindMediaServer, plugin.KindNotifier, plugin.KindSource,
 }
 
 // NewSchema assembles the MVP schema; reg contributes plugin settings.

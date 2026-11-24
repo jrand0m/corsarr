@@ -35,6 +35,14 @@ describe('DecisionPanel', () => {
     expect(within(getByRole('list', { name: 'Custom formats' })).getAllByRole('listitem').map((li) => li.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['DD+ 5.1 +250', 'Trusted group +1000']);
   });
 
+  it('marks a direct-source release instead of showing seeders', () => {
+    const direct: Decision = { ...base, release: { ...base.release, protocol: 'source', seeders: undefined, indexer: 'TrubadurCamp' } };
+    const { getByRole } = render(DecisionPanel, { decision: direct, now });
+    const text = getByRole('region', { name: base.release.title }).textContent ?? '';
+    expect(text).toContain('Direct source');
+    expect(text).not.toContain('seeders');
+  });
+
   it('lists every reason grouped by category, safety first, with explanations', () => {
     const { container } = render(DecisionPanel, { decision: reject([pref, temp, perm, safe]), now });
     const groups = [...container.querySelectorAll('.group')];

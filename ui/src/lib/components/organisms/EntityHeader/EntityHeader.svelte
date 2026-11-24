@@ -23,6 +23,8 @@
   interface Props {
     title: string;
     kind: MediaKind;
+    /** What the item is, when not the kind's usual item (an artist page of the music kind). */
+    kindLabel?: string;
     /** Cached poster or cover URL; null shows the fallback. */
     art?: string | null;
     /** Meta line after the kind: "2024 · Harbourline · 52m". */
@@ -39,7 +41,7 @@
     /** Parent link above the title: Library › TV. */
     back?: { href: string; label: string };
   }
-  let { title, kind, art, meta, status = [], facts = [], monitor, monitorReason, onmonitor, actions, menu, onmenu, back }: Props = $props();
+  let { title, kind, kindLabel, art, meta, status = [], facts = [], monitor, monitorReason, onmonitor, actions, menu, onmenu, back }: Props = $props();
 
   const kindName: Record<MediaKind, string> = { tv: 'TV series', movie: 'Movie', music: 'Album', book: 'Book' };
   const shape = $derived(kind === 'music' ? 'cover' : 'poster');
@@ -52,7 +54,7 @@
     <h1 dir="auto">{title}</h1>
     <p class="meta">
       <MediaKindIcon {kind} />
-      <span>{kindName[kind]}{meta ? ` · ${meta}` : ''}</span>
+      <span>{kindLabel ?? kindName[kind]}{meta ? ` · ${meta}` : ''}</span>
     </p>
     {#if status.length || monitor}
       <div class="states">

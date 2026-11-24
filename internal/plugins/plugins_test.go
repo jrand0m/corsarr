@@ -12,6 +12,7 @@ func TestEveryBuiltInIsRegisteredAndValid(t *testing.T) {
 		"torznab": plugin.KindIndexer, "qbittorrent": plugin.KindDownloader, "tmdb": plugin.KindMetadata,
 		"plex": plugin.KindMediaServer, "native": plugin.KindNotifier, "shoutrrr": plugin.KindNotifier,
 		"knaben": plugin.KindIndexer, "thepiratebay": plugin.KindIndexer,
+		"musicbrainz": plugin.KindMetadata, "trubadurcamp": plugin.KindSource, "mechanicalwavescloud": plugin.KindSource,
 	}
 	for id, kind := range want {
 		reg, ok := plugin.Default.Get(id)

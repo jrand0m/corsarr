@@ -31,12 +31,15 @@ type plugins struct{ a *App }
 
 func (p plugins) Indexer(key domain.ObjectKey) (plugin.Indexer, bool) {
 	n, ok := instances.Get[plugin.Indexer](p.a.Instances, plugin.KindIndexer, key)
+	if !ok {
+		n, ok = instances.Get[plugin.Indexer](p.a.Instances, plugin.KindSource, key)
+	}
 	return n.Impl, ok
 }
 
 func (p plugins) Downloaders() []queue.Downloader {
 	var out []queue.Downloader
-	for _, n := range usable[plugin.Downloader](p.a, plugin.KindDownloader) {
+	for _, n := range append(usable[plugin.Downloader](p.a, plugin.KindDownloader), sources[plugin.Downloader](p.a)...) {
 		out = append(out, queue.Downloader{Key: n.Key, Impl: n.Impl})
 	}
 	return out
@@ -44,7 +47,7 @@ func (p plugins) Downloaders() []queue.Downloader {
 
 func (a *App) indexers() []automation.Indexer {
 	var out []automation.Indexer
-	for _, n := range usable[plugin.Indexer](a, plugin.KindIndexer) {
+	for _, n := range append(usable[plugin.Indexer](a, plugin.KindIndexer), sources[plugin.Indexer](a)...) {
 		out = append(out, automation.Indexer{Key: n.Key, Impl: reporting{Indexer: n.Impl, ref: n.Ref(), health: a.d.Health},
 			Limit: automation.ParseLimit(n.Settings.Int("queryLimit", 0), first(n.Settings.Strings("queryLimitPer")))})
 	}
@@ -128,8 +131,12 @@ func (a *App) itemTitles(ctx context.Context, refs []domain.ItemRef) []domain.Ev
 	out := make([]domain.EventItem, len(refs))
 	for i, r := range refs {
 		out[i] = domain.EventItem{Ref: r}
-		if r.Kind == domain.KindTV {
+		switch r.Kind {
+		case domain.KindTV:
 			out[i] = a.tvItem(ctx, r)
+			continue
+		case domain.KindMusic:
+			out[i] = a.musicItem(ctx, r)
 			continue
 		}
 		if m, err := a.Movies.Get(ctx, r.ID); err == nil && r.Kind == domain.KindMovie {

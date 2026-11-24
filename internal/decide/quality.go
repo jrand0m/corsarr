@@ -185,11 +185,12 @@ var tierDefaults = map[Tier]QualityDefinition{
 }
 
 // DefaultDefinitions returns the shipped bounds: max 2160p 250, 1080p 70,
-// 720p 35, SD 25 MB/min; Remux and disc images are capped like their tier.
+// 720p 35, SD 25 MB/min; Remux and disc images are capped like their tier;
+// lossy audio 3, lossless 12 and hi-res audio 60 MB/min.
 func DefaultDefinitions() Definitions {
 	d := Definitions{}
-	for _, q := range ladder {
-		d[q.ID] = tierDefaults[q.Tier]
+	for _, q := range append(Ladder(), audioLadder...) {
+		d[q.ID] = shippedDefinition(q.ID)
 	}
 	return d
 }
@@ -199,7 +200,7 @@ func (d Definitions) For(id QualityID) QualityDefinition {
 	if def, ok := d[id]; ok {
 		return def
 	}
-	return tierDefaults[byID[id].Tier]
+	return shippedDefinition(id)
 }
 
 // KindLimits are the per-kind size safety nets.

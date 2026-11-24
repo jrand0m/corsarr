@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -141,9 +142,7 @@ type doerFor struct {
 func (d doerFor) Do(req *http.Request) (*http.Response, error) { return d.c.do(req, d.ref) }
 
 func (c *Client) do(req *http.Request, ref *domain.IntegrationRef) (*http.Response, error) {
-	if req.Header.Get("User-Agent") == "" {
-		req.Header.Set("User-Agent", "corsarr/"+pick(c.o.Version, "dev"))
-	}
+	req.Header.Set("User-Agent", userAgent(req.Header.Get("User-Agent"), pick(c.o.Version, "dev")))
 	h := c.host(req.URL.Hostname())
 	retries := c.o.MaxRetries
 	if ref != nil && c.blocked(*ref) {
@@ -152,6 +151,20 @@ func (c *Client) do(req *http.Request, ref *domain.IntegrationRef) (*http.Respon
 	resp, err := c.attempts(req, h, retries)
 	c.report(ref, resp, err)
 	return resp, err
+}
+
+// userAgent is corsarr's product token; a plugin may add a comment such as a
+// contact address ("( https://… )"), which follows the token, while a full
+// User-Agent a plugin sets stays as it is.
+func userAgent(set, version string) string {
+	product := "corsarr/" + version
+	switch {
+	case set == "":
+		return product
+	case strings.HasPrefix(set, "("):
+		return product + " " + set
+	}
+	return set
 }
 
 func (c *Client) blocked(ref domain.IntegrationRef) bool {

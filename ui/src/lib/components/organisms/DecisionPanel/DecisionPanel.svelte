@@ -22,7 +22,8 @@
     release: {
       title: string;
       indexer: string;
-      protocol: 'torrent' | 'usenet';
+      /** source: an album straight from a music source (no seeders). */
+      protocol: 'torrent' | 'usenet' | 'source';
       size: number;
       publishedAt: Date | string | number;
       seeders?: number;
@@ -89,6 +90,7 @@
       {#if d.release.runtimeSeconds}<Quantity kind="gbph" value={d.release.size} runtime={d.release.runtimeSeconds} />{/if}
       {#if d.release.protocol === 'torrent'}
         <span>{d.release.seeders === undefined ? '—' : `${formatCount(d.release.seeders)} seeders`}</span>
+      {:else if d.release.protocol === 'source'}<span>Direct source</span>
       {:else}<span>Usenet</span>{/if}
       <span>{d.release.indexer}</span>
       <Timestamp value={d.release.publishedAt} now={now === undefined ? undefined : new Date(now)} />

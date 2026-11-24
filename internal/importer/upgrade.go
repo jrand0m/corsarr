@@ -222,6 +222,12 @@ func imported(id int64, m domain.Movie, items []domain.EventItem, dest string, r
 	return result{outcome: o, folders: []string{m.Path}, items: items}
 }
 
+// ownsFiles reports whether library files point at the reference: series
+// and artists only group the episodes and tracks that do.
+func ownsFiles(r domain.ItemRef) bool {
+	return r.Variant != domain.VariantSeries && r.Variant != domain.VariantArtist
+}
+
 // OnItemDeleted recycles the files of a deleted item when the user asked for it.
 func (s *Service) OnItemDeleted(ctx context.Context, ev domain.Event) {
 	data, ok := ev.Data.(domain.ItemEventData)
@@ -229,8 +235,8 @@ func (s *Service) OnItemDeleted(ctx context.Context, ev domain.Event) {
 		return
 	}
 	for _, it := range ev.Items {
-		if !s.d.Modes.Active(it.Ref.Kind) {
-			continue // no file changes outside active kinds
+		if !s.d.Modes.Active(it.Ref.Kind) || !ownsFiles(it.Ref) {
+			continue // no file changes outside active kinds; series and artists own no files themselves
 		}
 		files, err := s.d.Library.FilesOf(ctx, it.Ref)
 		s.warn("list item files", err, "item", it.Ref.String())

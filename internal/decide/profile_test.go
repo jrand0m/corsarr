@@ -134,8 +134,8 @@ func TestDefaultProfiles(t *testing.T) {
 			t.Error("Any stops at 1080p")
 		}
 	}
-	if DefaultProfiles(domain.KindMusic) != nil {
-		t.Fatal("no video profiles for music")
+	if DefaultProfiles(domain.KindBook) != nil {
+		t.Fatal("no shipped profiles for books")
 	}
 }
 

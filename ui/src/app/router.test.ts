@@ -13,6 +13,7 @@ describe('resolve', () => {
     expect(resolve('/library/tv/add')).toMatchObject({ area: 'library', screen: 'addSeries' });
     expect(resolve('/wanted/missing')).toMatchObject({ area: 'wanted', screen: 'missing' });
     expect(resolve('/wanted/missing/tv')).toMatchObject({ area: 'wanted', screen: 'missingTv' });
+    expect(resolve('/wanted/missing/music')).toMatchObject({ area: 'wanted', screen: 'missingMusic' });
     expect(resolve('/activity/queue')).toMatchObject({ area: 'activity', screen: 'queue' });
     expect(resolve('/activity/history')).toMatchObject({ area: 'activity', screen: 'history' });
     expect(resolve('/activity/blocklist')).toMatchObject({ area: 'activity', screen: 'blocklist' });
@@ -26,6 +27,10 @@ describe('resolve', () => {
     expect(resolve('/library/movies/42')).toEqual({ area: 'library', screen: 'movie', params: { id: '42' } });
     expect(resolve('/library/movies/42/')).toEqual({ area: 'library', screen: 'movie', params: { id: '42' } });
     expect(resolve('/library/tv/7')).toEqual({ area: 'library', screen: 'show', params: { id: '7' } });
+    expect(resolve('/library/music')).toMatchObject({ area: 'library', screen: 'artists' });
+    expect(resolve('/library/music/add')).toMatchObject({ area: 'library', screen: 'addArtist' });
+    expect(resolve('/library/music/3')).toEqual({ area: 'library', screen: 'artist', params: { id: '3' } });
+    expect(resolve('/library/music/albums/9')).toEqual({ area: 'library', screen: 'album', params: { id: '9' } });
     expect(resolve('/settings/plugins/indexers.knaben')).toEqual({ area: 'settings', screen: 'plugins', params: { id: 'indexers.knaben' } });
   });
 
@@ -39,7 +44,7 @@ describe('resolve', () => {
 
   it('marks known later screens and unknown paths', () => {
     expect(resolve('/wanted/calendar')).toEqual({ later: '/wanted/calendar' });
-    expect(resolve('/library/music')).toEqual({ later: '/library/music' });
+    expect(resolve('/library/books')).toEqual({ later: '/library/books' });
     expect(resolve('/search')).toEqual({ later: '/search' });
     expect(resolve('/nowhere')).toBeNull();
   });

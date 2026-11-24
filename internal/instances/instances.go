@@ -78,7 +78,7 @@ func New(reg *plugin.Registry, http HTTPFor, rep Reporter, log *slog.Logger) *Ma
 var sectionKinds = map[string]plugin.Kind{}
 
 func init() {
-	for _, k := range []plugin.Kind{plugin.KindIndexer, plugin.KindDownloader, plugin.KindMetadata, plugin.KindMediaServer, plugin.KindNotifier} {
+	for _, k := range []plugin.Kind{plugin.KindIndexer, plugin.KindDownloader, plugin.KindMetadata, plugin.KindMediaServer, plugin.KindNotifier, plugin.KindSource} {
 		sectionKinds[k.Section()] = k
 	}
 }
