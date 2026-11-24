@@ -171,24 +171,30 @@ func (c *compound) parsePseudo(s string) (int, error) {
 
 // matches tests one element against a compound.
 func (c compound) matches(n *html.Node) bool {
-	if n.Type != html.ElementNode || (c.tag != "" && n.Data != c.tag) {
-		return false
-	}
-	if c.id != "" && attr(n, "id") != c.id {
-		return false
-	}
+	return c.named(n) && c.classed(n) && c.attributed(n) && (c.nth == 0 || position(n, c.nth < 0) == abs(c.nth))
+}
+
+func (c compound) named(n *html.Node) bool {
+	return n.Type == html.ElementNode && (c.tag == "" || n.Data == c.tag) && (c.id == "" || attr(n, "id") == c.id)
+}
+
+func (c compound) classed(n *html.Node) bool {
 	classes := strings.Fields(attr(n, "class"))
 	for _, want := range c.classes {
 		if !contains(classes, want) {
 			return false
 		}
 	}
+	return true
+}
+
+func (c compound) attributed(n *html.Node) bool {
 	for _, a := range c.attrs {
 		if !a.matches(n) {
 			return false
 		}
 	}
-	return c.nth == 0 || position(n, c.nth < 0) == abs(c.nth)
+	return true
 }
 
 func (a attrTest) matches(n *html.Node) bool {

@@ -79,7 +79,24 @@ type Mounter interface {
 	Handle(pattern string, h http.HandlerFunc)
 }
 
+// KeyMounter is implemented by the mounter modules receive: routes outside
+// /api/v1 that authenticate by API key only (Torznab clients); deny answers
+// unauthenticated requests in the route's own protocol.
+type KeyMounter interface {
+	HandleAPIKey(pattern string, h, deny http.HandlerFunc)
+}
+
 type authedMounter struct{ s *Server }
+
+func (m authedMounter) HandleAPIKey(pattern string, h, deny http.HandlerFunc) {
+	m.s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		if m.s.validAPIKey(r) {
+			h(w, r)
+			return
+		}
+		deny(w, r)
+	})
+}
 
 func (m authedMounter) Handle(pattern string, h http.HandlerFunc) {
 	m.s.mux.Handle(pattern, m.s.requireAuth(h))

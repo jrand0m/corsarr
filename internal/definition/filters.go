@@ -87,50 +87,45 @@ var nonDigits = regexp.MustCompile(`[^0-9]`)
 // Apply runs the filter. Regex keeps the first capture group (or the whole
 // match), and an unmatched regex yields "". Go regexps run in linear time.
 func (f Filter) Apply(v string) string {
-	switch f.Name {
-	case "trim":
-		return strings.Join(strings.Fields(v), " ")
-	case "lower":
-		return strings.ToLower(v)
-	case "upper":
-		return strings.ToUpper(v)
-	case "urldecode":
-		if d, err := url.QueryUnescape(v); err == nil {
-			return d
-		}
-		return v
-	case "urlencode":
-		return url.QueryEscape(v)
-	case "digits":
-		return nonDigits.ReplaceAllString(v, "")
-	}
-	return f.applyArgs(v)
-}
-
-func (f Filter) applyArgs(v string) string {
-	switch f.Name {
-	case "regex":
-		return f.regex(v)
-	case "prepend":
-		return f.Args[0] + v
-	case "append":
-		return v + f.Args[0]
-	case "remove":
-		return strings.ReplaceAll(v, f.Args[0], "")
-	case "replace":
-		return strings.ReplaceAll(v, f.Args[0], f.Args[1])
-	case "split":
-		parts := strings.Split(v, f.Args[0])
-		i, _ := strconv.Atoi(f.Args[1])
-		if i < 0 {
-			i += len(parts)
-		}
-		if i < 0 || i >= len(parts) {
-			return ""
-		}
-		return parts[i]
+	if fn, ok := valueFilters[f.Name]; ok {
+		return fn(f, v)
 	}
 	return v
+}
+
+var valueFilters = map[string]func(f Filter, v string) string{
+	"trim":      func(_ Filter, v string) string { return strings.Join(strings.Fields(v), " ") },
+	"lower":     func(_ Filter, v string) string { return strings.ToLower(v) },
+	"upper":     func(_ Filter, v string) string { return strings.ToUpper(v) },
+	"urldecode": urlDecode,
+	"urlencode": func(_ Filter, v string) string { return url.QueryEscape(v) },
+	"digits":    func(_ Filter, v string) string { return nonDigits.ReplaceAllString(v, "") },
+	"regex":     Filter.regex,
+	"prepend":   func(f Filter, v string) string { return f.Args[0] + v },
+	"append":    func(f Filter, v string) string { return v + f.Args[0] },
+	"remove":    func(f Filter, v string) string { return strings.ReplaceAll(v, f.Args[0], "") },
+	"replace":   func(f Filter, v string) string { return strings.ReplaceAll(v, f.Args[0], f.Args[1]) },
+	"split":     split,
+}
+
+func urlDecode(_ Filter, v string) string {
+	if d, err := url.QueryUnescape(v); err == nil {
+		return d
+	}
+	return v
+}
+
+// split keeps one part; a negative index counts from the end.
+func split(f Filter, v string) string {
+	parts := strings.Split(v, f.Args[0])
+	i, _ := strconv.Atoi(f.Args[1])
+	if i < 0 {
+		i += len(parts)
+	}
+	if i < 0 || i >= len(parts) {
+		return ""
+	}
+	return parts[i]
 }
 
 func (f Filter) regex(v string) string {

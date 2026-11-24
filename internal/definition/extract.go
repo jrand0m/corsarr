@@ -156,13 +156,7 @@ func (d *Definition) skipped(r Row) bool {
 
 // Holds evaluates a check against a response (status, redirect target, body).
 func (c Check) Holds(status int, location string, body []byte) bool {
-	if c.Empty() {
-		return false
-	}
-	if c.Redirect != "" && status >= 300 && status < 400 && strings.Contains(location, c.Redirect) {
-		return true
-	}
-	if c.Contains != "" && bytes.Contains(body, []byte(c.Contains)) {
+	if c.redirects(status, location) || c.contains(body) {
 		return true
 	}
 	if c.Selector == "" {
@@ -170,6 +164,14 @@ func (c Check) Holds(status int, location string, body []byte) bool {
 	}
 	doc, err := html.Parse(bytes.NewReader(body))
 	return err == nil && c.holdsOn(doc, nil)
+}
+
+func (c Check) redirects(status int, location string) bool {
+	return c.Redirect != "" && status >= 300 && status < 400 && strings.Contains(location, c.Redirect)
+}
+
+func (c Check) contains(body []byte) bool {
+	return c.Contains != "" && bytes.Contains(body, []byte(c.Contains))
 }
 
 func (c Check) holdsOn(doc *html.Node, body []byte) bool {
@@ -219,19 +221,9 @@ var hexHash = regexp.MustCompile(`^[0-9a-f]{40}$`)
 // Release maps a row onto a release. ok is false when the row has no title
 // or nothing to download.
 func (d *Definition) Release(r Row, base *url.URL, now time.Time) (domain.Release, Link, bool) {
-	link := Link{Download: resolveURL(base, r[FieldDownload]), Magnet: r[FieldMagnet], Details: resolveURL(base, r[FieldDetails])}
-	if strings.HasPrefix(link.Download, "magnet:") {
-		link.Magnet, link.Download = link.Download, ""
-	}
-	hash := strings.ToLower(r[FieldInfoHash])
-	if !hexHash.MatchString(hash) {
-		hash = magnetHash(link.Magnet)
-	}
-	if link.Magnet == "" && hash != "" {
-		link.Magnet = d.magnet(hash, r[FieldTitle])
-	}
+	link, hash := d.link(r, base)
 	id := firstOf(hash, link.Details, link.Download)
-	if id == "" || (link.Magnet == "" && link.Download == "" && (link.Details == "" || d.Download == nil)) {
+	if id == "" || !d.fetchable(link) {
 		return domain.Release{}, Link{}, false
 	}
 	rel := domain.Release{
@@ -245,6 +237,28 @@ func (d *Definition) Release(r Row, base *url.URL, now time.Time) (domain.Releas
 		rel.Flags = append(rel.Flags, "freeleech")
 	}
 	return rel, link, true
+}
+
+// link collects a row's payload links and info hash (a magnet is built from
+// the hash when the row has none).
+func (d *Definition) link(r Row, base *url.URL) (Link, string) {
+	link := Link{Download: resolveURL(base, r[FieldDownload]), Magnet: r[FieldMagnet], Details: resolveURL(base, r[FieldDetails])}
+	if strings.HasPrefix(link.Download, "magnet:") {
+		link.Magnet, link.Download = link.Download, ""
+	}
+	hash := strings.ToLower(r[FieldInfoHash])
+	if !hexHash.MatchString(hash) {
+		hash = magnetHash(link.Magnet)
+	}
+	if link.Magnet == "" && hash != "" {
+		link.Magnet = d.magnet(hash, r[FieldTitle])
+	}
+	return link, hash
+}
+
+// fetchable: a magnet or file link, or a details page the definition follows.
+func (d *Definition) fetchable(l Link) bool {
+	return l.Magnet != "" || l.Download != "" || (l.Details != "" && d.Download != nil)
 }
 
 func publishDate(raw string, layouts []string, now time.Time) (time.Time, []string) {

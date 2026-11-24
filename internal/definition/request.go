@@ -120,19 +120,25 @@ func setIDs(v Vars, req domain.SearchRequest, accepts map[string]bool) {
 // keywords is the text form: the query plus S01E02 / S01 or the year when the
 // mode cannot take them as parameters.
 func keywords(text string, req domain.SearchRequest, accepts map[string]bool) string {
-	if text == "" {
-		return ""
-	}
 	switch {
+	case text == "":
+		return ""
 	case req.Mode == domain.SearchTV && req.Season > 0 && !accepts["season"]:
-		text += fmt.Sprintf(" S%02d", req.Season)
-		if len(req.Episodes) == 1 {
-			text += fmt.Sprintf("E%02d", req.Episodes[0])
+		return text + episodeTag(req)
+	case req.Mode == domain.SearchMovie && req.Year > 0 && !accepts["year"]:
+		if year := strconv.Itoa(req.Year); !strings.Contains(text, year) {
+			return text + " " + year
 		}
-	case req.Mode == domain.SearchMovie && req.Year > 0 && !accepts["year"] && !strings.Contains(text, strconv.Itoa(req.Year)):
-		text += " " + strconv.Itoa(req.Year)
 	}
 	return text
+}
+
+func episodeTag(req domain.SearchRequest) string {
+	tag := fmt.Sprintf(" S%02d", req.Season)
+	if len(req.Episodes) == 1 {
+		tag += fmt.Sprintf("E%02d", req.Episodes[0])
+	}
+	return tag
 }
 
 // Pick returns the first request matching the query's mode and condition.
@@ -166,28 +172,37 @@ func (d *Definition) Render(base *url.URL, r Request, v Vars) (HTTPRequest, erro
 	}
 	u = base.ResolveReference(u)
 	q := u.Query()
-	for k, t := range r.Query {
-		val, err := Expand(t, v)
-		if err != nil {
-			return HTTPRequest{}, err
-		}
+	query, err := expandAll(v, r.Query)
+	if err != nil {
+		return HTTPRequest{}, err
+	}
+	for k, val := range query {
 		if val != "" {
 			q.Set(k, val)
 		}
 	}
 	u.RawQuery = q.Encode()
-	out := HTTPRequest{Method: r.Method, URL: u.String(), ContentType: r.Type, Headers: map[string]string{}}
+	out := HTTPRequest{Method: r.Method, URL: u.String(), ContentType: r.Type}
 	if out.Body, err = Expand(r.Body, v); err != nil {
 		return HTTPRequest{}, err
 	}
 	if out.Body != "" && out.ContentType == "" {
 		out.ContentType = "application/x-www-form-urlencoded"
 	}
-	for _, hs := range []Strings{d.Headers, r.Headers} {
-		for k, t := range hs {
-			if out.Headers[k], err = Expand(t, v); err != nil {
-				return HTTPRequest{}, err
+	out.Headers, err = expandAll(v, d.Headers, r.Headers)
+	return out, err
+}
+
+// expandAll renders the values of string maps into one map (later maps win).
+func expandAll(v Vars, maps ...Strings) (map[string]string, error) {
+	out := map[string]string{}
+	for _, m := range maps {
+		for k, t := range m {
+			val, err := Expand(t, v)
+			if err != nil {
+				return nil, err
 			}
+			out[k] = val
 		}
 	}
 	return out, nil

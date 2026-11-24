@@ -51,6 +51,20 @@ type Catalog struct {
 	defs    map[string]*definition.Definition // what is registered now
 	entries []Entry
 	userIDs map[string]bool
+	rev     int // bumped on every Load
+}
+
+// Revision counts loads; instances built from an older revision are stale.
+func (c *Catalog) Revision() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.rev
+}
+
+// Declarative reports whether a plugin id is a registered definition.
+func (c *Catalog) Declarative(id string) bool {
+	_, ok := c.Definition(id)
+	return ok
 }
 
 // Default is the catalogue registered into plugin.Default.
@@ -177,26 +191,15 @@ func readBounded(path string) ([]byte, error) {
 
 // apply swaps the registered set to bundled ∪ user (user wins).
 func (c *Catalog) apply(user map[string]*definition.Definition, listed []Entry) {
+	c.rev++
 	for id := range c.userIDs {
-		if _, still := user[id]; still {
-			continue
-		}
-		if b, ok := c.bundled[id]; ok {
-			_ = c.reg.Put(Registration(b))
-			c.defs[id] = b
-		} else {
-			c.reg.Remove(id)
-			delete(c.defs, id)
+		if _, still := user[id]; !still {
+			c.drop(id)
 		}
 	}
 	c.userIDs = map[string]bool{}
 	for id, d := range user {
-		if existing, ok := c.reg.Get(id); ok && existing.Manifest.Delivery != Delivery {
-			continue // never shadow a built-in plugin
-		}
-		if c.reg.Put(Registration(d)) == nil {
-			c.defs[id], c.userIDs[id] = d, true
-		}
+		c.register(id, d)
 	}
 	entries := []Entry{}
 	for _, e := range c.entries {
@@ -206,6 +209,27 @@ func (c *Catalog) apply(user map[string]*definition.Definition, listed []Entry) 
 	}
 	c.entries = append(entries, listed...)
 	c.sortEntries()
+}
+
+// drop removes a user definition, restoring the bundled one it overrode.
+func (c *Catalog) drop(id string) {
+	if b, ok := c.bundled[id]; ok {
+		_ = c.reg.Put(Registration(b))
+		c.defs[id] = b
+		return
+	}
+	c.reg.Remove(id)
+	delete(c.defs, id)
+}
+
+// register adds a user definition unless its id belongs to a built-in plugin.
+func (c *Catalog) register(id string, d *definition.Definition) {
+	if existing, ok := c.reg.Get(id); ok && existing.Manifest.Delivery != Delivery {
+		return
+	}
+	if c.reg.Put(Registration(d)) == nil {
+		c.defs[id], c.userIDs[id] = d, true
+	}
 }
 
 func (c *Catalog) sortEntries() {

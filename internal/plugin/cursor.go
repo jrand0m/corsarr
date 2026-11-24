@@ -13,23 +13,39 @@ const (
 	ClassSessionExpired FailureClass = "session_expired"
 )
 
-// NewerThan keeps the releases newer than a feed cursor
-// ("<publish time RFC3339>|<release id>") and returns the advanced cursor.
-// An empty cursor keeps everything. The cursor never moves backwards.
-func NewerThan(rels []domain.Release, cursor string) ([]domain.Release, string) {
-	ts, id, _ := strings.Cut(cursor, "|")
+// feedCursor is a parsed "<publish time RFC3339>|<release id>" cursor.
+type feedCursor struct {
+	at  time.Time
+	id  string
+	set bool
+}
+
+func parseCursor(c string) feedCursor {
+	ts, id, _ := strings.Cut(c, "|")
 	at, _ := time.Parse(time.RFC3339Nano, ts)
+	return feedCursor{at: at, id: id, set: c != ""}
+}
+
+func (c feedCursor) before(r domain.Release) bool {
+	return !c.set || r.PublishedAt.After(c.at) || (r.PublishedAt.Equal(c.at) && r.ID != c.id)
+}
+
+// NewerThan keeps the releases newer than a feed cursor and returns the
+// advanced cursor. An empty cursor keeps everything. The cursor never moves
+// backwards.
+func NewerThan(rels []domain.Release, cursor string) ([]domain.Release, string) {
+	cur := parseCursor(cursor)
 	var fresh []domain.Release
-	newest := domain.Release{}
-	for _, r := range rels {
-		if cursor == "" || r.PublishedAt.After(at) || (r.PublishedAt.Equal(at) && r.ID != id) {
+	var newest *domain.Release
+	for i, r := range rels {
+		if cur.before(r) {
 			fresh = append(fresh, r)
 		}
-		if newest.ID == "" || r.PublishedAt.After(newest.PublishedAt) {
-			newest = r
+		if newest == nil || r.PublishedAt.After(newest.PublishedAt) {
+			newest = &rels[i]
 		}
 	}
-	if newest.ID == "" || (cursor != "" && !newest.PublishedAt.After(at)) {
+	if newest == nil || (cur.set && !newest.PublishedAt.After(cur.at)) {
 		return fresh, cursor
 	}
 	return fresh, newest.PublishedAt.Format(time.RFC3339Nano) + "|" + newest.ID

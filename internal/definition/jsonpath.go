@@ -28,20 +28,31 @@ func ParsePath(s string) (Path, error) {
 		if key != "" {
 			p = append(p, pathStep{key: key})
 		}
-		for rest != "" {
-			idx, after, ok := strings.Cut(rest, "]")
-			n, err := strconv.Atoi(idx)
-			if !ok || err != nil || n < 0 {
-				return nil, fmt.Errorf("path %q: bad index", s)
-			}
-			p = append(p, pathStep{index: n, isIdx: true})
-			rest = strings.TrimPrefix(after, "[")
-			if after != "" && !strings.HasPrefix(after, "[") {
-				return nil, fmt.Errorf("path %q: unexpected %q", s, after)
-			}
+		idx, err := indexes(rest)
+		if err != nil {
+			return nil, fmt.Errorf("path %q: %w", s, err)
 		}
+		p = append(p, idx...)
 	}
 	return p, nil
+}
+
+// indexes reads "0][1]" (the part after a segment's first "[").
+func indexes(rest string) ([]pathStep, error) {
+	var out []pathStep
+	for rest != "" {
+		idx, after, ok := strings.Cut(rest, "]")
+		n, err := strconv.Atoi(idx)
+		if !ok || err != nil || n < 0 {
+			return nil, fmt.Errorf("bad index")
+		}
+		out = append(out, pathStep{index: n, isIdx: true})
+		if after != "" && !strings.HasPrefix(after, "[") {
+			return nil, fmt.Errorf("unexpected %q", after)
+		}
+		rest = strings.TrimPrefix(after, "[")
+	}
+	return out, nil
 }
 
 // Get walks v (decoded with UseNumber) along the path.

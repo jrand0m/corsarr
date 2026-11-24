@@ -23,6 +23,9 @@ var validTypes = map[plugin.FieldType]bool{
 	plugin.FieldURL: true, plugin.FieldPath: true, plugin.FieldRegex: true, plugin.FieldList: true, plugin.FieldMap: true,
 }
 
+// shippedDelivery are the delivery forms of plugins that ship in the binary.
+var shippedDelivery = map[string]bool{"builtin": true, "declarative": true}
+
 // ManifestProblems lists every way a manifest violates the plugin contract.
 func ManifestProblems(m plugin.Manifest, kind plugin.Kind) []string {
 	var p []string
@@ -39,7 +42,7 @@ func ManifestProblems(m plugin.Manifest, kind plugin.Kind) []string {
 	if m.APIVersion != plugin.APIVersion {
 		add("apiVersion %d, host %d", m.APIVersion, plugin.APIVersion)
 	}
-	if m.Delivery != "builtin" && m.Delivery != "declarative" {
+	if !shippedDelivery[m.Delivery] {
 		add("built-in delivery must be %q or %q, got %q", "builtin", "declarative", m.Delivery)
 	}
 	seen := map[string]bool{}

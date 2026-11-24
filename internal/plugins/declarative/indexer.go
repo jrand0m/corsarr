@@ -36,13 +36,9 @@ type Indexer struct {
 
 // New validates the instance settings once and builds the indexer.
 func New(d *definition.Definition, inst plugin.Instance) (*Indexer, error) {
-	raw := firstNonEmpty(inst.Settings.String("baseUrl"), d.Links[0])
-	base, err := url.Parse(raw)
-	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
-		return nil, plugin.Errorf(plugin.ClassConfig, "site address %q must be an http(s) address", raw)
-	}
-	if !strings.HasSuffix(base.Path, "/") {
-		base.Path += "/"
+	base, err := siteBase(firstNonEmpty(inst.Settings.String("baseUrl"), d.Links[0]))
+	if err != nil {
+		return nil, err
 	}
 	settings := map[string]string{}
 	for _, s := range d.Settings {
@@ -51,15 +47,34 @@ func New(d *definition.Definition, inst plugin.Instance) (*Indexer, error) {
 	if d.Login.Method == definition.LoginCookie && inst.Settings.String("cookie") == "" {
 		return nil, plugin.Errorf(plugin.ClassConfig, "%s needs a session cookie", d.Name)
 	}
-	every := time.Duration(d.RateLimit.Interval)
-	if every == 0 && d.Search.Response.Type == definition.ResponseHTML {
-		every = htmlInterval
-	}
+	every := spacing(d)
 	return &Indexer{
 		def: d, inst: inst, base: base, settings: settings, links: newLinkCache(linkCacheSize), pace: &pacer{every: every},
 		ref:  domain.IndexerRef{Key: inst.Key, Name: inst.Name, Priority: inst.Settings.Int("priority", 25)},
 		sess: session{cookie: inst.Settings.String("cookie")},
 	}, nil
+}
+
+// siteBase parses the site address; it always ends in "/" so definition
+// paths resolve under it.
+func siteBase(raw string) (*url.URL, error) {
+	base, err := url.Parse(raw)
+	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
+		return nil, plugin.Errorf(plugin.ClassConfig, "site address %q must be an http(s) address", raw)
+	}
+	if !strings.HasSuffix(base.Path, "/") {
+		base.Path += "/"
+	}
+	return base, nil
+}
+
+// spacing is the definition's request interval, else a polite default for scraped pages.
+func spacing(d *definition.Definition) time.Duration {
+	every := time.Duration(d.RateLimit.Interval)
+	if every == 0 && d.Search.Response.Type == definition.ResponseHTML {
+		every = htmlInterval
+	}
+	return every
 }
 
 func settingText(v, def any) string {
@@ -219,19 +234,32 @@ func (ix *Indexer) send(ctx context.Context, hr definition.HTTPRequest) (*reply,
 	method, target, body := hr.Method, hr.URL, hr.Body
 	for hop := 0; ; hop++ {
 		r, err := ix.once(ctx, method, target, body, hr.ContentType, hr.Headers, definition.MaxResponseSize)
-		if err != nil || r.status < 300 || r.status >= 400 || r.location == "" || hop == maxRedirects {
+		if err != nil || hop == maxRedirects {
 			return r, err
 		}
-		next, err := url.Parse(target)
-		if err != nil {
+		next, ok := ix.follow(target, r)
+		if !ok {
 			return r, nil
 		}
-		loc, err := next.Parse(r.location)
-		if err != nil || loc.Host != ix.base.Host || ix.def.Login.Expired.Holds(r.status, r.location, nil) {
-			return r, nil
-		}
-		method, target, body = http.MethodGet, loc.String(), ""
+		method, target, body = http.MethodGet, next, ""
 	}
+}
+
+// follow returns the redirect target to fetch next: same site only, and
+// never the logged-out page (that is for the session check to see).
+func (ix *Indexer) follow(from string, r *reply) (string, bool) {
+	if r.status < 300 || r.status >= 400 || r.location == "" || ix.def.Login.Expired.Holds(r.status, r.location, nil) {
+		return "", false
+	}
+	u, err := url.Parse(from)
+	if err != nil {
+		return "", false
+	}
+	loc, err := u.Parse(r.location)
+	if err != nil || loc.Host != ix.base.Host {
+		return "", false
+	}
+	return loc.String(), true
 }
 
 func (ix *Indexer) once(ctx context.Context, method, target, body, ctype string, headers map[string]string, max int64) (*reply, error) {
@@ -264,13 +292,7 @@ func (ix *Indexer) once(ctx context.Context, method, target, body, ctype string,
 // links with the instance's own session and following the details page when
 // the definition says so.
 func (ix *Indexer) Resolve(ctx context.Context, rel domain.Release) (plugin.Payload, error) {
-	link, ok := ix.links.get(rel.ID)
-	if !ok {
-		link = definition.Link{Download: rel.DownloadURL, Details: rel.DetailsURL}
-		if strings.HasPrefix(rel.DownloadURL, "magnet:") {
-			link = definition.Link{Magnet: rel.DownloadURL}
-		}
-	}
+	link := ix.linkOf(rel)
 	if link.Magnet == "" && link.Download == "" && link.Details != "" && ix.def.Download != nil {
 		var err error
 		if link, err = ix.followDetails(ctx, link.Details); err != nil {
@@ -284,6 +306,18 @@ func (ix *Indexer) Resolve(ctx context.Context, rel domain.Release) (plugin.Payl
 		return ix.fetchTorrent(ctx, link.Download, rel.Title)
 	}
 	return plugin.Payload{}, plugin.Errorf(plugin.ClassParse, "release %q has no download link", rel.ID)
+}
+
+// linkOf is the link remembered from the search, else the one persisted on
+// the release (after a restart).
+func (ix *Indexer) linkOf(rel domain.Release) definition.Link {
+	if link, ok := ix.links.get(rel.ID); ok {
+		return link
+	}
+	if strings.HasPrefix(rel.DownloadURL, "magnet:") {
+		return definition.Link{Magnet: rel.DownloadURL}
+	}
+	return definition.Link{Download: rel.DownloadURL, Details: rel.DetailsURL}
 }
 
 func (ix *Indexer) followDetails(ctx context.Context, details string) (definition.Link, error) {

@@ -97,19 +97,23 @@ func lineOf(root *yaml.Node, path string) int {
 }
 
 func child(n *yaml.Node, seg string) *yaml.Node {
-	switch n.Kind {
-	case yaml.MappingNode:
-		for i := 0; i+1 < len(n.Content); i += 2 {
-			if n.Content[i].Value == seg {
-				return n.Content[i+1]
-			}
-		}
-	case yaml.SequenceNode:
-		if i, err := strconv.Atoi(seg); err == nil && i >= 0 && i < len(n.Content) {
-			return n.Content[i]
+	if n.Kind == yaml.SequenceNode {
+		return item(n, seg)
+	}
+	for i := 0; i+1 < len(n.Content) && n.Kind == yaml.MappingNode; i += 2 {
+		if n.Content[i].Value == seg {
+			return n.Content[i+1]
 		}
 	}
 	return nil
+}
+
+func item(n *yaml.Node, seg string) *yaml.Node {
+	i, err := strconv.Atoi(seg)
+	if err != nil || i < 0 || i >= len(n.Content) {
+		return nil
+	}
+	return n.Content[i]
 }
 
 func splitPath(path string) []string {
@@ -178,27 +182,29 @@ func (v *validator) add(path, format string, a ...any) {
 	v.out = append(v.out, Problem{Path: path, Msg: fmt.Sprintf(format, a...)})
 }
 
+// when adds a problem when bad holds.
+func (v *validator) when(bad bool, path, format string, a ...any) {
+	if bad {
+		v.add(path, format, a...)
+	}
+}
+
+var privacies = map[Privacy]bool{Public: true, SemiPrivate: true, Private: true}
+
 func (v *validator) identity(d *Definition) {
-	if d.Schema != SchemaVersion {
-		v.add("schema", "schema version %d is not supported (this build reads %d)", d.Schema, SchemaVersion)
-	}
-	if !idPattern.MatchString(d.ID) {
-		v.add("id", "id %q must be 2-40 lower-case letters or digits, starting with a letter", d.ID)
-	}
-	if strings.TrimSpace(d.Name) == "" {
-		v.add("name", "a display name is required")
-	}
-	if d.Privacy != Public && d.Privacy != SemiPrivate && d.Privacy != Private {
-		v.add("privacy", "privacy must be public, semi-private or private")
-	}
-	if len(d.Links) == 0 {
-		v.add("links", "at least one site address is required")
-	}
+	v.when(d.Schema != SchemaVersion, "schema", "schema version %d is not supported (this build reads %d)", d.Schema, SchemaVersion)
+	v.when(!idPattern.MatchString(d.ID), "id", "id %q must be 2-40 lower-case letters or digits, starting with a letter", d.ID)
+	v.when(strings.TrimSpace(d.Name) == "", "name", "a display name is required")
+	v.when(!privacies[d.Privacy], "privacy", "privacy must be public, semi-private or private")
+	v.when(len(d.Links) == 0, "links", "at least one site address is required")
 	for i, l := range d.Links {
-		if u, err := url.Parse(l); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			v.add(fmt.Sprintf("links[%d]", i), "%q is not an http(s) address", l)
-		}
+		v.when(!isHTTP(l), fmt.Sprintf("links[%d]", i), "%q is not an http(s) address", l)
 	}
+}
+
+func isHTTP(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 var settingKey = regexp.MustCompile(`^[a-z][a-zA-Z0-9]*$`)
@@ -254,29 +260,23 @@ func (v *validator) login(l Login) {
 }
 
 func (v *validator) caps(c Caps) {
-	if len(c.Modes) == 0 {
-		v.add("caps.modes", "at least one search mode is required")
-	}
+	v.when(len(c.Modes) == 0, "caps.modes", "at least one search mode is required")
 	for m, params := range c.Modes {
-		if !knownModes[m] {
-			v.add("caps.modes."+m, "unknown mode (search, tv, movie, music, book)")
-		}
+		v.when(!knownModes[m], "caps.modes."+m, "unknown mode (search, tv, movie, music, book)")
 		for _, p := range params {
-			if !knownParams[p] {
-				v.add("caps.modes."+m, "unknown parameter %q", p)
-			}
+			v.when(!knownParams[p], "caps.modes."+m, "unknown parameter %q", p)
 		}
 	}
+	v.categories(c.Categories)
+}
+
+func (v *validator) categories(cats []Category) {
 	seen := map[string]bool{}
-	for i, cat := range c.Categories {
+	for i, cat := range cats {
 		p := fmt.Sprintf("caps.categories[%d]", i)
-		if cat.Site == "" || seen[cat.Site] {
-			v.add(p+".site", "site category must be set and unique")
-		}
+		v.when(cat.Site == "" || seen[cat.Site], p+".site", "site category must be set and unique")
 		seen[cat.Site] = true
-		if cat.Standard < 1000 || cat.Standard > 9999 {
-			v.add(p+".standard", "standard category %d is outside 1000-9999", cat.Standard)
-		}
+		v.when(cat.Standard < 1000 || cat.Standard > 9999, p+".standard", "standard category %d is outside 1000-9999", cat.Standard)
 	}
 }
 
@@ -348,26 +348,20 @@ func hasAny(m map[string]FieldRule, keys ...string) bool {
 
 func (v *validator) field(t ResponseType, name string, f FieldRule) {
 	p := "search.response.fields." + name
-	if !knownFields[name] && !strings.HasPrefix(name, "_") {
-		v.add(p, "unknown field (helper fields start with _)")
-	}
-	if t == ResponseJSON && f.Selector != "" {
-		v.add(p+".selector", "a JSON response uses path, not selector")
-	}
-	if t == ResponseHTML && f.Path != "" {
-		v.add(p+".path", "an HTML response uses selector, not path")
-	}
-	if f.Path != "" {
-		if _, err := ParsePath(f.Path); err != nil {
-			v.add(p+".path", "%v", err)
-		}
+	v.when(!knownFields[name] && !strings.HasPrefix(name, "_"), p, "unknown field (helper fields start with _)")
+	v.when(t == ResponseJSON && f.Selector != "", p+".selector", "a JSON response uses path, not selector")
+	v.when(t == ResponseHTML && f.Path != "", p+".path", "an HTML response uses selector, not path")
+	if _, err := ParsePath(f.Path); err != nil {
+		v.add(p+".path", "%v", err)
 	}
 	v.selector(p+".selector", f.Selector)
 	v.template(p+".value", f.Value)
-	if len(f.Filters) > MaxFilters {
-		v.add(p+".filters", "at most %d filters", MaxFilters)
-	}
-	for i, fl := range f.Filters {
+	v.filters(p, f.Filters)
+}
+
+func (v *validator) filters(p string, fs []Filter) {
+	v.when(len(fs) > MaxFilters, p+".filters", "at most %d filters", MaxFilters)
+	for i, fl := range fs {
 		if err := fl.check(); err != nil {
 			v.add(fmt.Sprintf("%s.filters[%d]", p, i), "%v", err)
 		}
