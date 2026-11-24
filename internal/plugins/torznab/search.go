@@ -19,6 +19,7 @@ var modeT = map[domain.SearchMode]string{
 var modeIDs = map[domain.SearchMode][]idParam{
 	domain.SearchMovie: {{"imdb", "imdbid"}, {"tmdb", "tmdbid"}},
 	domain.SearchTV:    {{"tvdb", "tvdbid"}, {"imdb", "imdbid"}, {"tmdb", "tmdbid"}, {"tvmaze", "tvmazeid"}},
+	domain.SearchMusic: {{"artist", "artist"}, {"album", "album"}},
 }
 
 // Search prefers an id search the indexer advertises, then falls back to a
@@ -63,6 +64,9 @@ func (ix *Indexer) idQuery(req domain.SearchRequest, caps parsedCaps) (url.Value
 	}
 	if found && req.Mode == domain.SearchTV {
 		addEpisode(v, req)
+	}
+	if found && req.Mode == domain.SearchMusic && req.Year > 0 && caps.supports(req.Mode, "year") {
+		v.Set("year", strconv.Itoa(req.Year))
 	}
 	return v, found
 }
