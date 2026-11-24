@@ -24,6 +24,11 @@
     verdict: 'reject', rank: 14, candidates: 14, score: { total: -500, formats: [{ name: 'Unknown group', score: -500 }] }, reasons: [safe, perm, pref],
   };
 
+  const direct: Decision = {
+    release: { title: 'Harbour Lights - Low Tide (2025) [FLAC]', indexer: 'TrubadurCamp', protocol: 'source', size: 312e6, publishedAt: now - 86_400_000, quality: 'FLAC', runtimeSeconds: 2640 },
+    verdict: 'accept', rank: 1, candidates: 4, score: { total: 0, formats: [] }, reasons: [],
+  };
+
   const { Story } = defineMeta({
     title: 'Organisms/DecisionPanel',
     component: DecisionPanel,
@@ -42,6 +47,7 @@
     <Row label="Rejected, preference + temporary: grab anyway"><div class="w"><DecisionPanel decision={prefOnly} {now} ongrab={() => {}} /></div></Row>
     <Row label="Rejected, permanent + blocklist: grab anyway with confirm"><div class="w"><DecisionPanel decision={needsConfirm} {now} ongrab={() => {}} /></div></Row>
     <Row label="Rejected, safety: no override"><div class="w"><DecisionPanel decision={blocked} {now} ongrab={() => {}} /></div></Row>
+    <Row label="Accepted, from a direct music source"><div class="w"><DecisionPanel decision={direct} {now} ongrab={() => {}} /></div></Row>
     <Row label="Read-only (no grab handler)"><div class="w"><DecisionPanel decision={accepted} {now} /></div></Row>
   </ThemePair>
 </Story>
