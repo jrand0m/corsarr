@@ -20,6 +20,8 @@ import (
 	"github.com/jrand0m/corsarr/internal/importer"
 	"github.com/jrand0m/corsarr/internal/instances"
 	"github.com/jrand0m/corsarr/internal/movies"
+	"github.com/jrand0m/corsarr/internal/music"
+	"github.com/jrand0m/corsarr/internal/musicauto"
 	"github.com/jrand0m/corsarr/internal/notify"
 	"github.com/jrand0m/corsarr/internal/plugin"
 	"github.com/jrand0m/corsarr/internal/queue"
@@ -73,6 +75,8 @@ type App struct {
 	Roots      *rootfolders.Checker
 	TV         *tv.Service
 	TVAuto     *tvauto.Service
+	Music      *music.Service
+	MusicAuto  *musicauto.Service
 	wg         sync.WaitGroup
 	cancel     context.CancelFunc
 	ctx        context.Context // the running pipeline's context (set by Start)
@@ -107,11 +111,13 @@ func (a *App) build() {
 	a.Queue = queue.New(queue.Deps{Repo: st.Queue(), Plugins: plugins{a}, Pub: d.Bus, Jobs: d.Jobs, UIClients: d.UIClients,
 		ItemTitles: a.itemTitles, Payload: decide.PayloadPolicy{}, Modes: modes, FastPoll: d.Options.FastPoll, SlowPoll: d.Options.SlowPoll, Log: d.Log})
 	a.TV = a.newTV()
-	a.Importer = importer.New(importer.Deps{Queue: a.Queue, Movies: a.Movies, TV: a.TV, Library: st.Library(), Rules: a.Rules,
+	a.Music = a.newMusic()
+	a.Importer = importer.New(importer.Deps{Queue: a.Queue, Movies: a.Movies, TV: a.TV, Music: a.Music, Library: st.Library(), Rules: a.Rules,
 		RuleStore: st.Rules(), Pub: d.Bus, DataDir: st.Dir(), NoSpace: a.recheckRoots, Modes: modes, Log: d.Log})
 	a.Automation = automation.New(automation.Deps{Movies: a.Movies, Files: st.Library(), Queue: a.Queue, Blocklist: st.Blocklist(),
 		Cursors: st.FeedCursors(), Searches: st.Searches(), Recent: st.RecentReleases(), Indexers: a.indexers, Pub: d.Bus, Modes: modes, Log: d.Log})
 	a.TVAuto = a.newTVAuto()
+	a.MusicAuto = a.newMusicAuto()
 	a.Notify = notify.New(notify.Deps{Outbox: st.Outbox(), Refreshes: st.Refreshes(), Connections: a.connections, Health: d.Health, Pub: d.Bus,
 		MediaServers: a.mediaServers, MergeWindow: d.Options.MergeWindow, Modes: modes, Log: d.Log})
 }
@@ -161,7 +167,7 @@ func (a *App) registerJobs(ctx context.Context) error {
 			return err
 		}},
 	}
-	for _, j := range append(jobs, a.tvJobs()...) {
+	for _, j := range append(append(jobs, a.tvJobs()...), a.musicJobs()...) {
 		if err := a.d.Jobs.Register(ctx, j); err != nil {
 			return err
 		}
@@ -187,6 +193,9 @@ func (a *App) Start(ctx context.Context) error {
 	if err := a.startTV(ctx); err != nil {
 		return err
 	}
+	if err := a.startMusic(ctx); err != nil {
+		return err
+	}
 	a.goRun(func() { a.Notify.Run(ctx) })
 	a.goRun(func() { _ = a.Instances.TestAll(ctx) })
 	a.Queue.Adjust(ctx)
@@ -205,6 +214,7 @@ func (a *App) Close() {
 	}
 	a.Movies.Stop()
 	a.TV.Stop()
+	a.Music.Stop()
 	a.wg.Wait()
 	a.Importer.Wait()
 	a.Automation.Wait()
@@ -267,7 +277,7 @@ func (a *App) importWaiting(ctx context.Context, k domain.MediaKind) {
 // Mounts are the module API routes.
 func (a *App) Mounts() []func(api.Mounter) {
 	return []func(api.Mounter){a.Movies.Mount, a.Queue.Mount, a.Automation.Mount, a.Rules.Mount,
-		a.Roots.Mount, a.Notify.Mount, a.TV.Mount, a.TVAuto.Mount}
+		a.Roots.Mount, a.Notify.Mount, a.TV.Mount, a.TVAuto.Mount, a.Music.Mount, a.MusicAuto.Mount}
 }
 
 func typeIn(types ...domain.EventType) func(domain.EventType) bool {
