@@ -119,6 +119,9 @@ func (s *Service) run(ctx context.Context, req Request, mode, reviewed string, p
 
 func (s *Service) execute(ctx context.Context, req Request, mode, reviewed string, progress func(Progress)) (Report, error) {
 	snaps := s.read(ctx, req, progress)
+	if err := allFailed(snaps); err != nil {
+		return Report{Mode: mode, Sources: sourcesOf(snaps)}, err
+	}
 	st, err := s.state(ctx, snaps, req.Options)
 	if err != nil {
 		return Report{Mode: mode}, err
@@ -153,6 +156,26 @@ func (s *Service) read(ctx context.Context, req Request, progress func(Progress)
 			s.d.Log.Warn("migration source failed", "source", ep.App, "url", ep.URL.String(), "err", err)
 		}
 		out = append(out, snap)
+	}
+	return out
+}
+
+// allFailed is an error naming every source when none could be read.
+func allFailed(snaps []Snapshot) error {
+	var errs []error
+	for _, s := range snaps {
+		if s.Source.Error == "" {
+			return nil
+		}
+		errs = append(errs, fmt.Errorf("%s: %s", s.Source.App, s.Source.Error))
+	}
+	return errors.Join(errs...)
+}
+
+func sourcesOf(snaps []Snapshot) []SourceInfo {
+	out := make([]SourceInfo, len(snaps))
+	for i, s := range snaps {
+		out[i] = s.Source
 	}
 	return out
 }

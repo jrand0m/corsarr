@@ -276,7 +276,10 @@ func TestUnsupportedVersionIsRefused(t *testing.T) {
 	r := newRig(t)
 	r.sonarr.version = "2.0.0"
 	r.req.Sources = r.req.Sources[:1]
-	rep := r.plan()
+	rep, err := r.svc.Plan(context.Background(), r.req, nil)
+	if !errors.Is(err, ErrUnsupportedVersion) && (err == nil || !strings.Contains(err.Error(), "unsupported version")) {
+		t.Fatal(err)
+	}
 	if !strings.Contains(rep.Sources[0].Error, "supported 3.x to 4.x") || len(rep.Entries) != 0 {
 		t.Fatalf("%+v %d", rep.Sources, len(rep.Entries))
 	}

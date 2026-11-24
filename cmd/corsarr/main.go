@@ -5,6 +5,7 @@
 //	corsarr config validate [--plan]        validate the active config source
 //	corsarr config export [--format=yaml|env] [--full]
 //	corsarr config schema                   print the JSON Schema
+//	corsarr migrate plan|run --from=… --url=… --api-key-file=…   import an existing installation
 //	corsarr version
 //
 // Configuration args (`--server.address=:8090`, `--configFile=…`) may follow
@@ -47,6 +48,12 @@ type cli struct {
 // commandFlags are subcommand flags, kept out of the config args.
 var commandFlags = map[string]bool{"plan": true, "format": true, "full": true}
 
+func init() {
+	for _, f := range migrateFlags {
+		commandFlags[f] = true
+	}
+}
+
 func parse(args, environ []string, stdout, stderr io.Writer) cli {
 	c := cli{flags: map[string]string{}, stdout: stdout, stderr: stderr}
 	for _, a := range args {
@@ -82,8 +89,12 @@ func run(ctx context.Context, args, environ []string, stdout, stderr io.Writer) 
 	case "config schema":
 		_, _ = stdout.Write(config.NewSchema(plugin.Default).JSONSchema())
 		return 0
+	case "migrate plan":
+		return c.migrate(ctx, "plan")
+	case "migrate run":
+		return c.migrate(ctx, "run")
 	}
-	fmt.Fprintf(stderr, "unknown command %q (serve | healthcheck | config validate|export|schema | version)\n", strings.Join(c.cmd, " "))
+	fmt.Fprintf(stderr, "unknown command %q (serve | healthcheck | config validate|export|schema | migrate plan|run | version)\n", strings.Join(c.cmd, " "))
 	return 2
 }
 
