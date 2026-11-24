@@ -146,21 +146,28 @@ func belowCutoff(p decide.QualityProfile, cur decide.CurrentFile) bool {
 // count folds one album into the artist stats.
 func count(st *Stats, v AlbumView, now time.Time) {
 	st.TotalAlbums++
-	if v.InProfile {
-		st.AlbumCount++
-	}
-	if v.Monitored {
-		st.MonitoredAlbums++
-	}
-	if v.FileCount > 0 {
-		st.AlbumsWithFiles++
-	}
+	st.AlbumCount += one(v.InProfile)
+	st.MonitoredAlbums += one(v.Monitored)
+	st.AlbumsWithFiles += one(v.FileCount > 0)
 	st.TrackFileCount += v.FileCount
 	st.SizeOnDisk += v.SizeOnDisk
-	if d := v.ReleaseDate; d != nil && d.After(now) && (st.NextRelease == nil || d.Before(*st.NextRelease)) {
-		st.NextRelease = d
+	releases(st, v.ReleaseDate, now)
+}
+
+func one(b bool) int {
+	if b {
+		return 1
 	}
-	if d := v.ReleaseDate; d != nil && !d.After(now) && (st.LastRelease == nil || d.After(*st.LastRelease)) {
+	return 0
+}
+
+// releases keeps the next upcoming and the latest past release date.
+func releases(st *Stats, d *time.Time, now time.Time) {
+	switch {
+	case d == nil:
+	case d.After(now) && (st.NextRelease == nil || d.Before(*st.NextRelease)):
+		st.NextRelease = d
+	case !d.After(now) && (st.LastRelease == nil || d.After(*st.LastRelease)):
 		st.LastRelease = d
 	}
 }

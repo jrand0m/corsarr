@@ -62,11 +62,8 @@ func (ix *Indexer) idQuery(req domain.SearchRequest, caps parsedCaps) (url.Value
 			found = true
 		}
 	}
-	if found && req.Mode == domain.SearchTV {
-		addEpisode(v, req)
-	}
-	if found && req.Mode == domain.SearchMusic && req.Year > 0 && caps.supports(req.Mode, "year") {
-		v.Set("year", strconv.Itoa(req.Year))
+	if found {
+		narrow(v, req, caps)
 	}
 	return v, found
 }
@@ -77,6 +74,16 @@ func normalizeID(ext, id string) string {
 		return strings.TrimPrefix(id, "tt")
 	}
 	return id
+}
+
+// narrow adds the mode's extra parameters to an id search.
+func narrow(v url.Values, req domain.SearchRequest, caps parsedCaps) {
+	switch {
+	case req.Mode == domain.SearchTV:
+		addEpisode(v, req)
+	case req.Mode == domain.SearchMusic && req.Year > 0 && caps.supports(req.Mode, "year"):
+		v.Set("year", strconv.Itoa(req.Year))
+	}
 }
 
 func addEpisode(v url.Values, req domain.SearchRequest) {

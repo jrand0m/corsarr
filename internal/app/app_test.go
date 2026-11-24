@@ -125,6 +125,20 @@ func TestAppWiresModulesJobsAndAdapters(t *testing.T) {
 	if tvTitles[0].Title != "Show S01E02" || tvTitles[1].Title != "Show" || tvTitles[2].Title != "" {
 		t.Fatalf("tv item titles %+v", tvTitles)
 	}
+	cfg.RootFolders = append(cfg.RootFolders, config.RootFolder{Path: "/music", Kind: domain.KindMusic})
+	if roots := a.musicRoots(); len(roots) != 1 || roots[0] != "/music" {
+		t.Fatalf("music roots %v", roots)
+	}
+	if _, ok := a.musicMetadata(); ok {
+		t.Fatal("the test plugin serves no music metadata")
+	}
+	ar, _, _ := st.Music().AddArtist(ctx, domain.Artist{MBID: "m", Name: "Band", RootFolder: "/music", Path: "/music/Band",
+		ProfileKey: "standard", MetadataProfile: "standard", MonitorNew: domain.MonitorNewItemsAll, Tags: []string{}}, []domain.Album{{MBID: "g", Title: "Record"}})
+	albums, _ := st.Music().Albums(ctx, ar.ID)
+	musicTitles := a.itemTitles(ctx, []domain.ItemRef{albums[0].Ref(), ar.Ref(), {Kind: domain.KindMusic, ID: 9, Variant: domain.VariantArtist}})
+	if musicTitles[0].Title != "Band - Record" || musicTitles[1].Title != "Band" || musicTitles[2].Title != "" {
+		t.Fatalf("music item titles %+v", musicTitles)
+	}
 	// the start-up self-test runs concurrently and may report ok first; a
 	// later auth failure must stick and hide the downloader
 	testkit.Eventually(t, 2*time.Second, "action-needed downloaders are skipped", func() bool {

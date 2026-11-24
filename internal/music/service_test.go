@@ -230,6 +230,12 @@ func TestMonitorPinsAndDeleteKeepsFilesUnlessAsked(t *testing.T) {
 		t.Fatalf("%+v %v", page, err)
 	}
 	tracks, _ := f.svc.Tracks(ctx, live.ID)
+	if got, err := f.svc.Track(ctx, tracks[0].ID); err != nil || got.AlbumID != live.ID {
+		t.Fatalf("track %+v %v", got, err)
+	}
+	if _, err := f.svc.Track(ctx, 9999); !errors.Is(err, ErrNotFound) {
+		t.Fatal("unknown track")
+	}
 	file, err := f.st.Library().SaveFile(ctx, domain.LibraryFile{Item: tracks[0].Ref(), Path: "/x/1.flac", Size: 10, Quality: "flac", AddedAt: now})
 	must(t, err)
 	must(t, f.svc.SetTrackFile(ctx, tracks[0].ID, file.ID))
