@@ -12,7 +12,7 @@ export const EVENT_TYPES = [
   'import.completed', 'import.blocked', 'import.failed', 'payload.rejected', 'file.renamed', 'file.deleted',
   'blocklist.added', 'blocklist.removed', 'rule.acted', 'rule.run_completed', 'rule.undone', 'health.changed',
   'config.applied', 'config.apply_failed', 'config.drifted', 'mediakind.mode_changed', 'plugin.loaded', 'job.updated',
-  'command.updated',
+  'command.updated', 'migration.progress', 'migration.run_completed',
 ] as const;
 
 export type Handler = (ev: LiveEvent) => void;

@@ -230,8 +230,12 @@ func TestExistingItemAndOwnerChoicesAreKept(t *testing.T) {
 
 func TestExcludedEntriesAreSkipped(t *testing.T) {
 	r := newRig(t)
+	reviewed := r.plan().PlanHash
 	r.req.Options.Exclude = map[string]bool{"radarr:movie:2": true}
-	rep := r.apply()
+	rep, err := r.svc.Apply(context.Background(), r.req, reviewed, nil)
+	if err != nil {
+		t.Fatal("leaving an object out changed the reviewed plan:", err)
+	}
 	if e := entry(t, rep, "radarr:movie:2"); e.Outcome != OutSkip {
 		t.Fatalf("%+v", e)
 	}

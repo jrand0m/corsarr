@@ -24,11 +24,11 @@ func BuildPlan(snaps []Snapshot, st State, o Options) Report {
 	}
 	b.modes()
 	r.Entries = b.entries
-	b.exclude(r.Entries)
 	sortEntries(r.Entries)
+	r.PlanHash = r.hash() // before exclusions: leaving objects out does not change the reviewed plan
+	b.exclude(r.Entries)
 	r.count()
 	r.Config, r.Env = b.cfg.render()
-	r.PlanHash = r.hash()
 	r.Finished = st.Now
 	return r
 }
@@ -257,8 +257,11 @@ func (b *builder) modes() {
 	}
 }
 
+// kindNames are display names of the media kinds.
+var kindNames = map[domain.MediaKind]string{domain.KindTV: "TV", domain.KindMovie: "Movies", domain.KindMusic: "Music", domain.KindBook: "Books"}
+
 func (b *builder) kindMode(k domain.MediaKind) Entry {
-	e := Entry{ID: "corsarr:mode:" + string(k), Category: CatModes, Source: b.kinds[k], Name: "Mode of " + string(k)}
+	e := Entry{ID: "corsarr:mode:" + string(k), Category: CatModes, Source: b.kinds[k], Name: kindNames[k] + " mode"}
 	mode := domain.ModeShadow
 	if b.o.Activate {
 		mode = domain.ModeActive
@@ -270,7 +273,7 @@ func (b *builder) kindMode(k domain.MediaKind) Entry {
 		e.Outcome, e.Reason = OutUnchanged, "kept your choice: "+cur
 	default:
 		e.Outcome, e.op = OutCreate, modeOp{store.ModeOverride{Scope: store.ScopeKind, Name: string(k), Mode: string(mode)}}
-		e.Reason = string(k) + " runs in " + string(mode) + " mode"
+		e.Reason = kindNames[k] + " runs in " + string(mode) + " mode"
 		if mode == domain.ModeShadow {
 			e.Reason += ": corsarr keeps the library and queue in view but grabs, imports, notifies and deletes nothing until you switch it to active"
 		}
