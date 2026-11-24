@@ -149,4 +149,11 @@ export class Client {
     if (!res.body) return;
     yield* readNdjson<T>(res.body);
   }
+
+  /** NDJSON lines of a POST (a long run that reports progress) as they arrive. */
+  async *postStream<T>(path: string, body: unknown, signal?: AbortSignal): AsyncGenerator<T> {
+    const res = await this.raw('POST', path, { body, signal, accept: 'application/x-ndjson' });
+    if (!res.body) return;
+    yield* readNdjson<T>(res.body);
+  }
 }

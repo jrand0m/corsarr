@@ -100,6 +100,7 @@ const eventViews: Record<string, EventView> = {
   'config.drifted': { label: 'Config drifted', family: 'check', value: 'warn' },
   'mediakind.mode_changed': { label: 'Kind mode changed', family: 'kindMode', value: 'active' },
   'refresh.abandoned': { label: 'Library refresh gave up', family: 'health', value: 'failing' },
+  'migration.run_completed': { label: 'Migration applied', family: 'check', value: 'pass' },
 };
 
 /** Label and badge for a History event; health changes take the new health state. */
@@ -125,6 +126,7 @@ export function actorLabel(actor: string): string {
   if (actor === 'automation') return 'Automation';
   if (actor === 'system') return 'corsarr';
   if (actor.startsWith('plugin:')) return `Plugin ${actor.slice(7)}`;
+  if (actor.startsWith('import:')) return `Imported from ${actor.slice(7)}`;
   if (actor.startsWith('rule')) return 'Rule';
   return actor || '—';
 }

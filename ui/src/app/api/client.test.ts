@@ -97,6 +97,17 @@ describe('Client', () => {
     expect(lines).toEqual([{ record: { n: 1 } }, { error: { source: 'slow', message: 'timeout' } }, { summary: { done: true } }]);
   });
 
+  it('streams the NDJSON answer of a POST', async () => {
+    const fetch = vi.fn(async () => new Response('{"record":1}\n{"summary":{"done":true}}\n', { status: 200 }));
+    const api = new Client({ fetch });
+    const lines: unknown[] = [];
+    for await (const l of api.postStream('migration/plan', { sources: [] })) lines.push(l);
+    expect(lines).toEqual([{ record: 1 }, { summary: { done: true } }]);
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe('{"sources":[]}');
+  });
+
   it('reads plain text', async () => {
     const api = new Client({ fetch: async () => new Response('version: 1\n', { status: 200 }) });
     expect(await api.text('config/export', { format: 'yaml' })).toBe('version: 1\n');

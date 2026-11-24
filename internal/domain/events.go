@@ -40,6 +40,8 @@ const (
 	EvPluginLoaded      EventType = "plugin.loaded"
 	EvJobUpdated        EventType = "job.updated"
 	EvCommandUpdated    EventType = "command.updated"
+	EvMigrationProgress EventType = "migration.progress"
+	EvMigrationComplete EventType = "migration.run_completed"
 )
 
 // eventFlags records which events go to History (H) and SSE (S).
@@ -56,6 +58,7 @@ var eventFlags = map[EventType]struct{ History, Stream bool }{
 	EvHealthChanged: {true, true}, EvRefreshAbandoned: {true, true}, EvConfigApplied: {true, true}, EvConfigApplyFailed: {true, true},
 	EvConfigDrifted: {true, true}, EvMediaKindMode: {true, true}, EvPluginLoaded: {false, true},
 	EvJobUpdated: {false, true}, EvCommandUpdated: {false, true},
+	EvMigrationProgress: {false, true}, EvMigrationComplete: {true, true},
 }
 
 // Persisted reports whether the event belongs in History.

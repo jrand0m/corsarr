@@ -145,6 +145,18 @@ func (r *Runner) SetModes(modes map[string]Mode) []string {
 	return unknown
 }
 
+// IDs lists the registered rule ids, sorted.
+func (r *Runner) IDs() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]string, 0, len(r.rules))
+	for id := range r.rules {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Mode returns the mode a rule runs in now.
 func (r *Runner) Mode(id string) (Mode, error) {
 	rule, err := r.rule(id)

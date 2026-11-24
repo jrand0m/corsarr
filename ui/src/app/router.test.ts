@@ -55,7 +55,7 @@ describe('areaLoaders', () => {
   it('loads every area as a module with the screens the table names', async () => {
     const screens: Record<string, string[]> = {
       access: ['setup', 'login'], dashboard: ['dashboard'], library: ['movies', 'add', 'movie', 'series', 'addSeries', 'show'], wanted: ['missing', 'missingTv'],
-      activity: ['queue', 'history', 'blocklist'], system: ['health', 'tasks'], settings: ['general', 'plugins'],
+      activity: ['queue', 'history', 'blocklist'], system: ['health', 'tasks', 'migration'], settings: ['general', 'plugins'],
     };
     for (const [area, names] of Object.entries(screens)) {
       const mod = await areaLoaders[area as keyof typeof areaLoaders]();

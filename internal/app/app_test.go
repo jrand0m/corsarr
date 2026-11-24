@@ -97,7 +97,7 @@ func TestAppWiresModulesJobsAndAdapters(t *testing.T) {
 	if err := a.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(jobs.List()) != 10 || len(a.Mounts()) != 9 { // movie and TV pipelines, indexer settings
+	if len(jobs.List()) != 10 || len(a.Mounts()) != 10 { // movie and TV pipelines, indexer settings, migration
 		t.Fatalf("jobs %d mounts %d", len(jobs.List()), len(a.Mounts()))
 	}
 	p := plugins{a}
