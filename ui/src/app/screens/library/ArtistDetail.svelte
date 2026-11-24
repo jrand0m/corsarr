@@ -44,7 +44,7 @@
   const hidden = $derived((detail.data?.albums?.length ?? 0) - shownAlbums(detail.data?.albums ?? [], false).length);
 
   const entity = $derived({
-    title: artist?.name ?? 'Artist', kind: 'music' as const, art: null,
+    title: artist?.name ?? 'Artist', kind: 'music' as const, kindLabel: 'Artist', art: null,
     meta: [artist?.disambiguation, artist?.type, artist?.country].filter(Boolean).join(' · '),
     back: { href: '#/library/music', label: 'Music' },
     monitor: (artist?.monitored ? 'monitored' : 'unmonitored') as MonitorState,
@@ -122,9 +122,9 @@
   const columns: Column<AlbumView>[] = [
     { id: 'monitored', label: 'Monitored', width: '3rem', hideLabel: true, phone: 'hidden' },
     { id: 'title', label: 'Album', value: (a) => a.title, phone: 'title' },
-    { id: 'year', label: 'Year', width: '4.5rem', phone: 'meta', value: (a) => albumYear(a) || '—' },
-    { id: 'type', label: 'Type', width: '9rem', phone: 'hidden', value: (a) => albumTypes(a) },
-    { id: 'tracks', label: 'Tracks', width: '8rem', phone: 'trailing', value: (a) => `${a.fileCount}/${a.trackCount}` },
+    { id: 'year', label: 'Year', width: '4rem', phone: 'meta', value: (a) => albumYear(a) || '—' },
+    { id: 'type', label: 'Type', width: '7rem', phone: 'hidden', value: (a) => albumTypes(a) },
+    { id: 'tracks', label: 'Tracks', width: '7rem', phone: 'trailing', value: (a) => `${a.fileCount}/${a.trackCount}` },
     { id: 'status', label: 'Status', width: '9rem', phone: 'hidden' },
     { id: 'size', label: 'Size', width: '6rem', align: 'end', phone: 'hidden', value: (a) => a.sizeOnDisk },
   ];

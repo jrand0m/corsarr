@@ -31,9 +31,9 @@
   const albumColumns: Column<AlbumRow>[] = [
     { id: 'monitored', label: 'Monitored', width: '3rem', hideLabel: true, phone: 'hidden' },
     { id: 'title', label: 'Album', value: (a) => a.title, phone: 'title' },
-    { id: 'year', label: 'Year', width: '4.5rem', phone: 'meta', value: (a) => a.year },
-    { id: 'type', label: 'Type', width: '9rem', phone: 'hidden', value: (a) => a.type },
-    { id: 'tracks', label: 'Tracks', width: '8rem', phone: 'trailing', value: (a) => `${a.files}/${a.tracks}` },
+    { id: 'year', label: 'Year', width: '4rem', phone: 'meta', value: (a) => a.year },
+    { id: 'type', label: 'Type', width: '7rem', phone: 'hidden', value: (a) => a.type },
+    { id: 'tracks', label: 'Tracks', width: '7rem', phone: 'trailing', value: (a) => `${a.files}/${a.tracks}` },
     { id: 'status', label: 'Status', width: '9rem', phone: 'hidden' },
     { id: 'size', label: 'Size', width: '6rem', align: 'end', phone: 'hidden', value: (a) => a.size },
   ];
@@ -45,7 +45,7 @@
   ];
 
   const artist = {
-    title: 'Harbour Lights', kind: 'music' as const, art: null, meta: 'Group · GB', monitor: 'monitored' as const,
+    title: 'Harbour Lights', kind: 'music' as const, kindLabel: 'Artist', art: null, meta: 'Group · GB', monitor: 'monitored' as const,
     status: [{ family: 'item' as const, value: 'missing' }], back: { href: '#/library/music', label: 'Music' },
     facts: [{ label: 'Albums on disk', value: '4 of 6 monitored' }, { label: 'Tracks', value: '41' }, { label: 'Size', value: '940 MB' }],
     menu: [{ id: 'refresh', label: 'Refresh metadata', icon: 'refresh' as const }, { id: 'delete', label: 'Delete…', icon: 'trash' as const, danger: true }],

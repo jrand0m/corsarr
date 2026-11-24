@@ -48,6 +48,10 @@
     <Row label="Album (cover), CJK title, unmonitored">
       <EntityHeader title="港の灯り" kind="music" art={null} meta="2025 · Kaori Minato · 9 tracks" monitor="unmonitored" status={[{ family: 'item', value: 'cutoff-met' }]} />
     </Row>
+    <Row label="Artist (music kind, own label), missing albums">
+      <EntityHeader title="Harbour Lights" kind="music" kindLabel="Artist" art={null} meta="Group · GB" monitor="monitored"
+        status={[{ family: 'item', value: 'missing' }]} facts={[{ label: 'Albums on disk', value: '4 of 6 monitored' }]} />
+    </Row>
     <Row label="Book, long RTL title, managed by config">
       <EntityHeader
         title="مرفأ الضوء: حكايات الحاويات والموانئ التي غيرت العالم" kind="book" art={null} meta="2023 · EPUB"
