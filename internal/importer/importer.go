@@ -61,7 +61,8 @@ type Publisher interface {
 type Deps struct {
 	Queue     Queue
 	Movies    Movies
-	TV        TV // nil = no TV imports
+	TV        TV    // nil = no TV imports
+	Music     Music // nil = no music imports
 	Library   Library
 	Rules     *rules.Runner
 	RuleStore RuleStore
@@ -220,8 +221,11 @@ func failed(id int64, code string, items []domain.EventItem, reason string) resu
 
 // run does the work of one import and always returns an outcome.
 func (s *Service) run(ctx context.Context, d store.StoredDownload) result {
-	if d.Kind == domain.KindTV {
+	switch d.Kind {
+	case domain.KindTV:
 		return s.runTV(ctx, d)
+	case domain.KindMusic:
+		return s.runMusic(ctx, d)
 	}
 	m, err := s.linkedMovie(ctx, d)
 	items := []domain.EventItem{m.EventItem()}

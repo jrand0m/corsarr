@@ -224,6 +224,13 @@ func (r Music) Tracks(ctx context.Context, albumID int64) ([]domain.Track, error
 	return out, err
 }
 
+// Track returns a track by id.
+func (r Music) Track(ctx context.Context, id int64) (domain.Track, bool, error) {
+	t, err := scanTrack(r.s.R().QueryRowContext(ctx, "SELECT "+trackCols+" FROM tracks WHERE id = ?", id))
+	ok, err := found(err)
+	return t, ok, err
+}
+
 // SetTrackFile links a track to a library file (0 = none).
 func (r Music) SetTrackFile(ctx context.Context, trackID, fileID int64) error {
 	return r.s.exec(ctx, "UPDATE tracks SET file_id = ? WHERE id = ?", fileID, trackID)

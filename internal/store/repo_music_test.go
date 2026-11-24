@@ -37,6 +37,9 @@ func TestMusicArtistsAlbumsAndTracks(t *testing.T) {
 	tracks, err := r.Tracks(ctx, first.ID)
 	must(t, err)
 	must(t, r.SetTrackFile(ctx, tracks[0].ID, 7))
+	if tr, ok, err := r.Track(ctx, tracks[0].ID); err != nil || !ok || tr.FileID != 7 {
+		t.Fatalf("track %+v %v %v", tr, ok, err)
+	}
 	// a new edition keeps the track with a file and drops the other
 	must(t, r.SetEdition(ctx, first, []domain.Track{{Medium: 1, Number: 1, Title: "One (remaster)"}, {Medium: 2, Number: 1, Title: "Bonus"}}))
 	tracks, err = r.Tracks(ctx, first.ID)

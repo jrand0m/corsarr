@@ -31,6 +31,7 @@ type Repo interface {
 	SetAlbumsMonitored(ctx context.Context, ids []int64, monitored bool, pin domain.PinReason) (int, error)
 	SetEdition(ctx context.Context, a domain.Album, tracks []domain.Track) error
 	Tracks(ctx context.Context, albumID int64) ([]domain.Track, error)
+	Track(ctx context.Context, id int64) (domain.Track, bool, error)
 	SetTrackFile(ctx context.Context, trackID, fileID int64) error
 	PendingAvailability(ctx context.Context, fn func(domain.Album) error) error
 	MarkAvailable(ctx context.Context, ids []int64) error
@@ -374,6 +375,15 @@ func (s *Service) Albums(ctx context.Context, artistID int64) ([]domain.Album, e
 // Tracks lists an album's tracks.
 func (s *Service) Tracks(ctx context.Context, albumID int64) ([]domain.Track, error) {
 	return s.d.Repo.Tracks(ctx, albumID)
+}
+
+// Track returns one track or ErrNotFound.
+func (s *Service) Track(ctx context.Context, id int64) (domain.Track, error) {
+	t, ok, err := s.d.Repo.Track(ctx, id)
+	if err == nil && !ok {
+		err = ErrNotFound
+	}
+	return t, err
 }
 
 // EachArtist streams every artist.
