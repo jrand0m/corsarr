@@ -4,6 +4,7 @@ import type { SettingsSection } from '../../../lib/components/templates/Settings
 export const settingsSections = (instances?: number): SettingsSection[] => [
   { id: 'general', label: 'General', href: '#/settings/general' },
   { id: 'plugins', label: 'Plugins & integrations', href: '#/settings/plugins', count: instances },
+  { id: 'indexers', label: 'Indexers', href: '#/settings/indexers' },
 ];
 
 /** How to change config for each source (one config source). */
