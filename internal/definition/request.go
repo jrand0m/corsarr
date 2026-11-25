@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jrand0m/corsarr/internal/charset"
 	"github.com/jrand0m/corsarr/internal/domain"
 )
 
@@ -161,44 +162,56 @@ type HTTPRequest struct {
 }
 
 // Render expands a request template against the site base address.
+//
+// With a site encoding, the path, query values and a form body carry the
+// text in that encoding (a JSON body stays UTF-8).
 func (d *Definition) Render(base *url.URL, r Request, v Vars) (HTTPRequest, error) {
-	path, err := Expand(r.Path, v)
+	path, err := ExpandIn(r.Path, v, d.Encoding)
 	if err != nil {
 		return HTTPRequest{}, err
 	}
-	u, err := url.Parse(path)
+	u, err := url.Parse(d.EncodeText(path))
 	if err != nil {
 		return HTTPRequest{}, fmt.Errorf("request path %q: %w", path, err)
 	}
 	u = base.ResolveReference(u)
 	q := u.Query()
-	query, err := expandAll(v, r.Query)
+	query, err := expandAll(v, d.Encoding, r.Query)
 	if err != nil {
 		return HTTPRequest{}, err
 	}
 	for k, val := range query {
 		if val != "" {
-			q.Set(k, val)
+			q.Set(k, d.EncodeText(val))
 		}
 	}
 	u.RawQuery = q.Encode()
 	out := HTTPRequest{Method: r.Method, URL: u.String(), ContentType: r.Type}
-	if out.Body, err = Expand(r.Body, v); err != nil {
+	if out.Body, err = ExpandIn(r.Body, v, d.Encoding); err != nil {
 		return HTTPRequest{}, err
 	}
 	if out.Body != "" && out.ContentType == "" {
-		out.ContentType = "application/x-www-form-urlencoded"
+		out.ContentType = FormType
 	}
-	out.Headers, err = expandAll(v, d.Headers, r.Headers)
+	if out.ContentType == FormType {
+		out.Body = d.EncodeText(out.Body)
+	}
+	out.Headers, err = expandAll(v, "", d.Headers, r.Headers)
 	return out, err
 }
 
+// FormType is the content type of a form-encoded body.
+const FormType = "application/x-www-form-urlencoded"
+
+// EncodeText converts text to the site's encoding (unchanged for UTF-8 sites).
+func (d *Definition) EncodeText(s string) string { return charset.FromUTF8(s, d.Encoding) }
+
 // expandAll renders the values of string maps into one map (later maps win).
-func expandAll(v Vars, maps ...Strings) (map[string]string, error) {
+func expandAll(v Vars, encoding string, maps ...Strings) (map[string]string, error) {
 	out := map[string]string{}
 	for _, m := range maps {
 		for k, t := range m {
-			val, err := Expand(t, v)
+			val, err := ExpandIn(t, v, encoding)
 			if err != nil {
 				return nil, err
 			}

@@ -105,7 +105,7 @@ func (ix *Indexer) login(ctx context.Context) error {
 		if err != nil {
 			return plugin.Wrap(plugin.ClassConfig, "login field "+field, err)
 		}
-		form.Set(field, v)
+		form.Set(field, ix.def.EncodeText(v))
 	}
 	target, err := ix.base.Parse(strings.TrimPrefix(l.Path, "/"))
 	if err != nil {

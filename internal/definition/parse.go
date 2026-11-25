@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/jrand0m/corsarr/internal/charset"
 )
 
 // Problem is one reason a definition file is invalid, located by field path
@@ -200,6 +202,7 @@ func (v *validator) identity(d *Definition) {
 	for i, l := range d.Links {
 		v.when(!isHTTP(l), fmt.Sprintf("links[%d]", i), "%q is not an http(s) address", l)
 	}
+	v.when(!charset.Known(d.Encoding), "encoding", "encoding %q is not supported (use a single-byte encoding such as windows-1251 or iso-8859-1)", d.Encoding)
 }
 
 func isHTTP(raw string) bool {

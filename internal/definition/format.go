@@ -53,21 +53,25 @@ const (
 
 // Definition is one tracker described as data.
 type Definition struct {
-	Schema      int       `yaml:"schema" json:"schema"`
-	ID          string    `yaml:"id" json:"id"`
-	Version     string    `yaml:"version" json:"version"`
-	Name        string    `yaml:"name" json:"name"`
-	Description string    `yaml:"description" json:"description"`
-	Language    string    `yaml:"language" json:"language"`
-	Privacy     Privacy   `yaml:"privacy" json:"privacy"`
-	Links       []string  `yaml:"links" json:"links"`
-	Settings    []Setting `yaml:"settings" json:"settings"`
-	Login       Login     `yaml:"login" json:"login"`
-	RateLimit   RateLimit `yaml:"rateLimit" json:"rateLimit"`
-	Headers     Strings   `yaml:"headers" json:"headers"`
-	Caps        Caps      `yaml:"caps" json:"caps"`
-	Search      Search    `yaml:"search" json:"search"`
-	Download    *Download `yaml:"download" json:"download"`
+	Schema      int      `yaml:"schema" json:"schema"`
+	ID          string   `yaml:"id" json:"id"`
+	Version     string   `yaml:"version" json:"version"`
+	Name        string   `yaml:"name" json:"name"`
+	Description string   `yaml:"description" json:"description"`
+	Language    string   `yaml:"language" json:"language"`
+	Privacy     Privacy  `yaml:"privacy" json:"privacy"`
+	Links       []string `yaml:"links" json:"links"`
+	// Encoding is the site's text encoding (for example windows-1251) used to
+	// read its pages and to write queries and forms; empty means the response
+	// Content-Type or the page's own declaration, else UTF-8.
+	Encoding  string    `yaml:"encoding" json:"encoding,omitempty"`
+	Settings  []Setting `yaml:"settings" json:"settings"`
+	Login     Login     `yaml:"login" json:"login"`
+	RateLimit RateLimit `yaml:"rateLimit" json:"rateLimit"`
+	Headers   Strings   `yaml:"headers" json:"headers"`
+	Caps      Caps      `yaml:"caps" json:"caps"`
+	Search    Search    `yaml:"search" json:"search"`
+	Download  *Download `yaml:"download" json:"download"`
 	// MagnetTrackers are announce URLs added to magnets built from an info hash.
 	MagnetTrackers []string `yaml:"magnetTrackers" json:"magnetTrackers"`
 	Test           SelfTest `yaml:"test" json:"test"`
