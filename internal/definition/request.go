@@ -166,19 +166,33 @@ type HTTPRequest struct {
 // With a site encoding, the path, query values and a form body carry the
 // text in that encoding (a JSON body stays UTF-8).
 func (d *Definition) Render(base *url.URL, r Request, v Vars) (HTTPRequest, error) {
-	path, err := ExpandIn(r.Path, v, d.Encoding)
+	u, err := d.renderURL(base, r, v)
 	if err != nil {
 		return HTTPRequest{}, err
 	}
+	out := HTTPRequest{Method: r.Method, URL: u, ContentType: r.Type}
+	if out.Body, out.ContentType, err = d.renderBody(r, v); err != nil {
+		return HTTPRequest{}, err
+	}
+	out.Headers, err = expandAll(v, "", d.Headers, r.Headers)
+	return out, err
+}
+
+// renderURL expands the path and query (empty query values are left out).
+func (d *Definition) renderURL(base *url.URL, r Request, v Vars) (string, error) {
+	path, err := ExpandIn(r.Path, v, d.Encoding)
+	if err != nil {
+		return "", err
+	}
 	u, err := url.Parse(d.EncodeText(path))
 	if err != nil {
-		return HTTPRequest{}, fmt.Errorf("request path %q: %w", path, err)
+		return "", fmt.Errorf("request path %q: %w", path, err)
 	}
 	u = base.ResolveReference(u)
 	q := u.Query()
 	query, err := expandAll(v, d.Encoding, r.Query)
 	if err != nil {
-		return HTTPRequest{}, err
+		return "", err
 	}
 	for k, val := range query {
 		if val != "" {
@@ -186,18 +200,22 @@ func (d *Definition) Render(base *url.URL, r Request, v Vars) (HTTPRequest, erro
 		}
 	}
 	u.RawQuery = q.Encode()
-	out := HTTPRequest{Method: r.Method, URL: u.String(), ContentType: r.Type}
-	if out.Body, err = ExpandIn(r.Body, v, d.Encoding); err != nil {
-		return HTTPRequest{}, err
+	return u.String(), nil
+}
+
+// renderBody expands the body; a body without a type is a form.
+func (d *Definition) renderBody(r Request, v Vars) (body, ctype string, err error) {
+	if body, err = ExpandIn(r.Body, v, d.Encoding); err != nil {
+		return "", "", err
 	}
-	if out.Body != "" && out.ContentType == "" {
-		out.ContentType = FormType
+	ctype = r.Type
+	if body != "" && ctype == "" {
+		ctype = FormType
 	}
-	if out.ContentType == FormType {
-		out.Body = d.EncodeText(out.Body)
+	if ctype == FormType {
+		body = d.EncodeText(body)
 	}
-	out.Headers, err = expandAll(v, "", d.Headers, r.Headers)
-	return out, err
+	return body, ctype, nil
 }
 
 // FormType is the content type of a form-encoded body.

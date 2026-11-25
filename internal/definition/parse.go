@@ -242,15 +242,7 @@ func (v *validator) login(l Login) {
 	switch l.Method {
 	case LoginNone, LoginCookie:
 	case LoginForm:
-		if l.Path == "" && l.Page == "" {
-			v.add("login.path", "form login needs the path credentials are posted to, or a login page to read the form from")
-		}
-		if len(l.Fields) == 0 {
-			v.add("login.fields", "form login needs the fields to post")
-		}
-		if l.Success.Empty() {
-			v.add("login.success", "form login needs a success check")
-		}
+		v.formLogin(l)
 	default:
 		v.add("login.method", "method must be none, cookie or form")
 	}
@@ -265,6 +257,12 @@ func (v *validator) login(l Login) {
 		v.when(strings.TrimSpace(name) == "", "login.tokens", "a token needs a field name")
 		v.selector("login.tokens."+name+".selector", p.Selector)
 	}
+}
+
+func (v *validator) formLogin(l Login) {
+	v.when(l.Path == "" && l.Page == "", "login.path", "form login needs the path credentials are posted to, or a login page to read the form from")
+	v.when(len(l.Fields) == 0, "login.fields", "form login needs the fields to post")
+	v.when(l.Success.Empty(), "login.success", "form login needs a success check")
 }
 
 func (v *validator) caps(c Caps) {
