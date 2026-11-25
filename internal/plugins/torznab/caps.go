@@ -57,7 +57,7 @@ var modeElems = map[string]domain.SearchMode{
 // classified error; it returns nil when body is not an error document.
 func serverError(body []byte) error {
 	var e errorDoc
-	if xml.Unmarshal(body, &e) != nil {
+	if unmarshal(body, &e) != nil {
 		return nil
 	}
 	switch {
@@ -71,12 +71,13 @@ func serverError(body []byte) error {
 	return plugin.Errorf(plugin.ClassServerError, "indexer error %d: %s", e.Code, e.Description)
 }
 
-func parseCaps(body []byte) (parsedCaps, error) {
+func parseCaps(body []byte, contentType string) (parsedCaps, error) {
+	body = cleanXML(body, contentType)
 	if err := serverError(body); err != nil {
 		return parsedCaps{}, err
 	}
 	var d capsDoc
-	if err := xml.Unmarshal(body, &d); err != nil {
+	if err := unmarshal(body, &d); err != nil {
 		return parsedCaps{}, plugin.Wrap(plugin.ClassParse, "caps document", err)
 	}
 	pc := parsedCaps{params: map[domain.SearchMode]map[string]bool{}}

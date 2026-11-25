@@ -471,7 +471,7 @@ func TestEndpointPath(t *testing.T) {
 }
 
 func TestRSSOddities(t *testing.T) {
-	if _, err := parseRSS([]byte("<rss><channel><item><title>x")); plugin.ClassOf(err) != plugin.ClassParse {
+	if _, err := parseRSS([]byte("<rss><channel><item><title>x"), ""); plugin.ClassOf(err) != plugin.ClassParse {
 		t.Error("truncated xml")
 	}
 	if toString(true) != "" {
