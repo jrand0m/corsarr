@@ -30,6 +30,8 @@ downloadClients:
     url: http://qbittorrent:8080
     username: admin
     password: ${file:/run/secrets/qbit_password}
+    pathMap:                      # only when qBittorrent sees its folders under other paths
+      - /downloads=/media/downloads   # remote (as qBittorrent reports it) = local
 mediaServers:
   plex:
     type: plex
