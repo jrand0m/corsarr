@@ -34,7 +34,23 @@ func (albumMeta) Releases(context.Context, string) ([]plugin.ReleaseRecord, erro
 		{Position: 2, Format: "CD", Tracks: []plugin.TrackRecord{{Position: 1, Title: "Closing"}}}}}}, nil
 }
 
+// twoEditionsMeta adds a one-disc promotional edition with a bonus track
+// next to the official two-disc one.
+type twoEditionsMeta struct{ albumMeta }
+
+func (twoEditionsMeta) Releases(ctx context.Context, mbid string) ([]plugin.ReleaseRecord, error) {
+	rels, _ := albumMeta{}.Releases(ctx, mbid)
+	return append(rels, plugin.ReleaseRecord{MBID: "r2", Status: "promotion", Media: []plugin.MediumRecord{
+		{Position: 1, Format: "CD", Tracks: []plugin.TrackRecord{{Position: 1, Title: "Opening"}, {Position: 2, Title: "Middle"},
+			{Position: 3, Title: "Closing"}, {Position: 4, Title: "Bonus"}}}}}), nil
+}
+
 func musicEnv(t *testing.T, title string) (*env, *music.Service, domain.Album) {
+	t.Helper()
+	return musicEnvWith(t, title, albumMeta{})
+}
+
+func musicEnvWith(t *testing.T, title string, md plugin.MusicMetadata) (*env, *music.Service, domain.Album) {
 	t.Helper()
 	e := newEnv(t)
 	root := filepath.Join(filepath.Dir(e.lib), "music")
@@ -42,7 +58,7 @@ func musicEnv(t *testing.T, title string) (*env, *music.Service, domain.Album) {
 		t.Fatal(err)
 	}
 	svc := music.New(music.Deps{Repo: e.st.Music(), Files: e.st.Library(), Pub: e.rec,
-		Metadata:    func() (plugin.MusicMetadata, bool) { return albumMeta{}, true },
+		Metadata:    func() (plugin.MusicMetadata, bool) { return md, true },
 		RootFolders: func() []string { return []string{root} }, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	ar, _, err := svc.Add(ctx, music.AddRequest{MBID: "a1", ProfileKey: "any"})
 	if err != nil {
@@ -201,6 +217,26 @@ func TestMusicImportHoldsLooseMatchesForReview(t *testing.T) {
 	if o := e.q.outcomes[0]; o.Status != domain.ImportBlocked || o.ReasonCode != "no-match" ||
 		!strings.Contains(o.Items[0].Reason, "too loosely") {
 		t.Fatalf("%+v", o)
+	}
+}
+
+func TestMusicImportSwitchesToTheEditionThePayloadFits(t *testing.T) {
+	e, svc, al := musicEnvWith(t, "Example Artist - First Album (2020) [FLAC]", twoEditionsMeta{})
+	e.payload(t, map[string]string{"01 - Opening.flac": "a", "02 - Middle.flac": "b", "03 - Closing.flac": "c", "04 - Bonus.flac": "d"})
+	e.completed(t, 7)
+	o := e.q.outcomes[0]
+	if o.Status != domain.ImportImported || len(o.Items[0].NewPaths) != 4 || !strings.Contains(o.Items[0].Reason, "edition changed") {
+		t.Fatalf("%+v", o)
+	}
+	if got, _ := svc.Album(ctx, al.ID); got.EditionMBID != "r2" || got.TrackCount != 4 {
+		t.Fatalf("%+v", got)
+	}
+	if ev := e.rec.Of(domain.EvItemUpdated); len(ev) != 1 || ev[0].Data.(domain.ItemEventData).Changed[0] != "edition" {
+		t.Fatalf("%+v", ev)
+	}
+	want := filepath.Join(filepath.Dir(e.lib), "music", "Example Artist", "First Album (2020)", "Example Artist - First Album - 04 - Bonus.flac")
+	if _, err := os.Stat(want); err != nil {
+		t.Fatal(err)
 	}
 }
 

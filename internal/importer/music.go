@@ -19,6 +19,7 @@ import (
 type Music interface {
 	Artist(ctx context.Context, id int64) (domain.Artist, error)
 	EnsureEdition(ctx context.Context, albumID int64) (domain.Album, []domain.Track, error)
+	FitEdition(ctx context.Context, albumID int64, files []music.AudioFile) (music.EditionFit, error)
 	SetTrackFile(ctx context.Context, trackID, fileID int64) error
 }
 
@@ -31,6 +32,7 @@ type musicImport struct {
 	profile decide.QualityProfile
 	items   []domain.EventItem
 	title   string // the grabbed release title
+	edition string // says how the album changed edition to fit the payload
 }
 
 // runMusic imports an album download: the payload's audio files are matched
@@ -54,11 +56,26 @@ func (s *Service) runMusic(ctx context.Context, d store.StoredDownload) result {
 		return r
 	}
 	audio := audioFiles(files)
-	m := music.MatchFiles(readTags(audio), in.tracks)
+	tagged := readTags(audio)
+	if err := in.fitEdition(ctx, s.d.Music, tagged); err != nil {
+		return blocked(d.ID, "no-match", in.items, err.Error())
+	}
+	m := music.MatchFiles(tagged, in.tracks)
 	if !m.Auto() {
 		return blocked(d.ID, "no-match", in.items, matchProblem(m, len(audio), in.album.Title))
 	}
 	return s.placeTracks(ctx, in, m, byRel(audio))
+}
+
+// fitEdition moves the import, and the album, to the edition the payload
+// fits best.
+func (in *musicImport) fitEdition(ctx context.Context, m Music, files []music.AudioFile) error {
+	fit, err := m.FitEdition(ctx, in.album.ID, files)
+	if err != nil {
+		return err
+	}
+	in.album, in.tracks, in.edition = fit.Album, fit.Tracks, fit.Switched
+	return nil
 }
 
 // matchProblem says why a match needs a person: too few files placed, or
@@ -251,11 +268,21 @@ func musicOutcome(in musicImport, done []trackResult, missing int) result {
 		return blocked(in.d.ID, "not-upgrade", in.items, skipped)
 	}
 	it.Outcome = map[bool]string{true: "upgraded", false: "imported"}[upgraded]
-	if missing > 0 {
-		it.Reason = fmt.Sprintf("%d tracks missing from the payload", missing)
-	}
+	it.Reason = importNotes(in.edition, missing)
 	o := domain.ImportOutcome{DownloadID: in.d.ID, Status: domain.ImportImported, Items: []domain.ImportItem{it}}
 	return result{outcome: o, folders: []string{music.AlbumPath(in.artist, in.album)}, items: in.items}
+}
+
+// importNotes joins what a person should know about an album import.
+func importNotes(edition string, missing int) string {
+	var notes []string
+	if edition != "" {
+		notes = append(notes, edition)
+	}
+	if missing > 0 {
+		notes = append(notes, fmt.Sprintf("%d tracks missing from the payload", missing))
+	}
+	return strings.Join(notes, "; ")
 }
 
 func first(a, b string) string {
