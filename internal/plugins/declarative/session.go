@@ -121,12 +121,15 @@ func (ix *Indexer) login(ctx context.Context) error {
 
 func (ix *Indexer) loginResult(r *reply) error {
 	l := ix.def.Login
+	if plugin.Challenged(r.status, r.header, r.body) {
+		return plugin.ChallengeError(r.status, r.header) // the credentials were never seen
+	}
 	if l.Failure.Holds(r.status, r.location, r.body) {
 		msg := firstNonEmpty(l.Failure.Message(r.body), "the site refused the credentials")
 		return plugin.Wrap(plugin.ClassAuth, msg, errLogin)
 	}
-	if c := plugin.ClassifyStatus(r.status); c != "" {
-		return plugin.Errorf(c, "login returned HTTP %d", r.status)
+	if err := plugin.StatusError("login", r.status, r.header, r.body); err != nil {
+		return err
 	}
 	if !l.Success.Holds(r.status, r.location, r.body) {
 		return plugin.Wrap(plugin.ClassAuth, "login did not reach the signed-in page", errLogin)

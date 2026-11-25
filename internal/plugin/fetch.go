@@ -33,14 +33,15 @@ func Do(d HTTPDoer, req *http.Request, max int64) (*Response, error) {
 	return &Response{Status: resp.StatusCode, Header: resp.Header, Body: body}, nil
 }
 
-// Fetch is Do plus the status mapping of ClassifyStatus.
+// Fetch is Do plus the status mapping of ClassifyResponse (anti-bot pages
+// are challenges, other statuses as ClassifyStatus).
 func Fetch(d HTTPDoer, req *http.Request, max int64) (*Response, error) {
 	r, err := Do(d, req, max)
 	if err != nil {
 		return nil, err
 	}
-	if c := ClassifyStatus(r.Status); c != "" {
-		return nil, Errorf(c, "%s %s returned HTTP %d", req.Method, Redact(req.URL), r.Status)
+	if err := StatusError(req.Method+" "+Redact(req.URL), r.Status, r.Header, r.Body); err != nil {
+		return nil, err
 	}
 	return r, nil
 }

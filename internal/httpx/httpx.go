@@ -5,6 +5,7 @@
 package httpx
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -219,8 +220,8 @@ func (b *cancelBody) Close() error { err := b.ReadCloser.Close(); b.cancel(); re
 // retryAfter decides whether to retry and how long to wait (pure apart
 // from jitter and clock).
 func (c *Client) retryAfter(req *http.Request, resp *http.Response, err error, attempt, retries int) (time.Duration, bool) {
-	if attempt >= retries || req.Context().Err() != nil || !retryable(req, resp, err) {
-		return 0, false
+	if attempt >= retries || req.Context().Err() != nil || !retryable(req, resp, err) || challenged(resp) {
+		return 0, false // an anti-bot challenge answers the same way until someone acts
 	}
 	if resp != nil {
 		if d, ok := parseRetryAfter(resp.Header.Get("Retry-After"), c.o.Now()); ok {
@@ -281,14 +282,41 @@ func drain(resp *http.Response) {
 	}
 }
 
-// Classify maps a final result to a health observation.
+// challenged reports whether resp is an anti-bot page. Only 403/503 bodies
+// are looked at; the part read is put back so the caller still sees it all.
+func challenged(resp *http.Response) bool {
+	if resp == nil {
+		return false
+	}
+	var head []byte
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusServiceUnavailable {
+		head = peek(resp, plugin.ChallengeScan)
+	}
+	return plugin.Challenged(resp.StatusCode, resp.Header, head)
+}
+
+// peek reads up to n bytes of the body and restores them in front of the rest.
+func peek(resp *http.Response, n int64) []byte {
+	if resp.Body == nil {
+		return nil
+	}
+	head, _ := io.ReadAll(io.LimitReader(resp.Body, n))
+	resp.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(head), resp.Body), resp.Body}
+	return head
+}
+
+// Classify maps a final result to a health observation. A 403/503 body is
+// inspected for an anti-bot page (and left readable).
 func Classify(resp *http.Response, err error, now time.Time) health.Observation {
 	if err != nil {
 		return health.Observation{Class: errClass(err), Message: err.Error()}
 	}
 	switch code := resp.StatusCode; {
-	case resp.Header.Get("Cf-Mitigated") == "challenge":
-		return health.Observation{Class: health.ClassChallenge, Message: resp.Status}
+	case challenged(resp):
+		return health.Observation{Class: health.ClassChallenge, Message: plugin.ChallengeError(code, resp.Header).Msg}
 	case code == http.StatusUnauthorized || code == http.StatusForbidden:
 		return health.Observation{Class: health.ClassAuth, Message: resp.Status}
 	case code == http.StatusTooManyRequests:

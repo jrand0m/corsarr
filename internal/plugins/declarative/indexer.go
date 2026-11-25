@@ -211,9 +211,9 @@ func (ix *Indexer) expired(r *reply) bool {
 }
 
 func (ix *Indexer) ok(hr definition.HTTPRequest, r *reply) ([]byte, error) {
-	if c := plugin.ClassifyStatus(r.status); c != "" {
-		u, _ := url.Parse(hr.URL)
-		return nil, plugin.Errorf(c, "%s %s returned HTTP %d", hr.Method, plugin.Redact(u), r.status)
+	u, _ := url.Parse(hr.URL)
+	if err := plugin.StatusError(hr.Method+" "+plugin.Redact(u), r.status, r.header, r.body); err != nil {
+		return nil, err
 	}
 	if r.status >= 300 {
 		return nil, plugin.Errorf(plugin.ClassServerError, "unexpected HTTP %d", r.status)
@@ -351,8 +351,8 @@ func (ix *Indexer) fetchTorrent(ctx context.Context, link, name string) (plugin.
 	if strings.HasPrefix(r.location, "magnet:") {
 		return plugin.Payload{Kind: "magnet", URL: r.location, Name: name}, nil
 	}
-	if c := plugin.ClassifyStatus(r.status); c != "" {
-		return plugin.Payload{}, plugin.Errorf(c, "download returned HTTP %d", r.status)
+	if err := plugin.StatusError("download", r.status, r.header, r.body); err != nil {
+		return plugin.Payload{}, err
 	}
 	if len(r.body) == 0 || r.body[0] != 'd' {
 		return plugin.Payload{}, plugin.Errorf(plugin.ClassParse, "download did not return a torrent file")
