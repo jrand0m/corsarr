@@ -6,6 +6,7 @@
 //	corsarr config export [--format=yaml|env] [--full]
 //	corsarr config schema                   print the JSON Schema
 //	corsarr migrate plan|run --from=… --url=… --api-key-file=…   import an existing installation
+//	corsarr admin reset-password [--username=…]   new admin password from stdin
 //	corsarr version
 //
 // Configuration args (`--server.address=:8090`, `--configFile=…`) may follow
@@ -46,7 +47,7 @@ type cli struct {
 }
 
 // commandFlags are subcommand flags, kept out of the config args.
-var commandFlags = map[string]bool{"plan": true, "format": true, "full": true}
+var commandFlags = map[string]bool{"plan": true, "format": true, "full": true, "username": true}
 
 func init() {
 	for _, f := range migrateFlags {
@@ -72,30 +73,33 @@ func parse(args, environ []string, stdout, stderr io.Writer) cli {
 	return c
 }
 
+// commands maps each subcommand to its handler.
+var commands = map[string]func(c cli, ctx context.Context) int{
+	"":                     func(c cli, ctx context.Context) int { return c.serve(ctx, nil) },
+	"serve":                func(c cli, ctx context.Context) int { return c.serve(ctx, nil) },
+	"healthcheck":          func(c cli, _ context.Context) int { return c.healthcheck() },
+	"version":              func(c cli, _ context.Context) int { fmt.Fprintln(c.stdout, "corsarr", version); return 0 },
+	"config validate":      func(c cli, _ context.Context) int { return c.validate() },
+	"config export":        func(c cli, _ context.Context) int { return c.export() },
+	"config schema":        func(c cli, _ context.Context) int { return c.schema() },
+	"migrate plan":         func(c cli, ctx context.Context) int { return c.migrate(ctx, "plan") },
+	"migrate run":          func(c cli, ctx context.Context) int { return c.migrate(ctx, "run") },
+	"admin reset-password": func(c cli, ctx context.Context) int { return c.resetPassword(ctx) },
+}
+
 func run(ctx context.Context, args, environ []string, stdout, stderr io.Writer) int {
 	c := parse(args, environ, stdout, stderr)
-	switch strings.Join(c.cmd, " ") {
-	case "", "serve":
-		return c.serve(ctx, nil)
-	case "healthcheck":
-		return c.healthcheck()
-	case "version":
-		fmt.Fprintln(stdout, "corsarr", version)
-		return 0
-	case "config validate":
-		return c.validate()
-	case "config export":
-		return c.export()
-	case "config schema":
-		_, _ = stdout.Write(config.NewSchema(plugin.Default).JSONSchema())
-		return 0
-	case "migrate plan":
-		return c.migrate(ctx, "plan")
-	case "migrate run":
-		return c.migrate(ctx, "run")
+	name := strings.Join(c.cmd, " ")
+	if h, ok := commands[name]; ok {
+		return h(c, ctx)
 	}
-	fmt.Fprintf(stderr, "unknown command %q (serve | healthcheck | config validate|export|schema | migrate plan|run | version)\n", strings.Join(c.cmd, " "))
+	fmt.Fprintf(stderr, "unknown command %q (serve | healthcheck | config validate|export|schema | migrate plan|run | admin reset-password | version)\n", name)
 	return 2
+}
+
+func (c cli) schema() int {
+	_, _ = c.stdout.Write(config.NewSchema(plugin.Default).JSONSchema())
+	return 0
 }
 
 // load reads the active config source; errors are printed one per line.

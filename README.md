@@ -99,6 +99,14 @@ corsarr config schema            # every key, its type and default
 corsarr healthcheck              # exit status for container health checks
 ```
 
+Forgot the admin password? Pipe a new one in; the running server keeps going and every
+session is signed out:
+
+```bash
+printf '%s\n' "$NEW_PASSWORD" | corsarr admin reset-password      # add --username=… to rename
+printf '%s\n' "$NEW_PASSWORD" | docker exec -i corsarr /corsarr admin reset-password
+```
+
 ## Build from source
 
 Requirements: Go and Node.js (versions in `.tool-versions`) and [`just`](https://github.com/casey/just).
