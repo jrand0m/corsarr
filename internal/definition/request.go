@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jrand0m/corsarr/internal/charset"
 	"github.com/jrand0m/corsarr/internal/domain"
 )
 
@@ -161,44 +162,74 @@ type HTTPRequest struct {
 }
 
 // Render expands a request template against the site base address.
+//
+// With a site encoding, the path, query values and a form body carry the
+// text in that encoding (a JSON body stays UTF-8).
 func (d *Definition) Render(base *url.URL, r Request, v Vars) (HTTPRequest, error) {
-	path, err := Expand(r.Path, v)
+	u, err := d.renderURL(base, r, v)
 	if err != nil {
 		return HTTPRequest{}, err
 	}
-	u, err := url.Parse(path)
-	if err != nil {
-		return HTTPRequest{}, fmt.Errorf("request path %q: %w", path, err)
-	}
-	u = base.ResolveReference(u)
-	q := u.Query()
-	query, err := expandAll(v, r.Query)
-	if err != nil {
+	out := HTTPRequest{Method: r.Method, URL: u, ContentType: r.Type}
+	if out.Body, out.ContentType, err = d.renderBody(r, v); err != nil {
 		return HTTPRequest{}, err
 	}
-	for k, val := range query {
-		if val != "" {
-			q.Set(k, val)
-		}
-	}
-	u.RawQuery = q.Encode()
-	out := HTTPRequest{Method: r.Method, URL: u.String(), ContentType: r.Type}
-	if out.Body, err = Expand(r.Body, v); err != nil {
-		return HTTPRequest{}, err
-	}
-	if out.Body != "" && out.ContentType == "" {
-		out.ContentType = "application/x-www-form-urlencoded"
-	}
-	out.Headers, err = expandAll(v, d.Headers, r.Headers)
+	out.Headers, err = expandAll(v, "", d.Headers, r.Headers)
 	return out, err
 }
 
+// renderURL expands the path and query (empty query values are left out).
+func (d *Definition) renderURL(base *url.URL, r Request, v Vars) (string, error) {
+	path, err := ExpandIn(r.Path, v, d.Encoding)
+	if err != nil {
+		return "", err
+	}
+	u, err := url.Parse(d.EncodeText(path))
+	if err != nil {
+		return "", fmt.Errorf("request path %q: %w", path, err)
+	}
+	u = base.ResolveReference(u)
+	q := u.Query()
+	query, err := expandAll(v, d.Encoding, r.Query)
+	if err != nil {
+		return "", err
+	}
+	for k, val := range query {
+		if val != "" {
+			q.Set(k, d.EncodeText(val))
+		}
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
+// renderBody expands the body; a body without a type is a form.
+func (d *Definition) renderBody(r Request, v Vars) (body, ctype string, err error) {
+	if body, err = ExpandIn(r.Body, v, d.Encoding); err != nil {
+		return "", "", err
+	}
+	ctype = r.Type
+	if body != "" && ctype == "" {
+		ctype = FormType
+	}
+	if ctype == FormType {
+		body = d.EncodeText(body)
+	}
+	return body, ctype, nil
+}
+
+// FormType is the content type of a form-encoded body.
+const FormType = "application/x-www-form-urlencoded"
+
+// EncodeText converts text to the site's encoding (unchanged for UTF-8 sites).
+func (d *Definition) EncodeText(s string) string { return charset.FromUTF8(s, d.Encoding) }
+
 // expandAll renders the values of string maps into one map (later maps win).
-func expandAll(v Vars, maps ...Strings) (map[string]string, error) {
+func expandAll(v Vars, encoding string, maps ...Strings) (map[string]string, error) {
 	out := map[string]string{}
 	for _, m := range maps {
 		for k, t := range m {
-			val, err := Expand(t, v)
+			val, err := ExpandIn(t, v, encoding)
 			if err != nil {
 				return nil, err
 			}

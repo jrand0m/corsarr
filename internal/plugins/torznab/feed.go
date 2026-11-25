@@ -2,7 +2,6 @@ package torznab
 
 import (
 	"context"
-	"encoding/xml"
 	"net/url"
 	"strconv"
 	"strings"
@@ -40,18 +39,26 @@ func (ix *Indexer) items(ctx context.Context, q url.Values) ([]rssItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseRSS(resp.Body)
+	return parseRSS(resp.Body, resp.Header.Get("Content-Type"))
 }
 
-func parseRSS(body []byte) ([]rssItem, error) {
+// parseRSS reads a results page. When the page as a whole does not parse,
+// each item is read on its own and the broken ones are dropped; the page
+// fails only when no item can be read.
+func parseRSS(body []byte, contentType string) ([]rssItem, error) {
+	body = cleanXML(body, contentType)
 	if err := serverError(body); err != nil {
 		return nil, err
 	}
 	var d rssDoc
-	if err := xml.Unmarshal(body, &d); err != nil {
-		return nil, plugin.Wrap(plugin.ClassParse, "results page", err)
+	err := unmarshal(body, &d)
+	if err == nil {
+		return d.Items, nil
 	}
-	return d.Items, nil
+	if items := itemsOneByOne(body); len(items) > 0 {
+		return items, nil
+	}
+	return nil, plugin.Wrap(plugin.ClassParse, "results page", err)
 }
 
 func (it rssItem) attr(name string) string {

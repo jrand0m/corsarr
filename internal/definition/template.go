@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/jrand0m/corsarr/internal/charset"
 )
 
 // Template is a parsed text template: literal text with {{ name|filter:arg }}
@@ -129,15 +131,20 @@ func parseExpr(expr string) (part, error) {
 type Vars map[string]string
 
 // Execute renders the template; unknown variables render empty.
-func (t *Template) Execute(v Vars) (string, error) {
+func (t *Template) Execute(v Vars) (string, error) { return t.ExecuteIn(v, "") }
+
+// escapers are the filters that percent-encode; with a site encoding they
+// escape the site's bytes rather than UTF-8.
+var escapers = map[string]bool{"urlencode": true, "pathescape": true}
+
+// ExecuteIn renders the template for a site whose text is in encoding ("" =
+// UTF-8): urlencode and pathescape escape the value's bytes in that encoding.
+func (t *Template) ExecuteIn(v Vars, encoding string) (string, error) {
 	var b strings.Builder
 	for _, p := range t.parts {
 		s := p.lit
 		if p.name != "" {
-			s = v[p.name]
-			for _, f := range p.filters {
-				s = templateFilters[f.name](s, f.arg)
-			}
+			s = applyFilters(v[p.name], p.filters, encoding)
 		}
 		if b.Len()+len(s) > MaxExpanded {
 			return "", fmt.Errorf("template output is longer than %d bytes", MaxExpanded)
@@ -147,11 +154,24 @@ func (t *Template) Execute(v Vars) (string, error) {
 	return b.String(), nil
 }
 
+func applyFilters(s string, fs []tfilter, encoding string) string {
+	for _, f := range fs {
+		if escapers[f.name] {
+			s = charset.FromUTF8(s, encoding)
+		}
+		s = templateFilters[f.name](s, f.arg)
+	}
+	return s
+}
+
 // Expand parses and executes src in one step (sources were validated at load).
-func Expand(src string, v Vars) (string, error) {
+func Expand(src string, v Vars) (string, error) { return ExpandIn(src, v, "") }
+
+// ExpandIn is Expand for a site text encoding (see ExecuteIn).
+func ExpandIn(src string, v Vars, encoding string) (string, error) {
 	t, err := ParseTemplate(src)
 	if err != nil {
 		return "", err
 	}
-	return t.Execute(v)
+	return t.ExecuteIn(v, encoding)
 }

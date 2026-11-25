@@ -32,7 +32,7 @@ var actionNeeded = map[string]bool{ClassAuth: true, ClassChallenge: true, ClassS
 
 var hints = map[string]string{
 	ClassAuth:             "Check the credentials or API key in the integration settings.",
-	ClassChallenge:        "The site shows a browser challenge; solve it or configure a solver.",
+	ClassChallenge:        "The site is behind anti-bot protection (such as Cloudflare or DDoS-Guard), not rejecting the credentials; open it in a browser, wait for the protection to relax or configure a solver.",
 	ClassSessionExpired:   "Sign in again from the integration settings.",
 	ClassIdentityMismatch: "The server answering is not the one configured; check the URL.",
 	ClassRateLimited:      "The service is rate limiting; corsarr retries after the indicated time.",

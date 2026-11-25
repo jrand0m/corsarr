@@ -53,21 +53,25 @@ const (
 
 // Definition is one tracker described as data.
 type Definition struct {
-	Schema      int       `yaml:"schema" json:"schema"`
-	ID          string    `yaml:"id" json:"id"`
-	Version     string    `yaml:"version" json:"version"`
-	Name        string    `yaml:"name" json:"name"`
-	Description string    `yaml:"description" json:"description"`
-	Language    string    `yaml:"language" json:"language"`
-	Privacy     Privacy   `yaml:"privacy" json:"privacy"`
-	Links       []string  `yaml:"links" json:"links"`
-	Settings    []Setting `yaml:"settings" json:"settings"`
-	Login       Login     `yaml:"login" json:"login"`
-	RateLimit   RateLimit `yaml:"rateLimit" json:"rateLimit"`
-	Headers     Strings   `yaml:"headers" json:"headers"`
-	Caps        Caps      `yaml:"caps" json:"caps"`
-	Search      Search    `yaml:"search" json:"search"`
-	Download    *Download `yaml:"download" json:"download"`
+	Schema      int      `yaml:"schema" json:"schema"`
+	ID          string   `yaml:"id" json:"id"`
+	Version     string   `yaml:"version" json:"version"`
+	Name        string   `yaml:"name" json:"name"`
+	Description string   `yaml:"description" json:"description"`
+	Language    string   `yaml:"language" json:"language"`
+	Privacy     Privacy  `yaml:"privacy" json:"privacy"`
+	Links       []string `yaml:"links" json:"links"`
+	// Encoding is the site's text encoding (for example windows-1251) used to
+	// read its pages and to write queries and forms; empty means the response
+	// Content-Type or the page's own declaration, else UTF-8.
+	Encoding  string    `yaml:"encoding" json:"encoding,omitempty"`
+	Settings  []Setting `yaml:"settings" json:"settings"`
+	Login     Login     `yaml:"login" json:"login"`
+	RateLimit RateLimit `yaml:"rateLimit" json:"rateLimit"`
+	Headers   Strings   `yaml:"headers" json:"headers"`
+	Caps      Caps      `yaml:"caps" json:"caps"`
+	Search    Search    `yaml:"search" json:"search"`
+	Download  *Download `yaml:"download" json:"download"`
 	// MagnetTrackers are announce URLs added to magnets built from an info hash.
 	MagnetTrackers []string `yaml:"magnetTrackers" json:"magnetTrackers"`
 	Test           SelfTest `yaml:"test" json:"test"`
@@ -93,6 +97,15 @@ type Login struct {
 	// Form login: where the credentials go and which fields carry them.
 	Path   string  `yaml:"path" json:"path"`
 	Fields Strings `yaml:"fields" json:"fields"`
+	// Page, when set, is fetched before logging in. Its cookies are kept and
+	// the login form on it is submitted as a browser would: hidden inputs
+	// (CSRF tokens) and prefilled values, with Fields filled in on top. The
+	// form posts to Path when set, else to its own action.
+	Page string `yaml:"page" json:"page,omitempty"`
+	// Form selects the login form on Page (default: the first form).
+	Form string `yaml:"form" json:"form,omitempty"`
+	// Tokens fill fields from elsewhere on Page, such as a CSRF token in a meta tag.
+	Tokens map[string]Pick `yaml:"tokens" json:"tokens,omitempty"`
 	// Success must hold on the page after logging in (form login).
 	Success Check `yaml:"success" json:"success"`
 	// Failure, when it holds, carries the site's error message.

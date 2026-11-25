@@ -136,7 +136,7 @@ func (ix *Indexer) loadCaps(ctx context.Context) (parsedCaps, error) {
 	if err != nil {
 		return parsedCaps{}, err
 	}
-	pc, err := parseCaps(resp.Body)
+	pc, err := parseCaps(resp.Body, resp.Header.Get("Content-Type"))
 	if err != nil {
 		return parsedCaps{}, err
 	}

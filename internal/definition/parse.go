@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/jrand0m/corsarr/internal/charset"
 )
 
 // Problem is one reason a definition file is invalid, located by field path
@@ -200,6 +202,7 @@ func (v *validator) identity(d *Definition) {
 	for i, l := range d.Links {
 		v.when(!isHTTP(l), fmt.Sprintf("links[%d]", i), "%q is not an http(s) address", l)
 	}
+	v.when(!charset.Known(d.Encoding), "encoding", "encoding %q is not supported (use a single-byte encoding such as windows-1251 or iso-8859-1)", d.Encoding)
 }
 
 func isHTTP(raw string) bool {
@@ -239,15 +242,7 @@ func (v *validator) login(l Login) {
 	switch l.Method {
 	case LoginNone, LoginCookie:
 	case LoginForm:
-		if l.Path == "" {
-			v.add("login.path", "form login needs the path credentials are posted to")
-		}
-		if len(l.Fields) == 0 {
-			v.add("login.fields", "form login needs the fields to post")
-		}
-		if l.Success.Empty() {
-			v.add("login.success", "form login needs a success check")
-		}
+		v.formLogin(l)
 	default:
 		v.add("login.method", "method must be none, cookie or form")
 	}
@@ -257,6 +252,17 @@ func (v *validator) login(l Login) {
 	for k, t := range l.Fields {
 		v.template("login.fields."+k, t)
 	}
+	v.selector("login.form", l.Form)
+	for name, p := range l.Tokens {
+		v.when(strings.TrimSpace(name) == "", "login.tokens", "a token needs a field name")
+		v.selector("login.tokens."+name+".selector", p.Selector)
+	}
+}
+
+func (v *validator) formLogin(l Login) {
+	v.when(l.Path == "" && l.Page == "", "login.path", "form login needs the path credentials are posted to, or a login page to read the form from")
+	v.when(len(l.Fields) == 0, "login.fields", "form login needs the fields to post")
+	v.when(l.Success.Empty(), "login.success", "form login needs a success check")
 }
 
 func (v *validator) caps(c Caps) {
