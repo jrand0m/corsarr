@@ -130,7 +130,7 @@ func TestSafePayloadContinues(t *testing.T) {
 func TestFailuresAndExternalRemoval(t *testing.T) {
 	e := newEnv(t)
 	d := e.grab(t, "aaa")
-	e.dl.set("aaa", func(s *plugin.Snapshot) { s.State, s.Error = domain.StateFailed, "missingFiles" })
+	e.dl.set("aaa", func(s *plugin.Snapshot) { s.State, s.Error = domain.StateFailed, "the client gave up" })
 	_ = e.svc.Poll(ctx)
 	failed := e.rec.Of(domain.EvDownloadFailed)
 	if len(failed) != 1 || failed[0].Data.(domain.DownloadEventData).Cause != "downloader" {

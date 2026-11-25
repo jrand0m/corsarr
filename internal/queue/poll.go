@@ -197,6 +197,9 @@ func (s *Service) apply(ctx context.Context, dl plugin.Downloader, d *store.Stor
 	if rejected, err := s.checkPayload(ctx, dl, d); rejected || err != nil {
 		return err
 	}
+	if snap.State == d.State {
+		d.StatusReason = snap.Error // the client's warning follows it while the state holds
+	}
 	if snap.State == d.State || domain.CheckTransition(d.State, snap.State, domain.ActorDownloader) != nil {
 		if moved {
 			s.progress(ctx, d)
