@@ -39,6 +39,8 @@ var manifest = plugin.Manifest{
 			Help: "Web UI password."},
 		{Key: "categories", Type: plugin.FieldMap, Label: "Category per media kind", Default: defaultCategories,
 			Help: "qBittorrent category used for each media kind (movie, tv, music, book). Imports only look at these categories."},
+		{Key: "pathMap", Type: plugin.FieldList, Label: "Path mapping", Check: plugin.CheckPathRule,
+			Help: "Needed when qBittorrent sees its download folders under other paths than corsarr (another host, or containers with different mounts). One remote=local entry per folder, for example /downloads=/mnt/media/downloads. The longest matching prefix wins."},
 	},
 }
 
@@ -53,6 +55,8 @@ type Client struct {
 	inst       plugin.Instance
 	base       *url.URL
 	categories map[domain.MediaKind]string
+	paths      plugin.PathMap
+	dirExists  func(path string) bool
 
 	mu       sync.Mutex
 	loggedIn bool
@@ -70,7 +74,11 @@ func New(inst plugin.Instance) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{inst: inst, base: base, categories: cats}, nil
+	paths, err := plugin.ParsePathMap(inst.Settings.Strings("pathMap"))
+	if err != nil {
+		return nil, plugin.Wrap(plugin.ClassConfig, "pathMap", err)
+	}
+	return &Client{inst: inst, base: base, categories: cats, paths: paths, dirExists: dirExists}, nil
 }
 
 func parseCategories(raw map[string]any) (map[domain.MediaKind]string, error) {
@@ -99,10 +107,13 @@ func (c *Client) CategoryFor(kind domain.MediaKind) string { return c.categories
 // Protocols reports torrent only.
 func (c *Client) Protocols() []domain.Protocol { return []domain.Protocol{domain.ProtoTorrent} }
 
-// Test logs in and reads the application version.
+// Test logs in, reads the application version and checks that the folders
+// qBittorrent saves into exist locally.
 func (c *Client) Test(ctx context.Context) error {
-	_, err := c.version(ctx)
-	return err
+	if _, err := c.version(ctx); err != nil {
+		return err
+	}
+	return c.checkPaths(ctx)
 }
 
 func (c *Client) version(ctx context.Context) (int, error) {

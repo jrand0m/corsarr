@@ -32,7 +32,7 @@ type torrentInfo struct {
 const etaInfinity = 8640000
 
 var states = map[string]domain.DownloadState{
-	"error": domain.StateFailed, "missingFiles": domain.StateFailed,
+	"error": domain.StateStalled, "missingFiles": domain.StateStalled,
 	"uploading": domain.StateCompleted, "stalledUP": domain.StateCompleted, "pausedUP": domain.StateCompleted,
 	"stoppedUP": domain.StateCompleted, "queuedUP": domain.StateCompleted, "checkingUP": domain.StateCompleted,
 	"forcedUP":   domain.StateCompleted,
@@ -41,6 +41,14 @@ var states = map[string]domain.DownloadState{
 	"checkingResumeData": domain.StateDownloading, "moving": domain.StateDownloading,
 	"stalledDL": domain.StateStalled,
 	"queuedDL":  domain.StateQueued, "pausedDL": domain.StateQueued, "stoppedDL": domain.StateQueued,
+}
+
+// warnings explain the states that usually need a fix outside corsarr (a
+// full disk, a missing mount, permissions). They are reported as stalled
+// with a reason, never as failed, so no blocklist or new search follows.
+var warnings = map[string]string{
+	"error":        "qBittorrent reports an error for this torrent (often a full disk or a permission problem); fix it and resume the torrent in qBittorrent",
+	"missingFiles": "qBittorrent cannot find the files of this torrent (often an unmounted drive); fix it and recheck the torrent in qBittorrent",
 }
 
 // mapState translates a qBittorrent state; unknown states count as queued.
@@ -54,6 +62,7 @@ func mapState(s string) domain.DownloadState {
 // List returns one snapshot per torrent in the given categories (all torrents
 // when none are named). For completed torrents Files holds the content path
 // (a file or the torrent's root folder) so the importer can find the payload.
+// Paths are mapped into corsarr's view with the pathMap rules.
 func (c *Client) List(ctx context.Context, categories []string) ([]plugin.Snapshot, error) {
 	if len(categories) == 0 {
 		categories = []string{""}
@@ -68,7 +77,7 @@ func (c *Client) List(ctx context.Context, categories []string) ([]plugin.Snapsh
 		for _, ti := range infos {
 			if !seen[ti.Hash] {
 				seen[ti.Hash] = true
-				out = append(out, ti.snapshot())
+				out = append(out, c.snapshot(ti))
 			}
 		}
 	}
@@ -91,11 +100,12 @@ func (c *Client) info(ctx context.Context, category string) ([]torrentInfo, erro
 	return infos, nil
 }
 
-func (ti torrentInfo) snapshot() plugin.Snapshot {
+func (c *Client) snapshot(ti torrentInfo) plugin.Snapshot {
 	s := plugin.Snapshot{
 		DownloadID: ti.Hash, Name: ti.Name, Category: ti.Category, State: mapState(ti.State),
 		Progress: ti.Progress, Size: ti.Size, Downloaded: ti.Downloaded, Speed: ti.DLSpeed,
-		Seeders: ti.NumSeeds, Peers: ti.NumLeechs, SavePath: ti.SavePath, ContentPath: ti.ContentPath,
+		Seeders: ti.NumSeeds, Peers: ti.NumLeechs, SavePath: c.local(ti.SavePath), ContentPath: c.local(ti.ContentPath),
+		Error: warnings[ti.State],
 	}
 	if ti.ETA > 0 && ti.ETA < etaInfinity {
 		s.ETASeconds = ti.ETA
@@ -104,11 +114,8 @@ func (ti torrentInfo) snapshot() plugin.Snapshot {
 		t := time.Unix(ti.LastActivity, 0).UTC()
 		s.LastActivityAt = &t
 	}
-	if s.State == domain.StateCompleted && ti.ContentPath != "" {
-		s.Files = []string{ti.ContentPath}
-	}
-	if s.State == domain.StateFailed {
-		s.Error = ti.State
+	if s.State == domain.StateCompleted && s.ContentPath != "" {
+		s.Files = []string{s.ContentPath}
 	}
 	return s
 }

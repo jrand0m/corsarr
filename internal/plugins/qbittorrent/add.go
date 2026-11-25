@@ -12,8 +12,10 @@ import (
 )
 
 // Add starts a payload and returns its info hash. It is idempotent: a torrent
-// the client already holds is returned without being added again.
+// the client already holds is returned without being added again. A save
+// path is sent in qBittorrent's view (pathMap).
 func (c *Client) Add(ctx context.Context, req plugin.AddRequest) (string, error) {
+	req.SavePath = c.remote(req.SavePath)
 	magnet, content, hash, err := c.prepare(ctx, req.Payload)
 	if err != nil {
 		return "", err

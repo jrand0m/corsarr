@@ -37,7 +37,7 @@ func TestFilesErrors(t *testing.T) {
 
 func TestSnapshotCarriesContentPath(t *testing.T) {
 	ti := torrentInfo{Hash: "h", State: "downloading", ContentPath: "/dl/Movie"}
-	if s := ti.snapshot(); s.ContentPath != "/dl/Movie" || len(s.Files) != 0 {
+	if s := (&Client{}).snapshot(ti); s.ContentPath != "/dl/Movie" || len(s.Files) != 0 {
 		t.Fatalf("%+v", s)
 	}
 }
