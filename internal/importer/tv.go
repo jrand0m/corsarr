@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
-	"strings"
 
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
@@ -43,13 +42,8 @@ func (s *Service) runTV(ctx context.Context, d store.StoredDownload) result {
 	if err != nil {
 		return blocked(d.ID, "no-match", itemsOf(d), err.Error())
 	}
-	files, err := Scan(source(d), s.d.Payload)
-	if err != nil || len(files) == 0 {
-		return failed(d.ID, "path-not-found", in.items, "payload not found at "+source(d))
-	}
-	if bad := Executables(files); len(bad) > 0 {
-		r := failed(d.ID, "payload-unsafe", in.items, "dangerous files: "+strings.Join(bad, ", "))
-		r.unsafe = bad
+	files, r, ok := s.payload(ctx, d, in.items)
+	if !ok {
 		return r
 	}
 	return s.placeAll(ctx, in, assign(videos(files), in.linked))

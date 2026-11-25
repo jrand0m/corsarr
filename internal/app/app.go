@@ -127,7 +127,7 @@ func (a *App) build() {
 	a.TV = a.newTV()
 	a.Music = a.newMusic()
 	a.Importer = importer.New(importer.Deps{Queue: a.Queue, Movies: a.Movies, TV: a.TV, Music: a.Music, Library: st.Library(), Rules: a.Rules,
-		RuleStore: st.Rules(), Pub: d.Bus, DataDir: st.Dir(), NoSpace: a.recheckRoots, Modes: modes, Log: d.Log})
+		RuleStore: st.Rules(), Pub: d.Bus, DataDir: st.Dir(), NoSpace: a.recheckRoots, Files: a.Queue.PayloadFiles, Modes: modes, Log: d.Log})
 	a.Automation = automation.New(automation.Deps{Movies: a.Movies, Files: st.Library(), Queue: a.Queue, Blocklist: st.Blocklist(),
 		Cursors: st.FeedCursors(), Searches: st.Searches(), Recent: st.RecentReleases(), Indexers: a.indexers, Pub: d.Bus, Modes: modes, Log: d.Log})
 	a.TVAuto = a.newTVAuto()

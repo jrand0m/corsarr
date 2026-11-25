@@ -70,6 +70,9 @@ type Deps struct {
 	DataDir   string
 	Payload   decide.PayloadPolicy
 	FreeSpace func(path string) int64
+	// Files lists a download's files relative to its save path, as the
+	// download client reports them; nil when no client can tell.
+	Files func(ctx context.Context, d store.StoredDownload) ([]string, error)
 	// NoSpace is told the root folder an import found short of space, so the
 	// root folder's health updates at once; may be nil.
 	NoSpace func(root string)
@@ -232,13 +235,8 @@ func (s *Service) run(ctx context.Context, d store.StoredDownload) result {
 	if err != nil {
 		return blocked(d.ID, "no-match", itemsOf(d), err.Error())
 	}
-	files, err := Scan(source(d), s.d.Payload)
-	if err != nil || len(files) == 0 {
-		return failed(d.ID, "path-not-found", items, "payload not found at "+source(d))
-	}
-	if bad := Executables(files); len(bad) > 0 {
-		r := failed(d.ID, "payload-unsafe", items, "dangerous files: "+strings.Join(bad, ", "))
-		r.unsafe = bad
+	files, r, ok := s.payload(ctx, d, items)
+	if !ok {
 		return r
 	}
 	video, ok := MainVideo(files)
@@ -246,6 +244,53 @@ func (s *Service) run(ctx context.Context, d store.StoredDownload) result {
 		return blocked(d.ID, "no-match", items, "no video file in the payload")
 	}
 	return s.place(ctx, d, m, video)
+}
+
+// errNoFileList: a payload sharing its folder cannot be told apart without
+// the client's file list.
+var errNoFileList = errors.New("the download has no folder of its own and the download client's file list is not available")
+
+// payload scans and checks the download's files; when it cannot, the result
+// is the outcome to report.
+func (s *Service) payload(ctx context.Context, d store.StoredDownload, items []domain.EventItem) ([]File, result, bool) {
+	files, err := s.scanPayload(ctx, d)
+	switch {
+	case errors.Is(err, errNoFileList):
+		return nil, blocked(d.ID, "no-root-folder", items, err.Error()), false
+	case err != nil || len(files) == 0:
+		// a missing payload is a local problem (mounts, mapping), not a bad
+		// release: block it for a retry instead of failing it
+		return nil, blocked(d.ID, "path-not-found", items, "payload not found at "+source(d)+
+			"; if the download client sees its folders under other paths, add a pathMap entry to it"), false
+	}
+	if bad := Executables(files); len(bad) > 0 {
+		r := failed(d.ID, "payload-unsafe", items, "dangerous files: "+strings.Join(bad, ", "))
+		r.unsafe = bad
+		return nil, r, false
+	}
+	return files, result{}, true
+}
+
+// scanPayload reads the payload. A torrent without a root folder reports its
+// save folder as content path; that folder holds other downloads too, so only
+// the files the client lists for this download are read then.
+func (s *Service) scanPayload(ctx context.Context, d store.StoredDownload) ([]File, error) {
+	if !sharesFolder(d) {
+		return Scan(source(d), s.d.Payload)
+	}
+	if s.d.Files == nil {
+		return nil, errNoFileList
+	}
+	list, err := s.d.Files(ctx, d)
+	if err != nil || len(list) == 0 {
+		return nil, errNoFileList
+	}
+	return ScanList(d.SavePath, list, s.d.Payload)
+}
+
+// sharesFolder reports whether the content path is the save folder itself.
+func sharesFolder(d store.StoredDownload) bool {
+	return d.ContentPath != "" && d.SavePath != "" && filepath.Clean(d.ContentPath) == filepath.Clean(d.SavePath)
 }
 
 func source(d store.StoredDownload) string {
