@@ -29,7 +29,11 @@ func init() {
 	categoryOf[albumHash] = "music"
 }
 
-// fakeMusicBrainz serves one artist with one album of two tracks.
+// fakeMusicBrainz serves one artist with one album of two 20-minute tracks.
+// The search on add races the background edition fetch, so the album may
+// be judged with its real length (40 min) or the default one (45 min); the
+// indexer's 300 MB FLAC release fits the size limits of both, which keeps
+// the decision the same whichever finishes first.
 func fakeMusicBrainz(t *testing.T) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -43,8 +47,8 @@ func fakeMusicBrainz(t *testing.T) *httptest.Server {
 		case "/release":
 			_, _ = w.Write([]byte(`{"releases":[{"id":"r1","title":"First Album","status":"Official","date":"2020-03-01",
 				"media":[{"position":1,"format":"Digital Media","tracks":[
-				{"position":1,"title":"Opening","length":200000,"recording":{"id":"rec1"}},
-				{"position":2,"title":"Closing","length":220000,"recording":{"id":"rec2"}}]}]}]}`))
+				{"position":1,"title":"Opening","length":1200000,"recording":{"id":"rec1"}},
+				{"position":2,"title":"Closing","length":1200000,"recording":{"id":"rec2"}}]}]}]}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -220,7 +224,8 @@ func TestMusicShadowModeDecidesButGrabsNothing(t *testing.T) {
 		t.Fatalf("add artist: %d %s", code, resp)
 	}
 	testkit.Eventually(t, 10*time.Second, "decision.shadowed in history", func() bool { return has(s.history(t), "decision.shadowed") })
-	time.Sleep(300 * time.Millisecond)
+	// decision.shadowed is recorded by the same call that would have sent
+	// the grab, so once it is in History nothing can still be on its way.
 	if s.qb.added(albumHash) || has(s.history(t), "grab.sent") {
 		t.Fatal("shadow mode sent a grab")
 	}

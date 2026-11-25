@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jrand0m/corsarr/internal/audiotag"
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/music"
@@ -18,6 +19,7 @@ import (
 type Music interface {
 	Artist(ctx context.Context, id int64) (domain.Artist, error)
 	EnsureEdition(ctx context.Context, albumID int64) (domain.Album, []domain.Track, error)
+	FitEdition(ctx context.Context, albumID int64, files []music.AudioFile) (music.EditionFit, error)
 	SetTrackFile(ctx context.Context, trackID, fileID int64) error
 }
 
@@ -30,11 +32,13 @@ type musicImport struct {
 	profile decide.QualityProfile
 	items   []domain.EventItem
 	title   string // the grabbed release title
+	edition string // says how the album changed edition to fit the payload
 }
 
 // runMusic imports an album download: the payload's audio files are matched
-// to the album's tracks (disc and track numbers, then titles); below the
-// auto threshold the download waits for a person. Each matched file is
+// to the album's tracks by their tags and names (titles, disc and track
+// numbers, lengths, recording ids); when too few files match, or they match
+// only loosely, the download waits for a person. Each matched file is
 // hardlinked to Artist/Album (Year)/[Disc NN/]Artist - Album - NN - Title
 // and linked to its track; a track whose current file is as good is skipped.
 func (s *Service) runMusic(ctx context.Context, d store.StoredDownload) result {
@@ -47,12 +51,47 @@ func (s *Service) runMusic(ctx context.Context, d store.StoredDownload) result {
 		return r
 	}
 	audio := audioFiles(files)
-	m := music.MatchFiles(rels(audio), in.tracks)
+	tagged := readTags(audio)
+	if err := in.fitEdition(ctx, s.d.Music, tagged); err != nil {
+		return blocked(d.ID, "no-match", in.items, err.Error())
+	}
+	m := music.MatchFiles(tagged, in.tracks)
 	if !m.Auto() {
-		return blocked(d.ID, "no-match", in.items, fmt.Sprintf("%d of %d audio files match a track of %s",
-			len(m.Placements), len(audio), in.album.Title))
+		return blocked(d.ID, "no-match", in.items, matchProblem(m, len(audio), in.album.Title))
 	}
 	return s.placeTracks(ctx, in, m, byRel(audio))
+}
+
+// fitEdition moves the import, and the album, to the edition the payload
+// fits best.
+func (in *musicImport) fitEdition(ctx context.Context, m Music, files []music.AudioFile) error {
+	fit, err := m.FitEdition(ctx, in.album.ID, files)
+	if err != nil {
+		return err
+	}
+	in.album, in.tracks, in.edition = fit.Album, fit.Tracks, fit.Switched
+	return nil
+}
+
+// matchProblem says why a match needs a person: too few files placed, or
+// placed with too little certainty.
+func matchProblem(m music.FileMatch, files int, album string) string {
+	msg := fmt.Sprintf("%d of %d audio files match a track of %s", len(m.Placements), files, album)
+	if m.Score >= music.AutoThreshold {
+		msg += ", too loosely to import unattended"
+	}
+	return msg
+}
+
+// readTags reads the tags of every audio file; a file whose tags cannot be
+// read is matched by its name alone.
+func readTags(files []File) []music.AudioFile {
+	out := make([]music.AudioFile, len(files))
+	for i, f := range files {
+		out[i].Rel = f.Rel
+		out[i].Tags, _ = audiotag.Read(f.Path)
+	}
+	return out
 }
 
 func (s *Service) loadMusic(ctx context.Context, d store.StoredDownload) (musicImport, error) {
@@ -97,14 +136,6 @@ func audioFiles(files []File) []File {
 		if f.Class != ClassExecutable && music.IsAudio(f.Rel) {
 			out = append(out, f)
 		}
-	}
-	return out
-}
-
-func rels(files []File) []string {
-	out := make([]string, len(files))
-	for i, f := range files {
-		out[i] = f.Rel
 	}
 	return out
 }
@@ -232,11 +263,21 @@ func musicOutcome(in musicImport, done []trackResult, missing int) result {
 		return blocked(in.d.ID, "not-upgrade", in.items, skipped)
 	}
 	it.Outcome = map[bool]string{true: "upgraded", false: "imported"}[upgraded]
-	if missing > 0 {
-		it.Reason = fmt.Sprintf("%d tracks missing from the payload", missing)
-	}
+	it.Reason = importNotes(in.edition, missing)
 	o := domain.ImportOutcome{DownloadID: in.d.ID, Status: domain.ImportImported, Items: []domain.ImportItem{it}}
 	return result{outcome: o, folders: []string{music.AlbumPath(in.artist, in.album)}, items: in.items}
+}
+
+// importNotes joins what a person should know about an album import.
+func importNotes(edition string, missing int) string {
+	var notes []string
+	if edition != "" {
+		notes = append(notes, edition)
+	}
+	if missing > 0 {
+		notes = append(notes, fmt.Sprintf("%d tracks missing from the payload", missing))
+	}
+	return strings.Join(notes, "; ")
 }
 
 func first(a, b string) string {

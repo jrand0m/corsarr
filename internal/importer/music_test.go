@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"encoding/binary"
 	"io"
 	"log/slog"
 	"os"
@@ -33,7 +34,23 @@ func (albumMeta) Releases(context.Context, string) ([]plugin.ReleaseRecord, erro
 		{Position: 2, Format: "CD", Tracks: []plugin.TrackRecord{{Position: 1, Title: "Closing"}}}}}}, nil
 }
 
+// twoEditionsMeta adds a one-disc promotional edition with a bonus track
+// next to the official two-disc one.
+type twoEditionsMeta struct{ albumMeta }
+
+func (twoEditionsMeta) Releases(ctx context.Context, mbid string) ([]plugin.ReleaseRecord, error) {
+	rels, _ := albumMeta{}.Releases(ctx, mbid)
+	return append(rels, plugin.ReleaseRecord{MBID: "r2", Status: "promotion", Media: []plugin.MediumRecord{
+		{Position: 1, Format: "CD", Tracks: []plugin.TrackRecord{{Position: 1, Title: "Opening"}, {Position: 2, Title: "Middle"},
+			{Position: 3, Title: "Closing"}, {Position: 4, Title: "Bonus"}}}}}), nil
+}
+
 func musicEnv(t *testing.T, title string) (*env, *music.Service, domain.Album) {
+	t.Helper()
+	return musicEnvWith(t, title, albumMeta{})
+}
+
+func musicEnvWith(t *testing.T, title string, md plugin.MusicMetadata) (*env, *music.Service, domain.Album) {
 	t.Helper()
 	e := newEnv(t)
 	root := filepath.Join(filepath.Dir(e.lib), "music")
@@ -41,7 +58,7 @@ func musicEnv(t *testing.T, title string) (*env, *music.Service, domain.Album) {
 		t.Fatal(err)
 	}
 	svc := music.New(music.Deps{Repo: e.st.Music(), Files: e.st.Library(), Pub: e.rec,
-		Metadata:    func() (plugin.MusicMetadata, bool) { return albumMeta{}, true },
+		Metadata:    func() (plugin.MusicMetadata, bool) { return md, true },
 		RootFolders: func() []string { return []string{root} }, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	ar, _, err := svc.Add(ctx, music.AddRequest{MBID: "a1", ProfileKey: "any"})
 	if err != nil {
@@ -143,6 +160,83 @@ func TestMusicImportBlocksPoorMatchesAndUnsafePayloads(t *testing.T) {
 	e.completed(t, 10)
 	if o := e.q.outcomes[3]; o.Status != domain.ImportBlocked {
 		t.Fatalf("music not wired: %+v", o)
+	}
+}
+
+// taggedFLAC is a FLAC stream header followed by a Vorbis comment block
+// holding the given KEY=value entries.
+func taggedFLAC(entries ...string) string {
+	head := flacHeader(16)
+	head[4] = 0 // STREAMINFO is no longer the last block
+	body := binary.LittleEndian.AppendUint32(nil, 0)
+	body = binary.LittleEndian.AppendUint32(body, uint32(len(entries)))
+	for _, e := range entries {
+		body = binary.LittleEndian.AppendUint32(body, uint32(len(e)))
+		body = append(body, e...)
+	}
+	block := append([]byte{0x80 | 4, byte(len(body) >> 16), byte(len(body) >> 8), byte(len(body))}, body...)
+	return string(append(head, block...))
+}
+
+func TestMusicImportReadsTrackTagsWhenNamesSayNothing(t *testing.T) {
+	e, svc, al := musicEnv(t, "Example Artist - First Album (2020) [FLAC]")
+	e.payload(t, map[string]string{
+		"a.flac": taggedFLAC("TITLE=Closing", "TRACKNUMBER=1", "DISCNUMBER=2"),
+		"b.flac": taggedFLAC("TITLE=Opening", "TRACKNUMBER=1", "DISCNUMBER=1"),
+		"c.flac": taggedFLAC("TITLE=Middle", "TRACKNUMBER=2", "DISCNUMBER=1"),
+	})
+	e.completed(t, 7)
+	if o := e.q.outcomes[0]; o.Status != domain.ImportImported || len(o.Items[0].NewPaths) != 3 {
+		t.Fatalf("%+v", o)
+	}
+	tracks, _ := svc.Tracks(ctx, al.ID)
+	for _, tr := range tracks {
+		f, _, _ := e.st.Library().File(ctx, tr.FileID)
+		if !strings.HasSuffix(f.Path, tr.Title+".flac") {
+			t.Fatalf("track %q got %s", tr.Title, f.Path)
+		}
+	}
+	src, _ := os.Stat(filepath.Join(e.dl, e.q.d.Title, "a.flac"))
+	dst, err := os.Stat(filepath.Join(filepath.Dir(e.lib), "music", "Example Artist", "First Album (2020)", "CD 02",
+		"Example Artist - First Album - 01 - Closing.flac"))
+	if err != nil || !os.SameFile(src, dst) {
+		t.Fatalf("tagged disc and track decide the place: %v", err)
+	}
+}
+
+func TestMusicImportHoldsLooseMatchesForReview(t *testing.T) {
+	e, _, _ := musicEnv(t, "Example Artist - First Album (2020) [FLAC]")
+	// Every file finds a track, but the titles are misspelt and the
+	// numbers lack their discs: too uncertain to guess.
+	e.payload(t, map[string]string{
+		"x.flac": taggedFLAC("TITLE=Opining", "TRACKNUMBER=1"),
+		"y.flac": taggedFLAC("TITLE=Midday", "TRACKNUMBER=2"),
+		"z.flac": taggedFLAC("TITLE=Closinq", "TRACKNUMBER=1"),
+	})
+	e.completed(t, 7)
+	if o := e.q.outcomes[0]; o.Status != domain.ImportBlocked || o.ReasonCode != "no-match" ||
+		!strings.Contains(o.Items[0].Reason, "too loosely") {
+		t.Fatalf("%+v", o)
+	}
+}
+
+func TestMusicImportSwitchesToTheEditionThePayloadFits(t *testing.T) {
+	e, svc, al := musicEnvWith(t, "Example Artist - First Album (2020) [FLAC]", twoEditionsMeta{})
+	e.payload(t, map[string]string{"01 - Opening.flac": "a", "02 - Middle.flac": "b", "03 - Closing.flac": "c", "04 - Bonus.flac": "d"})
+	e.completed(t, 7)
+	o := e.q.outcomes[0]
+	if o.Status != domain.ImportImported || len(o.Items[0].NewPaths) != 4 || !strings.Contains(o.Items[0].Reason, "edition changed") {
+		t.Fatalf("%+v", o)
+	}
+	if got, _ := svc.Album(ctx, al.ID); got.EditionMBID != "r2" || got.TrackCount != 4 {
+		t.Fatalf("%+v", got)
+	}
+	if ev := e.rec.Of(domain.EvItemUpdated); len(ev) != 1 || ev[0].Data.(domain.ItemEventData).Changed[0] != "edition" {
+		t.Fatalf("%+v", ev)
+	}
+	want := filepath.Join(filepath.Dir(e.lib), "music", "Example Artist", "First Album (2020)", "Example Artist - First Album - 04 - Bonus.flac")
+	if _, err := os.Stat(want); err != nil {
+		t.Fatal(err)
 	}
 }
 

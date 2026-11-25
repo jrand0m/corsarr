@@ -165,7 +165,7 @@ func TestMatchFilesByNumberDiscAndTitle(t *testing.T) {
 	album := tracks([3]any{1, 1, "Opening"}, [3]any{1, 2, "Middle"}, [3]any{2, 1, "Return"}, [3]any{2, 2, "Closing Time"})
 	files := []string{"Album/CD1/01 - Opening.flac", "Album/CD1/02 - Middle.flac", "Album/CD2/01 - Return.flac",
 		"Album/CD2/Closing Time.flac", "Album/bonus - remix.flac"}
-	m := MatchFiles(files, album)
+	m := MatchFiles(Named(files...), album)
 	if len(m.Placements) != 4 || m.Unmatched[0] != "Album/bonus - remix.flac" || len(m.Missing) != 0 {
 		t.Fatalf("%+v", m)
 	}
@@ -173,12 +173,12 @@ func TestMatchFilesByNumberDiscAndTitle(t *testing.T) {
 		t.Fatalf("%+v auto=%v", m.Placements, m.Auto())
 	}
 	// disc-track prefixes, and "Artist - Album - 03 - Title" names
-	m = MatchFiles([]string{"x/1-01 a.flac", "x/2-02 b.flac", "x/Artist - Album - 02 - Middle.mp3"}, album)
+	m = MatchFiles(Named("x/1-01 a.flac", "x/2-02 b.flac", "x/Artist - Album - 02 - Middle.mp3"), album)
 	if len(m.Placements) != 3 || m.Placements[1].Track.ID != 4 || m.Placements[2].Track.ID != 2 || !m.Auto() {
 		t.Fatalf("%+v", m.Placements)
 	}
 	// the same number on two discs without a disc marker falls to the title
-	m = MatchFiles([]string{"01 Return.flac"}, album)
+	m = MatchFiles(Named("01 Return.flac"), album)
 	if len(m.Placements) != 1 || m.Placements[0].Track.ID != 3 || len(m.Missing) != 3 {
 		t.Fatalf("%+v", m)
 	}
