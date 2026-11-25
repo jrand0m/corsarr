@@ -41,6 +41,8 @@ func TestCheckTransition(t *testing.T) {
 		{StateImportBlocked, StateImporting, ActorUser, true},
 		{StateDownloading, StateRemoved, ActorSafety, true},
 		{StateStalled, StateFailed, ActorAutomation, true},
+		{StateQueued, StateStalled, ActorDownloader, true}, // a client warning before any progress
+		{StateStalled, StateQueued, ActorDownloader, true},
 		// wrong actor: automation cannot import, downloader cannot import
 		{StateCompleted, StateImportPending, ActorDownloader, false},
 		{StateImporting, StateImported, ActorAutomation, false},

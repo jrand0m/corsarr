@@ -135,7 +135,7 @@ func TestSnapshotMapping(t *testing.T) {
 	if s2 := by["h2"]; s2.State != domain.StateCompleted || s2.ETASeconds != 0 || len(s2.Files) != 1 || s2.Files[0] != "/d/Done" {
 		t.Errorf("h2 %+v", s2)
 	}
-	if s3 := by["h3"]; s3.State != domain.StateFailed || s3.Error != "missingFiles" {
+	if s3 := by["h3"]; s3.State != domain.StateStalled || !strings.Contains(s3.Error, "cannot find") {
 		t.Errorf("h3 %+v", s3)
 	}
 	all, err := c.List(t.Context(), nil)
@@ -146,7 +146,7 @@ func TestSnapshotMapping(t *testing.T) {
 
 func TestStateMapping(t *testing.T) {
 	want := map[string]domain.DownloadState{
-		"error": domain.StateFailed, "missingFiles": domain.StateFailed,
+		"error": domain.StateStalled, "missingFiles": domain.StateStalled,
 		"uploading": domain.StateCompleted, "pausedUP": domain.StateCompleted, "stoppedUP": domain.StateCompleted,
 		"stalledUP": domain.StateCompleted, "queuedUP": domain.StateCompleted, "forcedUP": domain.StateCompleted,
 		"downloading": domain.StateDownloading, "metaDL": domain.StateDownloading, "forcedDL": domain.StateDownloading,

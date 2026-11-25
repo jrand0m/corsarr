@@ -159,6 +159,22 @@ func (s *Service) downloader(key domain.ObjectKey) (plugin.Downloader, bool) {
 	return nil, false
 }
 
+// PayloadFiles lists a download's files, relative to its save path, as its
+// download client reports them.
+func (s *Service) PayloadFiles(ctx context.Context, d store.StoredDownload) ([]string, error) {
+	dl, ok := s.downloader(d.Downloader)
+	lister, lists := dl.(plugin.FileLister)
+	if !ok || !lists {
+		return nil, ErrNoDownloader
+	}
+	entries, err := lister.Files(ctx, d.DownloadID)
+	out := make([]string, len(entries))
+	for i, e := range entries {
+		out[i] = e.Path
+	}
+	return out, err
+}
+
 func (s *Service) pick(rel domain.Release) (Downloader, bool) {
 	for _, d := range s.d.Plugins.Downloaders() {
 		if handles(d.Impl, rel) {

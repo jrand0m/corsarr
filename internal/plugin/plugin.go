@@ -85,6 +85,8 @@ type Field struct {
 	Max      *float64  `json:"max,omitempty"`
 	// Secret marks list/map fields whose values are secret (secret-typed fields always are).
 	Secret bool `json:"secret,omitempty"`
+	// Check validates a text value, or each entry of a list, at config load.
+	Check func(string) error `json:"-"`
 }
 
 // SetupFlow is one of the generic interactive setup flows.

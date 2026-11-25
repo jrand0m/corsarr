@@ -42,6 +42,7 @@ type fakeQB struct {
 	forms      []map[string]string // last add form fields
 	noQueueing bool
 	logins     int
+	prefs      map[string]any // app/preferences; nil answers 404
 }
 
 func newFake(t *testing.T, version string) *fakeQB {
@@ -124,6 +125,8 @@ func (f *fakeQB) route(w http.ResponseWriter, r *http.Request, path string) {
 	switch path {
 	case "app/version":
 		_, _ = w.Write([]byte(f.version))
+	case "app/preferences":
+		f.preferences(w)
 	case "torrents/info":
 		f.info(w, r)
 	case "torrents/add":
@@ -150,6 +153,16 @@ func (f *fakeQB) route(w http.ResponseWriter, r *http.Request, path string) {
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+func (f *fakeQB) preferences(w http.ResponseWriter) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.prefs == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(f.prefs)
 }
 
 func (f *fakeQB) stateChange(w http.ResponseWriter, r *http.Request, version, api string) {

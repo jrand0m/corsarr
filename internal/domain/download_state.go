@@ -37,6 +37,8 @@ var transitions = map[edge][]Actor{
 	{StateQueued, StateDownloading}:      {ActorDownloader},
 	{StateDownloading, StateStalled}:     {ActorDownloader},
 	{StateStalled, StateDownloading}:     {ActorDownloader},
+	{StateQueued, StateStalled}:          {ActorDownloader},
+	{StateStalled, StateQueued}:          {ActorDownloader},
 	{StateQueued, StateCompleted}:        {ActorDownloader},
 	{StateDownloading, StateCompleted}:   {ActorDownloader},
 	{StateStalled, StateCompleted}:       {ActorDownloader},

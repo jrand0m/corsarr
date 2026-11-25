@@ -74,6 +74,11 @@ The image is `scratch` plus the binary, CA roots and a non-root user (uid 65532)
 filesystem** at the same path your download client sees, so imports are hardlinks
 instead of copies. See [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
 
+When the download client sees the same folders under other paths (another host, or a
+container with different mounts), give it a `pathMap`: one `remote=local` entry per
+folder, for example `/downloads=/media/downloads`. Its connection test warns when a
+save folder it reports cannot be found here.
+
 ## Configuration
 
 Configuration has exactly one source per start, chosen in this order:

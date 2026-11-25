@@ -68,8 +68,10 @@ type categoryInfo struct {
 }
 
 // EnsureCategory creates the category or aligns its save path; calling it
-// again changes nothing.
+// again changes nothing. The save path is local and sent in qBittorrent's
+// view (pathMap).
 func (c *Client) EnsureCategory(ctx context.Context, category, savePath string) error {
+	savePath = c.remote(savePath)
 	resp, err := c.get(ctx, "torrents/categories", nil, maxSmall)
 	if err != nil {
 		return err

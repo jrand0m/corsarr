@@ -290,7 +290,7 @@ func TestBlockedAndFailedOutcomes(t *testing.T) {
 	e := newEnv(t)
 	e.q.d.ContentPath = filepath.Join(e.dl, "missing")
 	e.completed(t, 7)
-	if o := e.q.outcomes[0]; o.Status != domain.ImportFailed || o.ReasonCode != "path-not-found" {
+	if o := e.q.outcomes[0]; o.Status != domain.ImportBlocked || o.ReasonCode != "path-not-found" {
 		t.Fatalf("%+v", o)
 	}
 	e.payload(t, map[string]string{"readme.txt": "no video"})

@@ -185,13 +185,16 @@ func fieldNode(f plugin.Field) *Node {
 	}
 	switch f.Type {
 	case plugin.FieldList:
-		return &Node{Kind: KindList, Doc: f.Help, Required: f.Required, Elem: &Node{Kind: KindString}}
+		return &Node{Kind: KindList, Doc: f.Help, Required: f.Required, Elem: &Node{Kind: KindString, Check: f.Check}}
 	case plugin.FieldMultiselect:
 		return &Node{Kind: KindList, Doc: f.Help, Required: f.Required, Elem: &Node{Kind: KindEnum, Enum: f.Options}}
 	case plugin.FieldMap:
 		return &Node{Kind: KindMap, Doc: f.Help, Required: f.Required, Elem: &Node{Kind: KindString}}
 	}
 	n.Check = rangeCheck(f)
+	if n.Check == nil {
+		n.Check = f.Check
+	}
 	return n
 }
 
