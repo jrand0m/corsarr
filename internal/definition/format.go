@@ -97,6 +97,15 @@ type Login struct {
 	// Form login: where the credentials go and which fields carry them.
 	Path   string  `yaml:"path" json:"path"`
 	Fields Strings `yaml:"fields" json:"fields"`
+	// Page, when set, is fetched before logging in. Its cookies are kept and
+	// the login form on it is submitted as a browser would: hidden inputs
+	// (CSRF tokens) and prefilled values, with Fields filled in on top. The
+	// form posts to Path when set, else to its own action.
+	Page string `yaml:"page" json:"page,omitempty"`
+	// Form selects the login form on Page (default: the first form).
+	Form string `yaml:"form" json:"form,omitempty"`
+	// Tokens fill fields from elsewhere on Page, such as a CSRF token in a meta tag.
+	Tokens map[string]Pick `yaml:"tokens" json:"tokens,omitempty"`
 	// Success must hold on the page after logging in (form login).
 	Success Check `yaml:"success" json:"success"`
 	// Failure, when it holds, carries the site's error message.
