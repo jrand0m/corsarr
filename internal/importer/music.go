@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jrand0m/corsarr/internal/audiotag"
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/music"
@@ -33,8 +34,9 @@ type musicImport struct {
 }
 
 // runMusic imports an album download: the payload's audio files are matched
-// to the album's tracks (disc and track numbers, then titles); below the
-// auto threshold the download waits for a person. Each matched file is
+// to the album's tracks by their tags and names (titles, disc and track
+// numbers, lengths, recording ids); when too few files match, or they match
+// only loosely, the download waits for a person. Each matched file is
 // hardlinked to Artist/Album (Year)/[Disc NN/]Artist - Album - NN - Title
 // and linked to its track; a track whose current file is as good is skipped.
 func (s *Service) runMusic(ctx context.Context, d store.StoredDownload) result {
@@ -52,12 +54,32 @@ func (s *Service) runMusic(ctx context.Context, d store.StoredDownload) result {
 		return r
 	}
 	audio := audioFiles(files)
-	m := music.MatchFiles(rels(audio), in.tracks)
+	m := music.MatchFiles(readTags(audio), in.tracks)
 	if !m.Auto() {
-		return blocked(d.ID, "no-match", in.items, fmt.Sprintf("%d of %d audio files match a track of %s",
-			len(m.Placements), len(audio), in.album.Title))
+		return blocked(d.ID, "no-match", in.items, matchProblem(m, len(audio), in.album.Title))
 	}
 	return s.placeTracks(ctx, in, m, byRel(audio))
+}
+
+// matchProblem says why a match needs a person: too few files placed, or
+// placed with too little certainty.
+func matchProblem(m music.FileMatch, files int, album string) string {
+	msg := fmt.Sprintf("%d of %d audio files match a track of %s", len(m.Placements), files, album)
+	if m.Score >= music.AutoThreshold {
+		msg += ", too loosely to import unattended"
+	}
+	return msg
+}
+
+// readTags reads the tags of every audio file; a file whose tags cannot be
+// read is matched by its name alone.
+func readTags(files []File) []music.AudioFile {
+	out := make([]music.AudioFile, len(files))
+	for i, f := range files {
+		out[i].Rel = f.Rel
+		out[i].Tags, _ = audiotag.Read(f.Path)
+	}
+	return out
 }
 
 func (s *Service) loadMusic(ctx context.Context, d store.StoredDownload) (musicImport, error) {
@@ -102,14 +124,6 @@ func audioFiles(files []File) []File {
 		if f.Class != ClassExecutable && music.IsAudio(f.Rel) {
 			out = append(out, f)
 		}
-	}
-	return out
-}
-
-func rels(files []File) []string {
-	out := make([]string, len(files))
-	for i, f := range files {
-		out[i] = f.Rel
 	}
 	return out
 }
