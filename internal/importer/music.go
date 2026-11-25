@@ -122,11 +122,14 @@ func byRel(files []File) map[string]File {
 	return out
 }
 
-// audioCandidate is what a new track file is: the release title's audio
-// quality, or the file's own format when the title states none.
+// audioCandidate is what a new track file is: the quality its stream
+// headers show; when they cannot be read, the release title's audio
+// quality, or the file's extension when the title states none.
 func audioCandidate(title, file string, p decide.QualityProfile) candidate {
 	m := parse.ParseMusic(title)
-	if !m.Format.Known {
+	if fm, ok := fileAudio(file, m); ok {
+		m = fm
+	} else if !m.Format.Known {
 		m.Format = parse.Field[parse.AudioFormat]{Value: formatOfExt(file), Known: formatOfExt(file) != ""}
 	}
 	q, _ := decide.AudioQualityOf(m)
