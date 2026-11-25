@@ -17,10 +17,11 @@ func IndexKey(artist, album string) string {
 }
 
 // Matches reports whether a parsed music release names this album of this
-// artist: both names match after normalising and, when the release states a
-// year, it is within one of the album's (reissues share titles).
+// artist: both names are the same name or nearly so (the artist is not
+// compared for a various-artists compilation) and, when the release states
+// a year, it is within one of the album's (reissues share titles).
 func Matches(ar domain.Artist, al domain.Album, m parse.MusicRelease) bool {
-	if movies.Normalize(m.Artist) != movies.Normalize(ar.Name) || movies.Normalize(m.Album) != movies.Normalize(al.Title) {
+	if !(IsVarious(ar) || SameName(m.Artist, ar.Name)) || !SameName(m.Album, al.Title) {
 		return false
 	}
 	return !m.Year.Known || al.Year() == 0 || abs(m.Year.Value-al.Year()) <= 1
@@ -34,10 +35,12 @@ func abs(n int) int {
 }
 
 // AlbumRequest searches one album by artist, album and year; the text form
-// ("Artist Album") serves indexers without music search.
+// ("Artist Album") serves indexers without music search. Names are cleaned
+// for search engines and a compilation is searched as "VA".
 func AlbumRequest(ar domain.Artist, al domain.Album, origin domain.SearchOrigin) domain.SearchRequest {
-	return domain.SearchRequest{Kind: domain.KindMusic, Mode: domain.SearchMusic, Text: ar.Name + " " + al.Title,
-		Titles: []string{al.Title}, Year: al.Year(), IDs: map[string]string{"artist": ar.Name, "album": al.Title, "mbid": al.MBID},
+	artist, title := queryArtist(ar), QueryText(al.Title)
+	return domain.SearchRequest{Kind: domain.KindMusic, Mode: domain.SearchMusic, Text: strings.TrimSpace(artist + " " + title),
+		Titles: []string{al.Title}, Year: al.Year(), IDs: map[string]string{"artist": artist, "album": title, "mbid": al.MBID},
 		Origin: origin, ItemRefs: []domain.ItemRef{al.Ref()}}
 }
 

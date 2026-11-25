@@ -140,8 +140,11 @@ var preferredFormats = map[string]int{"digital media": 2, "cd": 1}
 
 // ChooseEdition picks an album's edition: official first, then the
 // preferred medium format, then the most common track count among the
-// editions, then the earliest date. ok=false when there is none.
+// editions, then the earliest date. Editions are judged on their audio
+// only, and an edition left without audio is chosen only when every one is.
+// ok=false when there is none.
 func ChooseEdition(rels []plugin.ReleaseRecord) (plugin.ReleaseRecord, bool) {
+	rels = audioEditions(rels)
 	if len(rels) == 0 {
 		return plugin.ReleaseRecord{}, false
 	}
@@ -195,6 +198,7 @@ func dateOf(r plugin.ReleaseRecord) time.Time {
 
 // Edition applies a chosen edition to an album and returns its tracks.
 func Edition(a domain.Album, r plugin.ReleaseRecord) (domain.Album, []domain.Track) {
+	r = AudioOnly(r)
 	a.EditionMBID, a.MediumCount, a.TrackCount, a.DurationSec = r.MBID, len(r.Media), r.TrackCount(), 0
 	var tracks []domain.Track
 	for _, m := range r.Media {
