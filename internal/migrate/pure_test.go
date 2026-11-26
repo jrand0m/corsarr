@@ -21,7 +21,8 @@ import (
 func TestParseEndpointValidatesAtTheBoundary(t *testing.T) {
 	cases := []struct{ app, url, key, err string }{
 		{"Sonarr", "http://h:8989/base/", "k", ""},
-		{"lidarr", "http://h", "k", "must be sonarr"},
+		{"readarr", "http://h", "k", "must be sonarr, radarr, lidarr or prowlarr"},
+		{"Lidarr", "http://h:8989/base/", "k", ""},
 		{"radarr", "ftp://h", "k", "http or https"},
 		{"radarr", "http://", "k", "http or https"},
 		{"prowlarr", "http://h", " ", "needs an API key"},

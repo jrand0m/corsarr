@@ -1,4 +1,4 @@
-// Package migrate imports an existing TV, movie and indexer-manager
+// Package migrate imports an existing TV, movie, music and indexer-manager
 // installation through its public HTTP API, read-only. A run reads every
 // source into a Snapshot, builds a Plan (one outcome and reason per source
 // object) without writing anything, and on apply adopts library items and
@@ -31,21 +31,22 @@ type App string
 const (
 	Sonarr   App = "sonarr"
 	Radarr   App = "radarr"
+	Lidarr   App = "lidarr"
 	Prowlarr App = "prowlarr"
 )
 
 // ParseApp validates a source type at the boundary.
 func ParseApp(s string) (App, error) {
 	switch a := App(strings.ToLower(strings.TrimSpace(s))); a {
-	case Sonarr, Radarr, Prowlarr:
+	case Sonarr, Radarr, Lidarr, Prowlarr:
 		return a, nil
 	}
-	return "", fmt.Errorf("source %q must be sonarr, radarr or prowlarr", s)
+	return "", fmt.Errorf("source %q must be sonarr, radarr, lidarr or prowlarr", s)
 }
 
 // apiBase is the API root of the app.
 func (a App) apiBase() string {
-	if a == Prowlarr {
+	if a == Prowlarr || a == Lidarr {
 		return "/api/v1"
 	}
 	return "/api/v3"
@@ -58,6 +59,8 @@ func (a App) Kind() domain.MediaKind {
 		return domain.KindTV
 	case Radarr:
 		return domain.KindMovie
+	case Lidarr:
+		return domain.KindMusic
 	}
 	return ""
 }
@@ -130,7 +133,7 @@ var (
 )
 
 // supported is the major-version range per app: [min, below).
-var supported = map[App][2]int{Sonarr: {3, 5}, Radarr: {3, 7}, Prowlarr: {1, 3}}
+var supported = map[App][2]int{Sonarr: {3, 5}, Radarr: {3, 7}, Lidarr: {1, 4}, Prowlarr: {1, 3}}
 
 // SupportedRange renders the supported versions of an app.
 func SupportedRange(a App) string {

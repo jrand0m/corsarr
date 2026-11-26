@@ -20,11 +20,14 @@ func (b *builder) library(s Snapshot) {
 	for _, m := range s.Movies {
 		b.movie(s, m)
 	}
+	for _, a := range s.Artists {
+		b.artist(s, a)
+	}
 	b.removed(s)
 }
 
 // decide compares a source object with what earlier runs and the owner left.
-func (b *builder) decide(key store.ProvenanceKey, src string, tmdb int64, index map[int64]int64) (Outcome, string, int64) {
+func (b *builder) decide(key store.ProvenanceKey, src string, inCorsarr bool) (Outcome, string, int64) {
 	b.seen[key] = true
 	if p, ok := b.st.Prov[key]; ok {
 		cur, exists := b.st.Current[key]
@@ -38,7 +41,7 @@ func (b *builder) decide(key store.ProvenanceKey, src string, tmdb int64, index 
 		}
 		return OutUpdate, "changed at the source since the last run; corsarr's copy was untouched", p.TargetID
 	}
-	if _, ok := index[tmdb]; ok {
+	if inCorsarr {
 		return OutConflict, "already in corsarr (added there); kept as is", 0
 	}
 	return OutCreate, "new; monitoring, profile and files come across", 0
@@ -57,7 +60,8 @@ func (b *builder) series(s Snapshot, src SrcSeries) {
 	key := b.provKey(s, "series", src.ID)
 	srcHash := hashOf(src)
 	var targetID int64
-	e.Outcome, e.Reason, targetID = b.decide(key, srcHash, src.TMDB, b.st.Index.SeriesByTMDB)
+	_, exists := b.st.Index.SeriesByTMDB[src.TMDB]
+	e.Outcome, e.Reason, targetID = b.decide(key, srcHash, exists)
 	files := b.seriesFiles(s, src, e)
 	if e.Outcome.writes() {
 		b.kinds[domain.KindTV] = s.Source.App
@@ -86,7 +90,7 @@ func (b *builder) seriesFiles(s Snapshot, src SrcSeries, parent Entry) []store.E
 
 // file reports one source file; ok means it is adopted in place.
 func (b *builder) file(s Snapshot, f SrcFile, typ string, parent Entry) (domain.LibraryFile, bool) {
-	lf, exact := libraryFile(f, b.o.Rewrite)
+	lf, exact := libraryFile(f, b.o.Rewrite, s.Source.App.Kind())
 	e := Entry{ID: entryID(s.Source.App, typ, f.ID), Category: CatFiles, Source: s.Source.App, Name: lf.Path}
 	defer func() { b.add(e) }()
 	if !parent.Outcome.writes() {
@@ -124,7 +128,8 @@ func (b *builder) movie(s Snapshot, src SrcMovie) {
 	key := b.provKey(s, "movie", src.ID)
 	srcHash := hashOf(src)
 	var targetID int64
-	e.Outcome, e.Reason, targetID = b.decide(key, srcHash, src.TMDB, b.st.Index.MovieByTMDB)
+	_, exists := b.st.Index.MovieByTMDB[src.TMDB]
+	e.Outcome, e.Reason, targetID = b.decide(key, srcHash, exists)
 	if src.TMDB == 0 {
 		e.Outcome, e.Reason = OutUnsupported, "the source has no TMDB id for it; add it in corsarr by hand"
 	}
@@ -150,11 +155,14 @@ func joinNotes(reason string, notes []string) string {
 	return reason
 }
 
+// libraryTypes are the provenance object types of library items.
+var libraryTypes = map[string]bool{"series": true, "movie": true, "artist": true}
+
 // removed reports library objects of earlier runs the source no longer has.
 func (b *builder) removed(s Snapshot) {
 	var keys []store.ProvenanceKey
 	for k := range b.st.Prov {
-		if k.App == string(s.Source.App) && k.Instance == s.Source.Instance && (k.ObjectType == "series" || k.ObjectType == "movie") && !b.seen[k] {
+		if k.App == string(s.Source.App) && k.Instance == s.Source.Instance && libraryTypes[k.ObjectType] && !b.seen[k] {
 			keys = append(keys, k)
 		}
 	}
@@ -171,11 +179,12 @@ func (b *builder) removed(s Snapshot) {
 type keysOf struct {
 	episodes map[int]itemKey
 	movies   map[int]itemKey
+	albums   map[int]itemKey
 	series   map[int][]itemKey
 }
 
 func lookups(s Snapshot) keysOf {
-	k := keysOf{episodes: map[int]itemKey{}, movies: map[int]itemKey{}, series: map[int][]itemKey{}}
+	k := keysOf{episodes: map[int]itemKey{}, movies: map[int]itemKey{}, albums: map[int]itemKey{}, series: map[int][]itemKey{}}
 	for _, ser := range s.Series {
 		for _, ep := range ser.Episodes {
 			key := itemKey{Kind: domain.KindTV, TMDB: ser.TMDB, Ep: &store.EpisodeKey{Season: ep.Season, Number: ep.Number}}
@@ -186,19 +195,29 @@ func lookups(s Snapshot) keysOf {
 	for _, m := range s.Movies {
 		k.movies[m.ID] = itemKey{Kind: domain.KindMovie, TMDB: m.TMDB}
 	}
+	for _, a := range s.Artists {
+		for _, al := range a.Albums {
+			k.albums[al.ID] = itemKey{Kind: domain.KindMusic, Artist: a.MBID, Album: al.MBID}
+		}
+	}
 	return k
 }
 
-// items lists the known keys among episode and movie ids.
-func (k keysOf) items(episodes []int, movie int) []itemKey {
-	var out []itemKey
-	for _, id := range episodes {
-		if key, ok := k.episodes[id]; ok {
-			out = append(out, key)
-		}
-	}
+// items lists the known keys among episode, movie and album ids.
+func (k keysOf) items(episodes []int, movie int, albums []int) []itemKey {
+	out := known(k.episodes, episodes)
 	if key, ok := k.movies[movie]; ok {
 		out = append(out, key)
+	}
+	return append(out, known(k.albums, albums)...)
+}
+
+func known(m map[int]itemKey, ids []int) []itemKey {
+	var out []itemKey
+	for _, id := range ids {
+		if key, ok := m[id]; ok {
+			out = append(out, key)
+		}
 	}
 	return out
 }
@@ -238,14 +257,14 @@ func (b *builder) download(s Snapshot, id string, rows []SrcQueue, keys keysOf) 
 	case !inClient:
 		e.Outcome, e.Reason = OutGone, "no longer in the download client"
 	default:
-		var eps []int
+		var eps, albums []int
 		for _, r := range rows {
-			eps = append(eps, r.EpisodeID)
+			eps, albums = append(eps, r.EpisodeID), append(albums, r.AlbumID)
 		}
 		e.Outcome = OutCreate
 		e.Reason = fmt.Sprintf("adopted as one download linked to %d items; the client is not touched", len(rows))
 		e.op = downloadOp{hit: hit, id: id, title: rows[0].Title, protocol: domain.ProtoTorrent, kind: s.Source.App.Kind(),
-			size: rows[0].Size, items: keys.items(eps, rows[0].MovieID)}
+			size: rows[0].Size, items: keys.items(eps, rows[0].MovieID, albums)}
 	}
 }
 
@@ -256,7 +275,7 @@ func (b *builder) blocks(s Snapshot) {
 	for _, bl := range s.Blocklist {
 		e := Entry{ID: entryID(s.Source.App, "blocklist", bl.ID), Category: CatBlocklist, Source: s.Source.App, Name: bl.Title}
 		key := b.provKey(s, "blocklist", bl.ID)
-		items := keys.items(bl.EpisodeIDs, bl.MovieID)
+		items := keys.items(bl.EpisodeIDs, bl.MovieID, bl.AlbumIDs)
 		switch _, done := b.st.Prov[key]; {
 		case done:
 			e.Outcome, e.Reason = OutUnchanged, "imported by an earlier run"
@@ -288,6 +307,8 @@ var historyTypes = map[string]domain.EventType{
 	"movieFolderImported": domain.EvImportCompleted, "downloadFailed": domain.EvDownloadFailed,
 	"episodeFileDeleted": domain.EvFileDeleted, "movieFileDeleted": domain.EvFileDeleted,
 	"episodeFileRenamed": domain.EvFileRenamed, "movieFileRenamed": domain.EvFileRenamed,
+	"trackFileImported": domain.EvImportCompleted, "trackFileDeleted": domain.EvFileDeleted,
+	"trackFileRenamed": domain.EvFileRenamed,
 }
 
 func (b *builder) history(s Snapshot) {
@@ -303,7 +324,7 @@ func (b *builder) history(s Snapshot) {
 			e.Outcome, e.Reason = OutSkip, h.Event+" rows are not kept"
 		default:
 			e.Outcome, e.Reason = OutCreate, "kept in History, marked imported from "+string(s.Source.App)
-			e.op = historyOp{title: h.Title, prov: store.Provenance{Key: key}, items: keys.items([]int{h.EpisodeID}, h.MovieID),
+			e.op = historyOp{title: h.Title, prov: store.Provenance{Key: key}, items: keys.items([]int{h.EpisodeID}, h.MovieID, []int{h.AlbumID}),
 				ev: domain.Event{SchemaVersion: 1, EventID: "import-" + s.Source.Instance + "-" + fmt.Sprint(h.ID), Type: t,
 					OccurredAt: h.Date, Actor: "import:" + string(s.Source.App), Imported: true, Kind: s.Source.App.Kind(),
 					Data: map[string]any{"sourceTitle": h.Title, "downloadId": h.DownloadID, "importedFrom": string(s.Source.App)}}}

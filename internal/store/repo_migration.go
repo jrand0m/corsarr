@@ -131,16 +131,22 @@ func putProvenance(ctx context.Context, tx *sql.Tx, p Provenance) error {
 type LibraryIndex struct {
 	SeriesByTMDB map[int64]int64  // tmdb id → series id
 	MovieByTMDB  map[int64]int64  // tmdb id → movie id
+	ArtistByMBID map[string]int64 // MusicBrainz id → artist id
 	FilePaths    map[string]int64 // linked file path → file id
 }
 
 // Index reads the join keys of the library.
 func (r Migration) Index(ctx context.Context) (LibraryIndex, error) {
-	ix := LibraryIndex{SeriesByTMDB: map[int64]int64{}, MovieByTMDB: map[int64]int64{}, FilePaths: map[string]int64{}}
+	ix := LibraryIndex{SeriesByTMDB: map[int64]int64{}, MovieByTMDB: map[int64]int64{}, ArtistByMBID: map[string]int64{},
+		FilePaths: map[string]int64{}}
 	pair := func(sc scanner) ([2]int64, error) { var p [2]int64; return p, sc.Scan(&p[0], &p[1]) }
 	err := errors.Join(
 		eachRow(ctx, r.s.R(), pair, func(p [2]int64) error { ix.SeriesByTMDB[p[0]] = p[1]; return nil }, "SELECT tmdb_id, id FROM series"),
 		eachRow(ctx, r.s.R(), pair, func(p [2]int64) error { ix.MovieByTMDB[p[0]] = p[1]; return nil }, "SELECT tmdb_id, id FROM movies"),
+		eachRow(ctx, r.s.R(), func(sc scanner) (domain.Artist, error) {
+			var a domain.Artist
+			return a, sc.Scan(&a.MBID, &a.ID)
+		}, func(a domain.Artist) error { ix.ArtistByMBID[a.MBID] = a.ID; return nil }, "SELECT mbid, id FROM artists"),
 		eachRow(ctx, r.s.R(), func(sc scanner) (domain.LibraryFile, error) {
 			var f domain.LibraryFile
 			return f, sc.Scan(&f.Path, &f.ID)

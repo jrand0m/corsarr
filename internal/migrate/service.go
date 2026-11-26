@@ -287,8 +287,20 @@ func (s *Service) current(ctx context.Context, st *State, p store.Provenance) er
 			st.Current[p.Key] = MovieTargetHash(m)
 		}
 		return err
+	case "artist":
+		return s.currentArtist(ctx, st, p)
 	}
 	return nil
+}
+
+func (s *Service) currentArtist(ctx context.Context, st *State, p store.Provenance) error {
+	ar, ok, err := s.d.Store.Music().Artist(ctx, p.TargetID)
+	if err != nil || !ok {
+		return err
+	}
+	albums, err := s.d.Store.Music().Albums(ctx, ar.ID)
+	st.Current[p.Key] = ArtistTargetHash(ar, albums)
+	return err
 }
 
 func (s *Service) overrides(ctx context.Context, st *State, _ []Snapshot) error {
@@ -384,6 +396,14 @@ func (t storeTarget) AdoptSeries(ctx context.Context, s domain.Series, seasons [
 
 func (t storeTarget) AdoptMovie(ctx context.Context, m domain.Movie, f *domain.LibraryFile, p store.Provenance) (int64, error) {
 	return t.st.Migration().AdoptMovie(ctx, m, f, p)
+}
+
+func (t storeTarget) AdoptArtist(ctx context.Context, a domain.Artist, albums []store.AdoptAlbum, p store.Provenance) (int64, error) {
+	return t.st.Migration().AdoptArtist(ctx, a, albums, p)
+}
+
+func (t storeTarget) AlbumIDs(ctx context.Context, artistMBID string) (map[string]int64, error) {
+	return t.st.Migration().AlbumIDs(ctx, artistMBID)
 }
 
 func (t storeTarget) EpisodeIDs(ctx context.Context, tmdb int64) (map[store.EpisodeKey]int64, error) {

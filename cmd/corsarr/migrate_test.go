@@ -74,7 +74,7 @@ func TestMigrateRefusesBadInput(t *testing.T) {
 		{"--from=radarr", "--url=" + srv.URL},
 		{"--from=radarr", "--url=" + srv.URL, "--api-key-env=NOPE"},
 		{"--from=radarr", "--url=" + srv.URL, "--api-key-file=/does/not/exist"},
-		{"--from=lidarr", "--url=" + srv.URL, "--api-key-env=HOME"},
+		{"--from=readarr", "--url=" + srv.URL, "--api-key-env=HOME"},
 		{"--from=radarr", "--url=" + srv.URL, "--api-key-env=HOME", "--scope=bogus"},
 		{"--from=radarr", "--url=" + srv.URL, "--api-key-env=HOME", "--path-rewrite=x"},
 		{"--from=radarr", "--url=" + srv.URL, "--api-key-env=HOME", "--history-days=0"},

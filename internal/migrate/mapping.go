@@ -8,6 +8,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/movies"
+	"github.com/jrand0m/corsarr/internal/music"
 )
 
 // Pure mappings from source concepts onto corsarr's model.
@@ -42,29 +43,55 @@ type ProfileMapping struct {
 }
 
 // mapProfile picks the shipped profile with the same name, else the
-// closest one by the source cutoff's resolution.
+// closest one by the source cutoff.
 func mapProfile(p SrcProfile, k domain.MediaKind) ProfileMapping {
 	shipped := shippedProfiles(k)
 	key := movies.ProfileKey(p.Name)
-	dropped := ""
-	if p.Scored > 0 {
-		dropped = fmt.Sprintf("; %d custom format scores are not carried over", p.Scored)
-	}
+	notes := profileNotes(p, k)
 	if shipped[key] {
-		return ProfileMapping{Key: key, Exact: p.Scored == 0, Reason: "same as the built-in profile " + key + dropped}
+		return ProfileMapping{Key: key, Exact: notes == "", Reason: "same as the built-in profile " + key + notes}
 	}
-	closest := movies.DefaultProfileKey
-	if strings.Contains(p.Cutoff, "2160") {
-		closest = "ultrahd"
-	}
+	closest := closestProfile(p, k)
 	return ProfileMapping{Key: closest, Reason: fmt.Sprintf("custom profiles are not supported yet; items use the built-in %s (closest by cutoff %q)%s",
-		closest, p.Cutoff, dropped)}
+		closest, p.Cutoff, notes)}
+}
+
+// profileNotes lists what a profile loses on the way in.
+func profileNotes(p SrcProfile, k domain.MediaKind) string {
+	out := ""
+	if p.Scored > 0 {
+		out = fmt.Sprintf("; %d custom format scores are not carried over", p.Scored)
+	}
+	if k != domain.KindMusic {
+		return out
+	}
+	if below := belowMusicFloor(p.Allowed); len(below) > 0 {
+		out += "; allowed below corsarr's music quality floor and never grabbed: " + strings.Join(below, ", ")
+	}
+	return out
+}
+
+func closestProfile(p SrcProfile, k domain.MediaKind) string {
+	if k == domain.KindMusic {
+		q, _ := audioQualityID(p.Cutoff)
+		if t, _ := decide.AudioTierOf(q); t == decide.AudioLossless || t == decide.AudioHiRes {
+			return "lossless"
+		}
+		return music.DefaultProfileKey
+	}
+	if strings.Contains(p.Cutoff, "2160") {
+		return "ultrahd"
+	}
+	return movies.DefaultProfileKey
 }
 
 // profileKey maps an item's profile id, defaulting when the id is unknown.
 func profileKey(profiles map[int]SrcProfile, id int, k domain.MediaKind) string {
 	if p, ok := profiles[id]; ok {
 		return mapProfile(p, k).Key
+	}
+	if k == domain.KindMusic {
+		return music.DefaultProfileKey
 	}
 	return movies.DefaultProfileKey
 }
@@ -155,9 +182,13 @@ func MovieTargetHash(m domain.Movie) string {
 	return hashOf([]any{m.Monitored, m.MinAvailability, m.ProfileKey, m.RootFolder, m.Path})
 }
 
-// libraryFile maps a source file onto a library file at its (rewritten) path.
-func libraryFile(f SrcFile, rw Rewrite) (domain.LibraryFile, bool) {
+// libraryFile maps a source file onto a library file at its (rewritten)
+// path, with the quality on the kind's ladder.
+func libraryFile(f SrcFile, rw Rewrite, k domain.MediaKind) (domain.LibraryFile, bool) {
 	q, exact := qualityID(f.Quality)
+	if k == domain.KindMusic {
+		q, exact = audioQualityID(f.Quality)
+	}
 	return domain.LibraryFile{Path: rw.Apply(f.Path), Size: f.Size, Quality: string(q), Group: f.Group, Edition: f.Edition,
 		Revision: 1, AddedAt: f.Added}, exact
 }

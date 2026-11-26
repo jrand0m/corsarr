@@ -15,7 +15,9 @@ type Target interface {
 	AdoptSeries(ctx context.Context, s domain.Series, seasons []domain.Season, eps []domain.Episode, files []store.EpisodeFile,
 		p store.Provenance) (int64, error)
 	AdoptMovie(ctx context.Context, m domain.Movie, f *domain.LibraryFile, p store.Provenance) (int64, error)
+	AdoptArtist(ctx context.Context, a domain.Artist, albums []store.AdoptAlbum, p store.Provenance) (int64, error)
 	EpisodeIDs(ctx context.Context, tmdbID int64) (map[store.EpisodeKey]int64, error)
+	AlbumIDs(ctx context.Context, artistMBID string) (map[string]int64, error)
 	Index(ctx context.Context) (store.LibraryIndex, error)
 	AdoptDownload(ctx context.Context, g domain.Grab, d domain.Download) error
 	Block(ctx context.Context, e domain.BlocklistEntry) error
@@ -32,11 +34,14 @@ type op interface {
 // errNoItem says an entry's item is not in corsarr (its parent was skipped).
 var errNoItem = errors.New("the item is not in corsarr")
 
-// itemKey names an item by its external join key.
+// itemKey names an item by its external join key: a TMDB id (and an
+// episode's place), or an artist's and an album's MusicBrainz ids.
 type itemKey struct {
-	Kind domain.MediaKind
-	TMDB int64
-	Ep   *store.EpisodeKey
+	Kind   domain.MediaKind
+	TMDB   int64
+	Ep     *store.EpisodeKey
+	Artist string
+	Album  string
 }
 
 type applier struct {
@@ -44,12 +49,16 @@ type applier struct {
 	now    time.Time
 	eps    map[int64]map[store.EpisodeKey]int64
 	movies map[int64]int64
+	albums map[string]map[string]int64
 }
 
 // resolve finds the corsarr item of a key after the library was adopted.
 func (a *applier) resolve(ctx context.Context, k itemKey) (domain.ItemRef, error) {
-	if k.Kind == domain.KindMovie {
+	switch k.Kind {
+	case domain.KindMovie:
 		return a.movie(ctx, k.TMDB)
+	case domain.KindMusic:
+		return a.album(ctx, k.Artist, k.Album)
 	}
 	ids, ok := a.eps[k.TMDB]
 	if !ok {
@@ -79,6 +88,21 @@ func (a *applier) movie(ctx context.Context, tmdb int64) (domain.ItemRef, error)
 	return domain.ItemRef{}, errNoItem
 }
 
+func (a *applier) album(ctx context.Context, artist, album string) (domain.ItemRef, error) {
+	ids, ok := a.albums[artist]
+	if !ok {
+		var err error
+		if ids, err = a.t.AlbumIDs(ctx, artist); err != nil {
+			return domain.ItemRef{}, err
+		}
+		a.albums[artist] = ids
+	}
+	if id := ids[album]; id > 0 {
+		return domain.ItemRef{Kind: domain.KindMusic, ID: id}, nil
+	}
+	return domain.ItemRef{}, errNoItem
+}
+
 // resolveAll resolves the keys that exist; none at all is errNoItem.
 func (a *applier) resolveAll(ctx context.Context, keys []itemKey) ([]domain.ItemRef, error) {
 	var out []domain.ItemRef
@@ -102,7 +126,7 @@ func (a *applier) resolveAll(ctx context.Context, keys []itemKey) ([]domain.Item
 // library, then what refers to it). A failed entry is reported and the run
 // goes on; a cancelled context stops at the current entry.
 func Apply(ctx context.Context, r *Report, t Target, now time.Time, progress func(Progress)) error {
-	a := &applier{t: t, now: now, eps: map[int64]map[store.EpisodeKey]int64{}}
+	a := &applier{t: t, now: now, eps: map[int64]map[store.EpisodeKey]int64{}, albums: map[string]map[string]int64{}}
 	for i := range r.Entries {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -157,6 +181,19 @@ func (o movieOp) apply(ctx context.Context, a *applier) (string, error) {
 	id, err := a.t.AdoptMovie(ctx, o.movie, o.file, o.prov)
 	a.movies = nil
 	return fmt.Sprintf("movie:%d", id), err
+}
+
+type artistOp struct {
+	artist domain.Artist
+	albums []store.AdoptAlbum
+	prov   store.Provenance
+}
+
+func (o artistOp) apply(ctx context.Context, a *applier) (string, error) {
+	o.artist.AddedAt, o.prov.ImportedAt = a.now, a.now
+	id, err := a.t.AdoptArtist(ctx, o.artist, o.albums, o.prov)
+	delete(a.albums, o.artist.MBID)
+	return fmt.Sprintf("music:%d", id), err
 }
 
 // originMigrated marks a grab corsarr adopted instead of sending.

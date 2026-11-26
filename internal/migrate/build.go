@@ -68,7 +68,7 @@ func newBuilder(snaps []Snapshot, st State, o Options) *builder {
 func (b *builder) add(e Entry) { b.entries = append(b.entries, e) }
 
 func (b *builder) source(s Snapshot) {
-	for _, step := range []func(Snapshot){b.profiles, b.roots, b.naming, b.clients, b.indexersOf, b.library, b.downloads,
+	for _, step := range []func(Snapshot){b.profiles, b.metaProfiles, b.roots, b.naming, b.clients, b.indexersOf, b.library, b.downloads,
 		b.blocks, b.history} {
 		step(s)
 	}
@@ -107,6 +107,24 @@ func (b *builder) profiles(s Snapshot) {
 	for i, f := range s.CustomFormats {
 		b.add(Entry{ID: entryID(s.Source.App, "customformat", i), Category: CatProfiles, Source: s.Source.App, Name: f,
 			Outcome: OutUnsupported, Reason: "custom formats are not supported yet; listed so you can recreate it later"})
+	}
+}
+
+func (b *builder) metaProfiles(s Snapshot) {
+	ids := make([]int, 0, len(s.MetaProfiles))
+	for id := range s.MetaProfiles {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	for _, id := range ids {
+		p := s.MetaProfiles[id]
+		m := mapMetaProfile(p)
+		out := OutApproximate
+		if m.Exact {
+			out = OutUnchanged
+		}
+		b.add(Entry{ID: entryID(s.Source.App, "metadataprofile", id), Category: CatProfiles, Source: s.Source.App, Name: p.Name,
+			Outcome: out, Reason: m.Reason, Target: "metadataprofile:" + m.Key})
 	}
 }
 
