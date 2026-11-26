@@ -74,6 +74,8 @@ type Config struct {
 	RootFolders []RootFolder
 	// RuleModes maps rule id → configured mode (automation.rules.<id>.mode).
 	RuleModes map[string]string
+	// Legacy maps a compatibility API app (sonarr, radarr, …) → enabled.
+	Legacy map[string]bool
 	// Instances maps section (indexers, downloadClients, …) → key → instance.
 	Instances map[string]map[domain.ObjectKey]Instance
 	Source    Source
@@ -247,6 +249,7 @@ func build(s *Schema, t tree) *Config {
 		c.Instances[k.Section()] = instances(k.Section(), t[k.Section()].(tree))
 	}
 	c.RuleModes = ruleModes(t)
+	c.Legacy = legacyApps(t)
 	return c
 }
 
@@ -260,6 +263,19 @@ func ruleModes(t tree) map[string]string {
 	}
 	return out
 }
+
+func legacyApps(t tree) map[string]bool {
+	out := map[string]bool{}
+	apps, _ := t["legacy"].(tree)
+	for app, v := range apps {
+		on, _ := v.(tree)["enabled"].(bool)
+		out[app] = on
+	}
+	return out
+}
+
+// LegacyEnabled reports whether a compatibility API app is switched on.
+func (c *Config) LegacyEnabled(app string) bool { return c != nil && c.Legacy[app] }
 
 func str(t tree, section, key string) string {
 	v, _ := t[section].(tree)[key].(string)

@@ -63,6 +63,11 @@ rootFolders:
     kind: movie
   - path: {{shows}}
     kind: tv
+legacy:
+  sonarr: { enabled: true }
+  radarr: { enabled: true }
+  lidarr: { enabled: true }
+  prowlarr: { enabled: true }
 metadata:
   tmdb:
     type: tmdb

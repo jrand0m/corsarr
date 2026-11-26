@@ -53,6 +53,8 @@ func fakeTMDB(t *testing.T) *httptest.Server {
 			_ = json.NewEncoder(w).Encode(movie)
 		case r.URL.Path == "/search/tv":
 			_, _ = w.Write([]byte(`{"results":[{"id":77,"name":"` + showTitle + `","first_air_date":"2020-01-05"}]}`))
+		case r.URL.Path == "/find/321" && r.URL.Query().Get("external_source") == "tvdb_id":
+			_, _ = w.Write([]byte(`{"tv_results":[{"id":77}]}`))
 		case r.URL.Path == "/tv/77":
 			_, _ = w.Write([]byte(`{"id":77,"name":"` + showTitle + `","first_air_date":"2020-01-05","status":"Ended",
 				"episode_run_time":[30],"number_of_seasons":1,"seasons":[{"season_number":1}],"external_ids":{"tvdb_id":321}}`))
@@ -125,6 +127,14 @@ type fakeQB struct {
 	mu      sync.Mutex
 	state   map[string]int // hash → step
 	deleted map[string]bool
+	hold    bool // torrents stay downloading until released
+}
+
+// setHold pauses or resumes the torrents' progress.
+func (f *fakeQB) setHold(on bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.hold = on
 }
 
 var qbStates = []string{"metaDL", "downloading", "uploading"}
@@ -189,7 +199,7 @@ func (f *fakeQB) add(w http.ResponseWriter, r *http.Request) {
 func (f *fakeQB) info(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for hash, step := range f.state {
-		if r.URL.Query().Get("category") != "" && step < len(qbStates)-1 {
+		if r.URL.Query().Get("category") != "" && step < len(qbStates)-1 && (!f.hold || step < 1) {
 			step++
 			f.state[hash] = step
 		}

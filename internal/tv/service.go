@@ -145,7 +145,10 @@ type AddRequest struct {
 	SeasonFolders *bool    `json:"seasonFolders"`
 	SeriesType    string   `json:"seriesType"`
 	Tags          []string `json:"tags"`
-	SearchNow     bool     `json:"searchNow"`
+	// Seasons, when set, monitors exactly these season numbers instead of
+	// applying Monitor.
+	Seasons   []int `json:"seasons,omitempty"`
+	SearchNow bool  `json:"searchNow"`
 }
 
 // Add fetches the series with all its episodes, applies the monitoring mode,
@@ -167,6 +170,9 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (domain.Series, bool,
 	ApplyRecord(&ser, rec)
 	ser.Path = filepath.Join(ser.RootFolder, FolderName(ser))
 	eps, seasons := ApplyMode(mode, Episodes(rec), s.d.Now())
+	if req.Seasons != nil {
+		eps, seasons = ApplySeasons(req.Seasons, Episodes(rec))
+	}
 	ser, created, err := s.d.Repo.AddSeries(ctx, ser, seasons, eps)
 	if err != nil || !created {
 		return ser, false, err
