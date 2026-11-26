@@ -21,6 +21,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/importer"
 	"github.com/jrand0m/corsarr/internal/indexers"
 	"github.com/jrand0m/corsarr/internal/instances"
+	"github.com/jrand0m/corsarr/internal/legacy"
 	"github.com/jrand0m/corsarr/internal/migrate"
 	"github.com/jrand0m/corsarr/internal/movies"
 	"github.com/jrand0m/corsarr/internal/music"
@@ -83,12 +84,14 @@ type App struct {
 	Migrate      *migrate.Service
 	Music        *music.Service
 	MusicAuto    *musicauto.Service
-	wg           sync.WaitGroup
-	cancel       context.CancelFunc
-	ctx          context.Context // the running pipeline's context (set by Start)
-	modesMu      sync.Mutex
-	modes        map[domain.MediaKind]domain.KindMode // last applied, for mode_changed
-	ov           atomic.Pointer[map[string]string]    // mode overrides (kind:<k>, rule:<id>)
+	// Legacy is the compatibility API for third-party tools.
+	Legacy  *legacy.Service
+	wg      sync.WaitGroup
+	cancel  context.CancelFunc
+	ctx     context.Context // the running pipeline's context (set by Start)
+	modesMu sync.Mutex
+	modes   map[domain.MediaKind]domain.KindMode // last applied, for mode_changed
+	ov      atomic.Pointer[map[string]string]    // mode overrides (kind:<k>, rule:<id>)
 }
 
 // New builds every module and registers the jobs; call Start after the
@@ -133,6 +136,7 @@ func (a *App) build() {
 	a.TVAuto = a.newTVAuto()
 	a.Migrate = a.newMigrate()
 	a.MusicAuto = a.newMusicAuto()
+	a.Legacy = a.newLegacy()
 	a.Notify = notify.New(notify.Deps{Outbox: st.Outbox(), Refreshes: st.Refreshes(), Connections: a.connections, Health: d.Health, Pub: d.Bus,
 		MediaServers: a.mediaServers, MergeWindow: d.Options.MergeWindow, Modes: modes, Log: d.Log})
 }
@@ -300,7 +304,7 @@ func (a *App) importWaiting(ctx context.Context, k domain.MediaKind) {
 func (a *App) Mounts() []func(api.Mounter) {
 	return []func(api.Mounter){a.Movies.Mount, a.Queue.Mount, a.Automation.Mount, a.Rules.Mount,
 		a.Roots.Mount, a.Notify.Mount, a.TV.Mount, a.TVAuto.Mount, a.IndexerAdmin.Mount, a.Migrate.Mount,
-		a.Music.Mount, a.MusicAuto.Mount}
+		a.Music.Mount, a.MusicAuto.Mount, a.Legacy.Mount}
 }
 
 func typeIn(types ...domain.EventType) func(domain.EventType) bool {

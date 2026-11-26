@@ -102,6 +102,13 @@ func NewSchema(reg *plugin.Registry) *Schema {
 			Elem: obj("", Field{Name: "mode", Node: &Node{Kind: KindEnum, Enum: RuleModes,
 				Doc: "off: never runs; dry-run: records what it would do; live: acts. Unset keeps the rule's default."}})}},
 	)})
+	fields = append(fields, Field{Name: "legacy", Live: true, Node: obj(
+		"Compatibility API for third-party tools (request managers, dashboards) under /legacy/<app>; each app is off until enabled.",
+		legacyField(LegacySonarr, "Sonarr-compatible API at /legacy/sonarr/api/v3 (TV)."),
+		legacyField(LegacyRadarr, "Radarr-compatible API at /legacy/radarr/api/v3 (movies)."),
+		legacyField(LegacyLidarr, "Lidarr-compatible read-only API at /legacy/lidarr/api/v1 (music)."),
+		legacyField(LegacyProwlarr, "Prowlarr-compatible read-only API at /legacy/prowlarr/api/v1 (indexers)."),
+	)})
 	for _, k := range instanceSections {
 		fields = append(fields, Field{Name: k.Section(), Live: true, Node: &Node{
 			Kind: KindMap, Doc: fmt.Sprintf("%s plugin instances keyed by [a-z][a-z0-9]*.", k),
@@ -120,6 +127,19 @@ func enum(def, doc string, opts ...string) *Node {
 func kindField(k domain.MediaKind, def domain.KindMode) Field {
 	return Field{Name: string(k), Node: obj("", Field{Name: "mode", Node: enum(string(def), "disabled | shadow | active.",
 		string(domain.ModeDisabled), string(domain.ModeShadow), string(domain.ModeActive))})}
+}
+
+// The compatibility API apps (keys of the legacy section).
+const (
+	LegacySonarr   = "sonarr"
+	LegacyRadarr   = "radarr"
+	LegacyLidarr   = "lidarr"
+	LegacyProwlarr = "prowlarr"
+)
+
+func legacyField(app, doc string) Field {
+	return Field{Name: app, Node: obj(doc, Field{Name: "enabled", Node: &Node{Kind: KindBool, Default: "false",
+		Doc: "Serve this compatibility API (authenticated with the corsarr API key)."}})}
 }
 
 func kindNames() []string {

@@ -66,6 +66,28 @@ func ApplyMode(mode domain.MonitorMode, eps []domain.Episode, now time.Time) ([]
 	return out, seasonFlags(mode, bySeason, latest)
 }
 
+// ApplySeasons monitors exactly the listed seasons, every episode in them
+// and later episodes of them; specials only when season 0 is listed.
+func ApplySeasons(seasons []int, eps []domain.Episode) ([]domain.Episode, []domain.Season) {
+	want := map[int]bool{}
+	for _, n := range seasons {
+		want[n] = true
+	}
+	out := make([]domain.Episode, len(eps))
+	seen := map[int]bool{}
+	var flags []domain.Season
+	for i, e := range eps {
+		e.Monitored = want[e.Season]
+		out[i] = e
+		if !seen[e.Season] {
+			seen[e.Season] = true
+			flags = append(flags, domain.Season{Number: e.Season, Monitored: want[e.Season]})
+		}
+	}
+	sort.Slice(flags, func(i, j int) bool { return flags[i].Number < flags[j].Number })
+	return out, flags
+}
+
 func monitoredBy(mode domain.MonitorMode, e domain.Episode, first, latest int, now time.Time) bool {
 	switch mode {
 	case domain.MonitorAll:

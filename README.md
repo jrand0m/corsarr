@@ -107,6 +107,34 @@ printf '%s\n' "$NEW_PASSWORD" | corsarr admin reset-password      # add --userna
 printf '%s\n' "$NEW_PASSWORD" | docker exec -i corsarr /corsarr admin reset-password
 ```
 
+## Using corsarr with Jellyseerr or Homepage
+
+corsarr can answer the parts of the Sonarr, Radarr, Lidarr and Prowlarr APIs that request
+managers and dashboards use, so those tools work without changes. Each one is off until you
+switch it on (the section applies live):
+
+```yaml
+legacy:
+  sonarr:   { enabled: true }   # TV:      /legacy/sonarr   (API v3)
+  radarr:   { enabled: true }   # movies:  /legacy/radarr   (API v3)
+  lidarr:   { enabled: true }   # music:   /legacy/lidarr   (API v1, read-only)
+  prowlarr: { enabled: true }   # indexers: /legacy/prowlarr (API v1, read-only)
+```
+
+or `--legacy.sonarr.enabled=true` / `CORSARR_LEGACY_SONARR_ENABLED=true`. Then point the tool
+at the matching base URL and use corsarr's API key (Settings › General, or
+`GET /api/v1/auth/apikey`):
+
+- **Jellyseerr**: add a Sonarr server with URL base `/legacy/sonarr` and a Radarr server with
+  URL base `/legacy/radarr` on corsarr's host and port (`8090` by default), with corsarr's API
+  key. Behind a base path, prefix it: `/corsarr/legacy/sonarr`.
+- **Homepage**: widgets of type `sonarr`, `radarr`, `lidarr` and `prowlarr` with
+  `url: http://corsarr:8090/legacy/<app>` and `key:` set to corsarr's API key.
+
+Requests go through the same TV, movie and queue services as corsarr's own UI, so adding a
+series here behaves exactly like adding it in the UI, shadow mode included. Only the endpoints
+these tools use are implemented; anything else under `/legacy` answers 404.
+
 ## Build from source
 
 Requirements: Go and Node.js (versions in `.tool-versions`) and [`just`](https://github.com/casey/just).

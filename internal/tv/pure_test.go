@@ -272,3 +272,13 @@ func TestPaths(t *testing.T) {
 		t.Fatalf("%+v", eps)
 	}
 }
+
+func TestApplySeasonsMonitorsExactlyTheListedSeasons(t *testing.T) {
+	got, seasons := ApplySeasons([]int{2, 3}, threeSeasons())
+	if want := []string{"S02E01", "S02E02", "S03E01", "S03E02"}; !eq(monitoredCodes(got), want) {
+		t.Fatalf("%v, want %v", monitoredCodes(got), want)
+	}
+	if len(seasons) != 4 || seasons[0].Monitored || seasons[1].Monitored || !seasons[2].Monitored || !seasons[3].Monitored {
+		t.Fatalf("season flags %+v", seasons)
+	}
+}

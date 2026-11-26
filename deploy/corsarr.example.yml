@@ -45,6 +45,9 @@ notifications:
     template:                     # optional; Go text/template, .Title/.Body are the built-in text
       title: "[corsarr] {{.Title}}"
       body: "{{.Body}}"
+legacy:                           # compatibility API for Jellyseerr, Homepage, …; all off by default
+  sonarr: { enabled: true }       # /legacy/sonarr  (TV)
+  radarr: { enabled: true }       # /legacy/radarr  (movies)
 automation:
   rules:
     recyclepurge: { mode: dry-run }   # off | dry-run | live; deletes recycled files after 7 days when live
