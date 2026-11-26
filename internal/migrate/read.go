@@ -38,7 +38,7 @@ type Progress struct {
 // refused key or unsupported version stops this source before anything else.
 func Read(ctx context.Context, c *Client, o ReadOptions, progress func(Progress)) (Snapshot, error) {
 	snap := Snapshot{Source: SourceInfo{App: c.ep.App, URL: c.ep.URL.String(), Instance: c.ep.Instance(), Range: SupportedRange(c.ep.App)},
-		Profiles: map[int]SrcProfile{}, Tags: map[int]string{}}
+		Profiles: map[int]SrcProfile{}, MetaProfiles: map[int]SrcMetaProfile{}, Tags: map[int]string{}}
 	st, err := c.Status(ctx)
 	snap.Source.Name, snap.Source.Version = st.InstanceName, st.Version
 	if err != nil {
@@ -67,18 +67,20 @@ func readSteps(a App, o ReadOptions) []readStep {
 		cat  Category
 		step readStep
 	}{
-		{[]App{Sonarr, Radarr, Prowlarr}, CatLibrary, readStep{"tags", readTags}},
-		{[]App{Sonarr, Radarr}, CatProfiles, readStep{"profiles", readProfiles}},
-		{[]App{Sonarr, Radarr}, CatProfiles, readStep{"custom formats", readFormats}},
-		{[]App{Sonarr, Radarr}, CatRootFolders, readStep{"root folders", readRoots}},
-		{[]App{Sonarr, Radarr}, CatNaming, readStep{"naming", readNaming}},
-		{[]App{Sonarr, Radarr, Prowlarr}, CatClients, readStep{"download clients", readClients}},
-		{[]App{Sonarr, Radarr, Prowlarr}, CatIndexers, readStep{"indexers", readIndexers}},
+		{[]App{Sonarr, Radarr, Lidarr, Prowlarr}, CatLibrary, readStep{"tags", readTags}},
+		{[]App{Sonarr, Radarr, Lidarr}, CatProfiles, readStep{"profiles", readProfiles}},
+		{[]App{Lidarr}, CatProfiles, readStep{"metadata profiles", readMetaProfiles}},
+		{[]App{Sonarr, Radarr, Lidarr}, CatProfiles, readStep{"custom formats", readFormats}},
+		{[]App{Sonarr, Radarr, Lidarr}, CatRootFolders, readStep{"root folders", readRoots}},
+		{[]App{Sonarr, Radarr, Lidarr}, CatNaming, readStep{"naming", readNaming}},
+		{[]App{Sonarr, Radarr, Lidarr, Prowlarr}, CatClients, readStep{"download clients", readClients}},
+		{[]App{Sonarr, Radarr, Lidarr, Prowlarr}, CatIndexers, readStep{"indexers", readIndexers}},
 		{[]App{Sonarr}, CatLibrary, readStep{"series", readSeries}},
 		{[]App{Radarr}, CatLibrary, readStep{"movies", readMovies}},
-		{[]App{Sonarr, Radarr}, CatDownloads, readStep{"queue", readQueue}},
-		{[]App{Sonarr, Radarr}, CatBlocklist, readStep{"blocklist", readBlocklist}},
-		{[]App{Sonarr, Radarr}, CatHistory, readStep{"history", readHistory}},
+		{[]App{Lidarr}, CatLibrary, readStep{"artists", readArtists}},
+		{[]App{Sonarr, Radarr, Lidarr}, CatDownloads, readStep{"queue", readQueue}},
+		{[]App{Sonarr, Radarr, Lidarr}, CatBlocklist, readStep{"blocklist", readBlocklist}},
+		{[]App{Sonarr, Radarr, Lidarr}, CatHistory, readStep{"history", readHistory}},
 	}
 	var out []readStep
 	for _, s := range all {
@@ -116,7 +118,7 @@ func readProfiles(ctx context.Context, c *Client, s *Snapshot, _ ReadOptions) er
 	}
 	for _, p := range list {
 		s.Profiles[p.ID] = SrcProfile{ID: p.ID, Name: p.Name, Cutoff: cutoffName(p.Items, p.Cutoff), Upgrades: p.UpgradeAllowed,
-			Scored: scored(p.FormatItems)}
+			Scored: scored(p.FormatItems), Allowed: allowedNames(p.Items, false)}
 	}
 	return nil
 }
@@ -135,6 +137,20 @@ func cutoffName(items []wProfileItem, cutoff int) string {
 		}
 	}
 	return ""
+}
+
+// allowedNames lists the qualities a profile allows; a group's allowed flag
+// covers its members.
+func allowedNames(items []wProfileItem, inherited bool) []string {
+	var out []string
+	for _, it := range items {
+		allowed := inherited || it.Allowed
+		if it.Quality != nil && allowed {
+			out = append(out, it.Quality.Name)
+		}
+		out = append(out, allowedNames(it.Items, allowed)...)
+	}
+	return out
 }
 
 func scored(items []wFormatItem) int {
@@ -174,10 +190,7 @@ func readNaming(ctx context.Context, c *Client, s *Snapshot, _ ReadOptions) erro
 	if err := c.get(ctx, "/config/naming", nil, &n); err != nil {
 		return err
 	}
-	s.Rename = n.RenameEpisodes
-	if c.ep.App == Radarr {
-		s.Rename = n.RenameMovies
-	}
+	s.Rename = map[App]*bool{Sonarr: n.RenameEpisodes, Radarr: n.RenameMovies, Lidarr: n.RenameTracks}[c.ep.App]
 	return nil
 }
 
@@ -287,7 +300,8 @@ func readQueue(ctx context.Context, c *Client, s *Snapshot, _ ReadOptions) error
 	rows, err := paged(ctx, c, "/queue", nil, MaxQueueRows, func(wQueue) bool { return true })
 	for _, r := range rows {
 		s.Queue = append(s.Queue, SrcQueue{DownloadID: strings.ToLower(r.DownloadID), Title: r.Title, Protocol: r.Protocol,
-			Client: r.DownloadClient, Size: int64(r.Size), SeriesID: r.SeriesID, EpisodeID: r.EpisodeID, MovieID: r.MovieID})
+			Client: r.DownloadClient, Size: int64(r.Size), SeriesID: r.SeriesID, EpisodeID: r.EpisodeID, MovieID: r.MovieID,
+			AlbumID: r.AlbumID})
 	}
 	return err
 }
@@ -296,7 +310,7 @@ func readBlocklist(ctx context.Context, c *Client, s *Snapshot, _ ReadOptions) e
 	rows, err := paged(ctx, c, "/blocklist", nil, MaxBlocklistRows, func(wBlock) bool { return true })
 	for _, r := range rows {
 		s.Blocklist = append(s.Blocklist, SrcBlock{ID: r.ID, SeriesID: r.SeriesID, EpisodeIDs: r.EpisodeIDs, MovieID: r.MovieID,
-			Title: r.SourceTitle, Indexer: r.Indexer, Message: r.Message, Date: r.Date})
+			AlbumIDs: r.AlbumIDs, Title: r.SourceTitle, Indexer: r.Indexer, Message: r.Message, Date: r.Date})
 	}
 	return err
 }
@@ -306,7 +320,7 @@ func readHistory(ctx context.Context, c *Client, s *Snapshot, o ReadOptions) err
 	rows, err := paged(ctx, c, "/history", sort, MaxHistoryRows, func(h wHistory) bool { return !h.Date.Before(o.HistorySince) })
 	for _, r := range rows {
 		s.History = append(s.History, SrcHistory{ID: r.ID, Event: r.EventType, Date: r.Date, Title: r.SourceTitle,
-			SeriesID: r.SeriesID, EpisodeID: r.EpisodeID, MovieID: r.MovieID, DownloadID: strings.ToLower(r.DownloadID)})
+			SeriesID: r.SeriesID, EpisodeID: r.EpisodeID, MovieID: r.MovieID, AlbumID: r.AlbumID, DownloadID: strings.ToLower(r.DownloadID)})
 	}
 	return err
 }

@@ -24,12 +24,12 @@ type fakeArr struct {
 	mu      sync.Mutex
 	methods []string
 	paths   []string
-	routes  map[string]any // path (+ "?seriesId=N") → body
+	routes  map[string]any // path (+ "?N" for a seriesId or artistId) → body
 	version string
 }
 
 func newFake(t *testing.T, app App, routes map[string]any) *fakeArr {
-	f := &fakeArr{routes: routes, version: map[App]string{Sonarr: "4.0.20", Radarr: "6.4.4", Prowlarr: "2.6.5"}[app]}
+	f := &fakeArr{routes: routes, version: map[App]string{Sonarr: "4.0.20", Radarr: "6.4.4", Lidarr: "3.1.0.4875", Prowlarr: "2.6.5"}[app]}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.methods = append(f.methods, r.Method)
@@ -44,8 +44,10 @@ func newFake(t *testing.T, app App, routes map[string]any) *fakeArr {
 			_ = json.NewEncoder(w).Encode(wStatus{AppName: string(app), InstanceName: "home", Version: f.version})
 			return
 		}
-		if id := r.URL.Query().Get("seriesId"); id != "" {
-			path += "?" + id
+		for _, parent := range []string{"seriesId", "artistId"} {
+			if id := r.URL.Query().Get(parent); id != "" {
+				path += "?" + id
+			}
 		}
 		body, ok := f.routes[path]
 		if !ok {

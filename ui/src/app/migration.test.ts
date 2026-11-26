@@ -12,6 +12,10 @@ const entries: PlanEntry[] = [
 ];
 
 describe('migration form', () => {
+  it('offers every supported source app', () => {
+    expect(defaultForm().sources.map((s) => s.app)).toEqual(['sonarr', 'radarr', 'lidarr', 'prowlarr']);
+  });
+
   it('builds the request from the chosen sources only', () => {
     const f = defaultForm();
     f.sources[0] = { app: 'sonarr', include: true, url: ' http://sonarr:8989 ', apiKey: 'k' };
@@ -29,11 +33,13 @@ describe('migration form', () => {
   it('checks sources and scope before moving on', () => {
     const f = defaultForm();
     expect(sourceProblems(f)).toEqual(['Choose at least one source.']);
-    f.sources[2] = { app: 'prowlarr', include: true, url: 'prowlarr', apiKey: '' };
+    f.sources[3] = { app: 'prowlarr', include: true, url: 'prowlarr', apiKey: '' };
     expect(sourceProblems(f)).toHaveLength(2);
-    f.sources[2] = { app: 'prowlarr', include: true, url: 'https://p', apiKey: 'k' };
+    f.sources[3] = { app: 'prowlarr', include: true, url: 'https://p', apiKey: 'k' };
     expect(sourceProblems(f)).toEqual([]);
     expect(scopeProblems(f)).toEqual([]);
+    f.sources[2] = { app: 'lidarr', include: true, url: 'http://lidarr:8686', apiKey: '' };
+    expect(sourceProblems(f)).toEqual(['Lidarr: enter its API key.']);
     f.fromPrefix = 'data';
     expect(scopeProblems(f)).toHaveLength(2);
     f.scope = [];

@@ -3,10 +3,11 @@
 import type { FilterFacet, FilterState } from '../lib/filters/url';
 import type { SourceProgress } from '../lib/components/molecules/SourceProgressStrip/SourceProgressStrip.svelte';
 
-export type SourceApp = 'sonarr' | 'radarr' | 'prowlarr';
+export type SourceApp = 'sonarr' | 'radarr' | 'lidarr' | 'prowlarr';
 export const sourceApps: { app: SourceApp; label: string; note: string }[] = [
   { app: 'sonarr', label: 'Sonarr', note: 'Series, episodes, files, queue, blocklist and history' },
   { app: 'radarr', label: 'Radarr', note: 'Movies, files, queue, blocklist and history' },
+  { app: 'lidarr', label: 'Lidarr', note: 'Artists, albums, track files, queue, blocklist and history' },
   { app: 'prowlarr', label: 'Prowlarr', note: 'Indexers' },
 ];
 
@@ -62,8 +63,8 @@ export interface RunForm {
 }
 
 export const categories: { value: string; label: string; description: string }[] = [
-  { value: 'library', label: 'Library', description: 'Series, episodes and movies with monitoring; files adopted where they are' },
-  { value: 'profiles', label: 'Quality profiles', description: 'Mapped onto the built-in profiles' },
+  { value: 'library', label: 'Library', description: 'Series, episodes, movies, artists and albums with monitoring; files adopted where they are' },
+  { value: 'profiles', label: 'Profiles', description: 'Quality and metadata profiles, mapped onto the built-in ones' },
   { value: 'rootFolders', label: 'Root folders', description: 'Written to the config snippet' },
   { value: 'indexers', label: 'Indexers', description: 'Written to the config snippet' },
   { value: 'clients', label: 'Download clients', description: 'Written to the config snippet' },

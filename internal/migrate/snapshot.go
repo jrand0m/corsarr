@@ -22,7 +22,9 @@ type Snapshot struct {
 	Source        SourceInfo
 	Series        []SrcSeries
 	Movies        []SrcMovie
+	Artists       []SrcArtist
 	Profiles      map[int]SrcProfile
+	MetaProfiles  map[int]SrcMetaProfile
 	CustomFormats []string
 	RootFolders   []string
 	Tags          map[int]string
@@ -98,7 +100,8 @@ type SrcProfile struct {
 	Name     string
 	Cutoff   string // quality or group name at the cutoff
 	Upgrades bool
-	Scored   int // custom formats with a non-zero score
+	Scored   int      // custom formats with a non-zero score
+	Allowed  []string // names of the allowed qualities
 }
 
 // SrcClient is a source download client.
@@ -141,6 +144,7 @@ type SrcQueue struct {
 	SeriesID   int
 	EpisodeID  int
 	MovieID    int
+	AlbumID    int
 }
 
 // SrcBlock is a source blocklist entry.
@@ -149,6 +153,7 @@ type SrcBlock struct {
 	SeriesID   int
 	EpisodeIDs []int
 	MovieID    int
+	AlbumIDs   []int
 	Title      string
 	Indexer    string
 	Message    string
@@ -164,5 +169,65 @@ type SrcHistory struct {
 	SeriesID   int
 	EpisodeID  int
 	MovieID    int
+	AlbumID    int
 	DownloadID string
+}
+
+// SrcArtist is a source artist with its albums, the tracks of each album's
+// selected edition, and its track files.
+type SrcArtist struct {
+	ID             int
+	MBID           string
+	Name, SortName string
+	Disambiguation string
+	Type           string
+	Path, Root     string
+	ProfileID      int
+	MetaProfileID  int
+	Monitored      bool
+	MonitorNew     string
+	Tags           []int
+	Albums         []SrcAlbum
+	Files          []SrcTrackFile
+}
+
+// SrcAlbum is a source album (release group) with its selected edition.
+type SrcAlbum struct {
+	ID             int
+	MBID           string
+	Title          string
+	Type           string
+	SecondaryTypes []string
+	ReleaseDate    *time.Time
+	Monitored      bool
+	EditionMBID    string
+	MediumCount    int
+	Tracks         []SrcTrack
+}
+
+// SrcTrack is one track of an album's selected edition.
+type SrcTrack struct {
+	ID          int
+	RecordingID string
+	Medium      int
+	Number      int
+	Title       string
+	DurationSec int
+	FileID      int
+}
+
+// SrcTrackFile is a source track file and the album it belongs to.
+type SrcTrackFile struct {
+	SrcFile
+	AlbumID int
+}
+
+// SrcMetaProfile is a source metadata profile: the allowed album types
+// (lower case) and release statuses.
+type SrcMetaProfile struct {
+	ID        int
+	Name      string
+	Primary   []string
+	Secondary []string
+	Statuses  []string
 }

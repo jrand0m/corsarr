@@ -25,7 +25,7 @@ import (
 var migrateFlags = []string{"from", "url", "api-key-file", "api-key-env", "scope", "path-rewrite", "history-days", "activate",
 	"exclude", "json", "write-config"}
 
-const migrateUsage = `usage: corsarr migrate plan|run --from=sonarr|radarr|prowlarr --url=http://host:port
+const migrateUsage = `usage: corsarr migrate plan|run --from=sonarr|radarr|lidarr|prowlarr --url=http://host:port
        (--api-key-file=PATH | --api-key-env=NAME) [--scope=library,downloads,…] [--path-rewrite=/from:/to]
        [--history-days=N] [--activate] [--exclude=id,…] [--json] [--write-config=PATH]`
 

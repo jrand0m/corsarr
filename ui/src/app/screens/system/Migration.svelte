@@ -1,5 +1,5 @@
 <!--
-  System › Migration: connect existing Sonarr, Radarr and Prowlarr installations (read-only), choose what
+  System › Migration: connect existing Sonarr, Radarr, Lidarr and Prowlarr installations (read-only), choose what
   comes across, review the plan (every source object with its outcome and reason; leave objects out),
   then apply it. Imported kinds start in shadow mode and every automation rule in dry-run; the kind
   modes beside the steps switch a kind to active when the owner is ready. Past runs keep their reports.
@@ -168,7 +168,7 @@
   {/if}
 {/snippet}
 
-<WizardPage title="Migration" description="Bring an existing Sonarr, Radarr or Prowlarr installation into corsarr without adding everything again."
+<WizardPage title="Migration" description="Bring an existing Sonarr, Radarr, Lidarr or Prowlarr installation into corsarr without adding everything again."
   {steps} bind:current bind:completed {validate} {onstep} busy={!!running} finishLabel={result ? 'Start another run' : 'Apply plan'}
   onfinish={finish}>
   {#snippet children(step)}
