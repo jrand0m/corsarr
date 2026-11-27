@@ -160,7 +160,7 @@ func mcpNode() *Node {
 		Field{Name: "rateLimit", Node: &Node{Kind: KindInt, Default: "60", Check: nonNegative,
 			Doc: "Most MCP calls per minute per API key; 0 means no limit."}},
 		Field{Name: "allowedOrigins", Node: &Node{Kind: KindList,
-			Doc: "Browser origins allowed besides the server's own, e.g. http://localhost:6274; clients that send no Origin are always allowed.",
+			Doc:  "Browser origins allowed besides the server's own, e.g. http://localhost:6274; clients that send no Origin are always allowed.",
 			Elem: &Node{Kind: KindString, Doc: "One origin: scheme://host[:port]."}}},
 	)
 }

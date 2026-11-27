@@ -98,9 +98,15 @@ func (s *Service) searchFor(kind domain.MediaKind, in searchArgs) func(context.C
 	case kind == domain.KindMovie:
 		return func(ctx context.Context) error { _, err := s.d.MovieSearch.Search(ctx, in.ID, o); return err }
 	case in.EpisodeID > 0:
-		return func(ctx context.Context) error { _, err := s.d.TVSearch.SearchEpisode(ctx, in.EpisodeID, o); return err }
+		return func(ctx context.Context) error {
+			_, err := s.d.TVSearch.SearchEpisode(ctx, in.EpisodeID, o)
+			return err
+		}
 	case kind == domain.KindTV && in.Season != nil:
-		return func(ctx context.Context) error { _, err := s.d.TVSearch.SearchSeason(ctx, in.ID, *in.Season, o); return err }
+		return func(ctx context.Context) error {
+			_, err := s.d.TVSearch.SearchSeason(ctx, in.ID, *in.Season, o)
+			return err
+		}
 	case kind == domain.KindTV:
 		return func(ctx context.Context) error { _, err := s.d.TVSearch.SearchSeries(ctx, in.ID, o); return err }
 	case in.AlbumID > 0:

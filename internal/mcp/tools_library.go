@@ -57,8 +57,8 @@ func (s *Service) libraryTools() []Tool {
 			Run: bind(s.startSearch)},
 		{Name: "rescan_item", Title: "Refresh an item", Write: true, Idempotent: true, OpenWorld: true,
 			Description: "Re-read an item's metadata (new episodes or albums). Movies are refreshed all together. Runs in the background.",
-			Input: object(map[string]schema{"kind": kindEnum("Media kind."), "id": integer("Series or artist id (ignored for movies).")}, "kind"),
-			Run: bind(s.rescanItem)},
+			Input:       object(map[string]schema{"kind": kindEnum("Media kind."), "id": integer("Series or artist id (ignored for movies).")}, "kind"),
+			Run:         bind(s.rescanItem)},
 	}
 }
 
