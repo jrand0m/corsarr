@@ -60,3 +60,22 @@ jobs:
         run: |
           go vet ./...
           go build -trimpath -ldflags "-s -w" -o /dev/null ./cmd/corsarr
+
+  container:
+    # Runs the image as restricted platforms do: the image user, a random uid
+    # with gid 0, a read-only root file system with tmpfs /tmp, and rootless Podman.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: |
+          for i in 1 2 3; do docker build --build-arg VERSION=ci -t corsarr:container-test . && break; sleep $((i*15)); done
+          docker image inspect corsarr:container-test >/dev/null
+      - name: Docker — uid 65532, random uid + gid 0, read-only root, refusals
+        run: scripts/container-test.sh corsarr:container-test docker
+      - name: Rootless Podman
+        run: |
+          if ! command -v podman >/dev/null; then echo "podman is not installed on this runner; skipping"; exit 0; fi
+          test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
+          docker save corsarr:container-test | podman load
+          scripts/container-test.sh corsarr:container-test podman
