@@ -400,7 +400,9 @@ func (fakeLibrary) FilesOf(_ context.Context, ref domain.ItemRef) ([]domain.Libr
 	return nil, nil
 }
 
-type fakeSearches struct{ states map[domain.ItemRef]domain.SearchState }
+type fakeSearches struct {
+	states map[domain.ItemRef]domain.SearchState
+}
 
 func (f fakeSearches) State(_ context.Context, ref domain.ItemRef) (domain.SearchState, error) {
 	return f.states[ref], nil

@@ -10,7 +10,7 @@ import (
 func (a *App) newMCP() *mcp.Service {
 	st := a.d.Store
 	return mcp.New(mcp.Deps{Config: a.d.Config, Modes: domain.Modes(a.mode), Movies: a.Movies, MovieSearch: a.Automation,
-		TV: a.TV, TVSearch: a.TVAuto, Music: a.Music, MusicSearch: a.MusicAuto, Queue: a.Queue, Library: st.Library(),
+		TV: a.TV, TVSearch: a.TVAuto, Music: a.Music, MusicSearch: a.MusicAuto, Queue: a.Queue, Downloaders: a.Queue, Library: st.Library(),
 		Searches: st.Searches(), History: st.History(), Health: a.d.Health, RootFolders: a.Roots, Bus: a.d.Bus,
 		Go: a.background, Log: a.d.Log})
 }

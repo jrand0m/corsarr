@@ -178,6 +178,12 @@ a track is requested as the album, EP or single that holds it), `request_book`,
 `request_status`, `cancel_request`, `search_library`, `get_item`, `list_wanted`,
 `get_calendar`, `get_history`, `get_health`, `search_releases` (preview, never grabs),
 `list_profiles`, `list_root_folders`, `set_monitored`, `start_search` and `rescan_item`.
+Download clients: `list_downloaders`, `get_queue`, `get_download`, `test_downloader`,
+`pause_download`, `resume_download`, `set_download_priority`, `recheck_download`,
+`reannounce_download`, `set_download_category`, `remove_download`, `retry_import`,
+`pause_all`, `resume_all`, `set_speed_limits`, `toggle_alt_speed` and `grab_release` (a release
+from `search_releases`). A client without a capability answers `unsupported`; in shadow mode
+a downloader write is recorded and not sent.
 Resources: `corsarr://queue`, `corsarr://health` and `corsarr://item/{kind}/{id}`, with
 change notifications for subscribers.
 

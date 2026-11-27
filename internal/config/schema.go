@@ -179,12 +179,12 @@ func mcpNode() *Node {
 		Field{Name: "scope", Node: enum(MCPScopeRead, "read: only tools that change nothing; write: also tools that add, search, monitor or remove.",
 			MCPScopeRead, MCPScopeWrite)},
 		Field{Name: "tools", Node: &Node{Kind: KindList, Doc: "Tool names to expose; empty exposes every tool the scope allows.",
-			Elem: &Node{Kind: KindString, Doc: "One tool name, e.g. find_media."}}},
+			Elem: &Node{Kind: KindString, Doc: "A tool to expose by name, e.g. find_media; leave the list empty to expose every tool the scope allows."}}},
 		Field{Name: "rateLimit", Node: &Node{Kind: KindInt, Default: "60", Check: nonNegative,
 			Doc: "Most MCP calls per minute per API key; 0 means no limit."}},
 		Field{Name: "allowedOrigins", Node: &Node{Kind: KindList,
 			Doc:  "Browser origins allowed besides the server's own, e.g. http://localhost:6274; clients that send no Origin are always allowed.",
-			Elem: &Node{Kind: KindString, Doc: "One origin: scheme://host[:port]."}}},
+			Elem: &Node{Kind: KindString, Doc: "A browser origin allowed to call the endpoint besides the server's own, as scheme://host[:port], e.g. http://localhost:6274."}}},
 	)
 }
 

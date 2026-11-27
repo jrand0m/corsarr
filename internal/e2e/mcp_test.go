@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -169,6 +168,26 @@ func TestMCPRequestsMusicEndToEnd(t *testing.T) {
 		t.Fatalf("album requests are idempotent: %v", again.Structured)
 	}
 	if out := c.tool("request_music", map[string]any{"artistMbid": artistMBID, "track": "Nowhere"}); !out.IsError {
-		t.Fatal(fmt.Sprintf("an unknown track is refused: %+v", out))
+		t.Fatalf("an unknown track is refused: %+v", out)
+	}
+}
+
+// The downloader tools read the qBittorrent fake through the queue service;
+// in shadow mode a client-wide write is recorded and not sent.
+func TestMCPDownloaderTools(t *testing.T) {
+	s := startIn(t, "shadow", []string{"movie.mkv"})
+	c := s.enableMCP(t)
+	if out := c.mustTool("list_downloaders", nil); !strings.Contains(out.text(), "1 download clients") {
+		t.Fatalf("list_downloaders: %s", out.text())
+	}
+	if out := c.mustTool("get_queue", map[string]any{"downloader": "qbit"}); !strings.Contains(out.text(), "0 downloads") {
+		t.Fatalf("get_queue: %s", out.text())
+	}
+	out := c.mustTool("pause_all", map[string]any{"downloader": "qbit"})
+	if out.Structured["recorded"] != true || out.Structured["sent"] != false {
+		t.Fatalf("shadow pause_all: %v", out.Structured)
+	}
+	if out := c.tool("get_download", map[string]any{"id": 99}); !out.IsError {
+		t.Fatal("unknown download")
 	}
 }

@@ -47,6 +47,7 @@ type MovieSearch interface {
 	Search(ctx context.Context, movieID int64, origin domain.SearchOrigin) (automation.Summary, error)
 	Interactive(ctx context.Context, movieID int64, em automation.Emitter) (automation.Summary, error)
 	Index() *automation.Index
+	ManualGrab
 }
 
 // TV is the tv module surface (tv.Service).
@@ -73,6 +74,7 @@ type TVSearch interface {
 	InteractiveEpisode(ctx context.Context, id int64, em automation.Emitter) (automation.Summary, error)
 	InteractiveSeason(ctx context.Context, seriesID int64, season int, em automation.Emitter) (automation.Summary, error)
 	Index() *tvauto.Index
+	ManualGrab
 }
 
 // Music is the music module surface (music.Service).
@@ -98,6 +100,7 @@ type MusicSearch interface {
 	SearchArtist(ctx context.Context, artistID int64, origin domain.SearchOrigin) (musicauto.Summary, error)
 	Interactive(ctx context.Context, albumID int64, em automation.Emitter) (automation.Summary, error)
 	Index() *musicauto.Index
+	ManualGrab
 }
 
 // Queue pages and removes downloads (queue.Service).
@@ -149,6 +152,7 @@ type Deps struct {
 	Music       Music
 	MusicSearch MusicSearch
 	Queue       Queue
+	Downloaders Downloaders // nil leaves the download-client tools out
 	Library     Library
 	Searches    SearchStates
 	History     History

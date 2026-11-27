@@ -30,6 +30,7 @@ type harness struct {
 	tvs    *fakeTV
 	mu     *fakeMusic
 	q      *fakeQueue
+	dl     *fakeDownloaders
 	bus    *events.Bus
 	sess   *Session
 	now    time.Time
@@ -54,7 +55,7 @@ func newHarness(t *testing.T) *harness {
 		{IDs: map[string]string{"tmdb": "30"}, Title: "Gamma"}}}
 	h.tvs = &fakeTV{c: c, series: []domain.Series{{ID: 1, TMDBID: 77, TVDBID: 7, IMDBID: "tt7", Title: "Show", Year: 2019, Monitored: true}},
 		episodes: []domain.Episode{{ID: 11, SeriesID: 1, Season: 1, Number: 1}, {ID: 12, SeriesID: 1, Season: 1, Number: 2}, {ID: 21, SeriesID: 1, Season: 2, Number: 1}},
-		lookup: []tv.LookupItem{{SeriesRecord: plugin.SeriesRecord{IDs: map[string]string{"tmdb": "77", "tvdb": "7"}, Title: "Show", Year: 2019}, LibraryID: 1}}}
+		lookup:   []tv.LookupItem{{SeriesRecord: plugin.SeriesRecord{IDs: map[string]string{"tmdb": "77", "tvdb": "7"}, Title: "Show", Year: 2019}, LibraryID: 1}}}
 	first := day.AddDate(-5, 0, 0)
 	h.mu = &fakeMusic{c: c, artists: []domain.Artist{{ID: 1, MBID: "artist-1", Name: "Band", Monitored: true}},
 		albums: []domain.Album{{ID: 100, ArtistID: 1, MBID: "album-1", Title: "Record", TrackCount: 2}},
@@ -68,6 +69,7 @@ func newHarness(t *testing.T) *harness {
 			Links: []domain.DownloadLink{{Item: domain.ItemRef{Kind: domain.KindTV, ID: 12}}}}}},
 		{{Download: domain.Download{ID: 2, Title: "Other", Links: []domain.DownloadLink{{Item: domain.ItemRef{Kind: domain.KindMovie, ID: 9}}}}}},
 	}}
+	h.dl = &fakeDownloaders{c: c}
 	h.bus = events.New()
 	t.Cleanup(h.bus.Close)
 	searched := day
@@ -75,7 +77,7 @@ func newHarness(t *testing.T) *harness {
 		Movies: h.mv, MovieSearch: &fakeMovieSearch{c: c, idx: automation.NewIndex()},
 		TV: h.tvs, TVSearch: &fakeTVSearch{c: c, idx: tvauto.NewIndex()},
 		Music: h.mu, MusicSearch: &fakeMusicSearch{c: c, idx: musicauto.NewIndex()},
-		Queue: h.q, Library: fakeLibrary{}, Searches: fakeSearches{states: map[domain.ItemRef]domain.SearchState{
+		Queue: h.q, Downloaders: h.dl, Library: fakeLibrary{}, Searches: fakeSearches{states: map[domain.ItemRef]domain.SearchState{
 			{Kind: domain.KindMovie, ID: 2}: {LastSearched: &searched, LastResult: &domain.SearchEventData{Releases: 3}},
 		}}, History: fakeHistory{}, Health: fakeHealth{}, RootFolders: fakeRoots{}, Bus: h.bus,
 		Go: func(fn func(context.Context)) { fn(context.Background()) }, Now: func() time.Time { return h.now }})

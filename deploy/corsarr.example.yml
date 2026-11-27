@@ -104,6 +104,24 @@ legacy:
     # API key. true or false.
     enabled: false
 
+# Model Context Protocol endpoint at <base>/mcp for AI assistants; off until enabled.
+mcp:
+  # Serve the MCP endpoint (authenticated with the corsarr API key or the read-only key). true
+  # or false.
+  enabled: false
+  # read: only tools that change nothing; write: also tools that add, search, monitor or remove.
+  # One of: read, write.
+  scope: read
+  # Tool names to expose; empty exposes every tool the scope allows.
+  # tools:
+  #   -
+  # Most MCP calls per minute per API key; 0 means no limit.
+  rateLimit: 60
+  # Browser origins allowed besides the server's own, e.g. http://localhost:6274; clients that
+  # send no Origin are always allowed.
+  # allowedOrigins:
+  #   -
+
 # Your indexer connections, one entry per name you choose (lower-case letters and digits).
 # indexers:
 #   <name>:

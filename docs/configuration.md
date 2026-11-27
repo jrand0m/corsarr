@@ -51,6 +51,11 @@ or `env`). A commented file with every default is in
 | `legacy.radarr.enabled` | `false` | `CORSARR_LEGACY_RADARR_ENABLED` | `--legacy.radarr.enabled=` | yes | Turn on to let request managers and dashboards use this API; they sign in with the corsarr API key. true or false. |
 | `legacy.lidarr.enabled` | `false` | `CORSARR_LEGACY_LIDARR_ENABLED` | `--legacy.lidarr.enabled=` | yes | Turn on to let request managers and dashboards use this API; they sign in with the corsarr API key. true or false. |
 | `legacy.prowlarr.enabled` | `false` | `CORSARR_LEGACY_PROWLARR_ENABLED` | `--legacy.prowlarr.enabled=` | yes | Turn on to let request managers and dashboards use this API; they sign in with the corsarr API key. true or false. |
+| `mcp.enabled` | `false` | `CORSARR_MCP_ENABLED` | `--mcp.enabled=` | yes | Serve the MCP endpoint (authenticated with the corsarr API key or the read-only key). true or false. |
+| `mcp.scope` | `read` | `CORSARR_MCP_SCOPE` | `--mcp.scope=` | yes | read: only tools that change nothing; write: also tools that add, search, monitor or remove. One of: read, write. |
+| `mcp.tools.<n>` | — | `CORSARR_MCP_TOOLS_<N>` | `--mcp.tools.<n>=` | yes | A tool to expose by name, e.g. find_media; leave the list empty to expose every tool the scope allows. |
+| `mcp.rateLimit` | `60` | `CORSARR_MCP_RATELIMIT` | `--mcp.rateLimit=` | yes | Most MCP calls per minute per API key; 0 means no limit. |
+| `mcp.allowedOrigins.<n>` | — | `CORSARR_MCP_ALLOWEDORIGINS_<N>` | `--mcp.allowedOrigins.<n>=` | yes | A browser origin allowed to call the endpoint besides the server's own, as scheme://host[:port], e.g. http://localhost:6274. |
 | `indexers.<name>.type` | — | `CORSARR_INDEXERS_<NAME>_TYPE` | `--indexers.<name>.type=` | yes | Which plugin this entry uses; its own settings are listed per plugin. One of: knaben, thepiratebay, torznab. |
 | `indexers.<name>.name` | — | `CORSARR_INDEXERS_<NAME>_NAME` | `--indexers.<name>.name=` | yes | Name shown in the web UI. |
 | `indexers.<name>.enabled` | `true` | `CORSARR_INDEXERS_<NAME>_ENABLED` | `--indexers.<name>.enabled=` | yes | Set to false to keep the entry but stop using it. true or false. |
