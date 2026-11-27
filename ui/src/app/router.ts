@@ -35,6 +35,7 @@ const routes: [pattern: string, area: Area, screen: string][] = [
   ['/system/health', 'system', 'health'],
   ['/system/tasks', 'system', 'tasks'],
   ['/system/migration', 'system', 'migration'],
+  ['/system/about', 'system', 'about'],
   ['/settings/general', 'settings', 'general'],
   ['/settings/plugins', 'settings', 'plugins'],
   ['/settings/plugins/:id', 'settings', 'plugins'],

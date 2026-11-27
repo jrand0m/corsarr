@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/jrand0m/corsarr/internal/buildinfo"
 	"github.com/jrand0m/corsarr/internal/config"
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/scheduler"
@@ -35,10 +36,12 @@ type SystemStatus struct {
 	ConfigSource  config.Source      `json:"configSource"`
 	EnabledKinds  []domain.MediaKind `json:"enabledKinds"`
 	PluginCount   int                `json:"pluginCount"`
+	Build         buildinfo.Info     `json:"build"`
 }
 
 func (s *Server) status(w http.ResponseWriter, _ *http.Request) {
 	st := SystemStatus{
+		Build:   buildinfo.Get(s.d.Version),
 		Version: s.d.Version, UptimeSeconds: int64(s.d.Now().Sub(s.d.Started).Seconds()),
 		RSSBytes: rssBytes(), Goroutines: runtime.NumGoroutine(), EnabledKinds: []domain.MediaKind{},
 	}

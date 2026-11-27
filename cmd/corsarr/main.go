@@ -78,7 +78,7 @@ var commands = map[string]func(c cli, ctx context.Context) int{
 	"":                     func(c cli, ctx context.Context) int { return c.serve(ctx, nil) },
 	"serve":                func(c cli, ctx context.Context) int { return c.serve(ctx, nil) },
 	"healthcheck":          func(c cli, _ context.Context) int { return c.healthcheck() },
-	"version":              func(c cli, _ context.Context) int { fmt.Fprintln(c.stdout, "corsarr", version); return 0 },
+	"version":              func(c cli, _ context.Context) int { return c.printVersion() },
 	"config validate":      func(c cli, _ context.Context) int { return c.validate() },
 	"config export":        func(c cli, _ context.Context) int { return c.export() },
 	"config schema":        func(c cli, _ context.Context) int { return c.schema() },
