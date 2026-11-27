@@ -52,6 +52,17 @@ type DownloadEventData struct {
 	Held         bool            `json:"held,omitempty"` // on hold: automation leaves it alone
 }
 
+// ClientActionData is the data of downloader.shadowed: the write that would
+// have been sent to a download client.
+type ClientActionData struct {
+	Downloader ObjectKey      `json:"downloader"`
+	DownloadID int64          `json:"downloadId,omitempty"` // 0 for a client-wide action
+	ClientID   string         `json:"clientId,omitempty"`
+	Title      string         `json:"title,omitempty"`
+	Action     string         `json:"action"`
+	Args       map[string]any `json:"args,omitempty"`
+}
+
 // Payload stages.
 const (
 	StagePreDownload  = "pre-download"

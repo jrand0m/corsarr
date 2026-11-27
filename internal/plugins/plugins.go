@@ -10,6 +10,7 @@ import (
 	_ "github.com/jrand0m/corsarr/internal/plugins/notify"
 	_ "github.com/jrand0m/corsarr/internal/plugins/plex"
 	_ "github.com/jrand0m/corsarr/internal/plugins/qbittorrent"
+	_ "github.com/jrand0m/corsarr/internal/plugins/sabnzbd"
 	_ "github.com/jrand0m/corsarr/internal/plugins/tmdb"
 	_ "github.com/jrand0m/corsarr/internal/plugins/torznab"
 	_ "github.com/jrand0m/corsarr/internal/plugins/trubadurcamp"

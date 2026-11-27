@@ -170,6 +170,19 @@ func (f *fakeQB) serve(w http.ResponseWriter, r *http.Request) {
 		f.deleted[r.PostForm.Get("hashes")] = r.PostForm.Get("deleteFiles") == "true"
 		delete(f.state, r.PostForm.Get("hashes"))
 	default:
+		f.control(w, path)
+	}
+}
+
+// control answers the client-wide and maintenance calls with fixed values.
+func (f *fakeQB) control(w http.ResponseWriter, path string) {
+	switch path {
+	case "torrents/recheck", "torrents/reannounce", "torrents/stop", "torrents/start", "transfer/setDownloadLimit", "transfer/setUploadLimit":
+	case "torrents/trackers":
+		_, _ = w.Write([]byte(`[{"url":"** [DHT] **","status":2},{"url":"https://tracker.example/announce/key","status":2,"num_seeds":4}]`))
+	case "sync/maindata":
+		_, _ = w.Write([]byte(`{"server_state":{"dl_info_speed":4096,"up_info_speed":0,"free_space_on_disk":1073741824},"torrents":{}}`))
+	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
 }

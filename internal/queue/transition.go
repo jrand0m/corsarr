@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/jrand0m/corsarr/internal/domain"
-	"github.com/jrand0m/corsarr/internal/plugin"
 	"github.com/jrand0m/corsarr/internal/store"
 )
 
@@ -37,6 +36,8 @@ func (s *Service) transition(ctx context.Context, d *store.StoredDownload, c cha
 	if err := s.d.Repo.Save(ctx, *d); err != nil {
 		return err
 	}
+	s.warn("record download transition", s.d.Repo.AddTransition(ctx, d.ID, store.Transition{From: from, To: c.to, Actor: c.actor,
+		Reason: c.reason, At: s.d.Now().UTC()}), "download", d.ID)
 	data := s.eventData(ctx, d)
 	data.From, data.To, data.Actor, data.Reason = from, c.to, c.actor, c.reason
 	if c.extra != nil {
@@ -124,6 +125,11 @@ type RemoveOptions struct {
 	DeleteFiles bool `json:"deleteFiles"`
 	Blocklist   bool `json:"blocklist"`
 	Research    bool `json:"research"`
+	SearchAgain bool `json:"searchAgain,omitempty"` // same as Research
+}
+
+func (o RemoveOptions) args() map[string]any {
+	return map[string]any{"deleteFiles": o.DeleteFiles, "blocklist": o.Blocklist, "searchAgain": o.Research || o.SearchAgain}
 }
 
 // Remove deletes the download from its client and marks it removed; the
@@ -141,8 +147,8 @@ func (s *Service) removeAs(ctx context.Context, id int64, actor domain.Actor, re
 	}
 	// shadow/disabled kinds and held downloads get no automatic client writes;
 	// the safety action is the one exception (an executable payload is removed
-	// whatever the mode or hold)
-	if err := s.writable(d, actor); err != nil {
+	// whatever the mode or hold); a user's remove in a shadow kind is recorded
+	if err := s.writable(ctx, d, actor, o); err != nil {
 		return err
 	}
 	if dl, ok := s.downloader(d.Downloader); ok {
@@ -151,16 +157,19 @@ func (s *Service) removeAs(ctx context.Context, id int64, actor domain.Actor, re
 		}
 	}
 	return s.transition(ctx, &d, change{to: domain.StateRemoved, actor: actor, reason: reason, extra: func(e *domain.DownloadEventData) {
-		e.FilesDeleted, e.Cause, e.Blocklist, e.Research = o.DeleteFiles, cause, o.Blocklist, o.Research
+		e.FilesDeleted, e.Cause, e.Blocklist, e.Research = o.DeleteFiles, cause, o.Blocklist, o.Research || o.SearchAgain
 	}})
 }
 
 // writable refuses client writes for inactive kinds and, for automation, held
-// downloads; the safety action is never refused.
-func (s *Service) writable(d store.StoredDownload, actor domain.Actor) error {
+// downloads; the safety action is never refused, a user's write in a shadow
+// kind is recorded instead of sent.
+func (s *Service) writable(ctx context.Context, d store.StoredDownload, actor domain.Actor, o RemoveOptions) error {
 	switch {
 	case actor == domain.ActorSafety:
 		return nil
+	case actor == domain.ActorUser:
+		return s.guard(ctx, d, "remove", o.args())
 	case actor == domain.ActorAutomation && d.OnHold():
 		return fmt.Errorf("%w: %d", ErrHeld, d.ID)
 	}
@@ -206,38 +215,4 @@ func first(xs []string) string {
 		return ""
 	}
 	return xs[0]
-}
-
-// Pause stops a download in its client.
-func (s *Service) Pause(ctx context.Context, id int64) error {
-	return s.client(ctx, id, func(c plugin.Downloader, cid string) error { return c.Pause(ctx, cid) })
-}
-
-// Resume restarts a paused download.
-func (s *Service) Resume(ctx context.Context, id int64) error {
-	return s.client(ctx, id, func(c plugin.Downloader, cid string) error { return c.Resume(ctx, cid) })
-}
-
-// SetPriority moves a download in its client's queue.
-func (s *Service) SetPriority(ctx context.Context, id int64, p plugin.Priority) error {
-	return s.client(ctx, id, func(c plugin.Downloader, cid string) error { return c.SetPriority(ctx, cid, p) })
-}
-
-func (s *Service) client(ctx context.Context, id int64, fn func(plugin.Downloader, string) error) error {
-	d, err := s.load(ctx, id)
-	if err != nil {
-		return err
-	}
-	if err := s.d.Modes.CheckActive(d.Kind); err != nil {
-		return err
-	}
-	dl, ok := s.downloader(d.Downloader)
-	if !ok {
-		return ErrNoDownloader
-	}
-	if err := fn(dl, d.DownloadID); err != nil {
-		return err
-	}
-	s.Wake()
-	return nil
 }

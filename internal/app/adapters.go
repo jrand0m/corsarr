@@ -45,6 +45,24 @@ func (p plugins) Downloaders() []queue.Downloader {
 	return out
 }
 
+// downloadClients lists every configured downloader with its health, usable
+// or not, for the downloader overview.
+func (a *App) downloadClients() []queue.ClientInfo {
+	var out []queue.ClientInfo
+	for _, n := range instances.Of[plugin.Downloader](a.Instances, plugin.KindDownloader) {
+		c := queue.ClientInfo{Key: n.Key, Name: n.Name, Type: n.PluginID, Impl: n.Impl}
+		if h, ok := a.d.Health.Get(n.Ref()); ok {
+			c.Health = &h
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+func (a *App) testDownloader(ctx context.Context, key domain.ObjectKey) error {
+	return a.Instances.Test(ctx, plugin.KindDownloader, key)
+}
+
 func (a *App) indexers() []automation.Indexer {
 	var out []automation.Indexer
 	for _, n := range append(usable[plugin.Indexer](a, plugin.KindIndexer), sources[plugin.Indexer](a)...) {

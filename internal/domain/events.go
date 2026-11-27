@@ -15,6 +15,7 @@ const (
 	EvGrabSent          EventType = "grab.sent"
 	EvGrabFailed        EventType = "grab.failed"
 	EvDecisionShadowed  EventType = "decision.shadowed"
+	EvClientShadowed    EventType = "downloader.shadowed" // a downloader write recorded, not sent (shadow mode)
 	EvDownloadProgress  EventType = "download.progress"
 	EvDownloadState     EventType = "download.state_changed"
 	EvDownloadCompleted EventType = "download.completed"
@@ -48,7 +49,7 @@ const (
 var eventFlags = map[EventType]struct{ History, Stream bool }{
 	EvItemAdded: {true, true}, EvItemUpdated: {false, true}, EvItemDeleted: {true, true},
 	EvItemAvailable: {false, true}, EvSearchCompleted: {false, true},
-	EvGrabSent: {true, true}, EvGrabFailed: {true, true}, EvDecisionShadowed: {true, true},
+	EvGrabSent: {true, true}, EvGrabFailed: {true, true}, EvDecisionShadowed: {true, true}, EvClientShadowed: {true, true},
 	EvDownloadProgress: {false, true}, EvDownloadState: {false, true},
 	EvDownloadCompleted: {false, true}, EvDownloadFailed: {true, true}, EvDownloadRemoved: {true, true},
 	EvImportCompleted: {true, true}, EvImportBlocked: {true, true}, EvImportFailed: {true, true},
