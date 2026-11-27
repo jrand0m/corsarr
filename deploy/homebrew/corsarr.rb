@@ -3,7 +3,6 @@
 class Corsarr < Formula
   desc "Media automation server in one static binary"
   homepage "https://github.com/jrand0m/corsarr"
-  version "0.4.0"
   license "AGPL-3.0-or-later"
 
   on_macos do
@@ -49,11 +48,6 @@ class Corsarr < Formula
         book: { mode: disabled }
     YAML
     (etc/"corsarr").install "corsarr.yml"
-  end
-
-  def post_install
-    (var/"corsarr").mkpath
-    (var/"log").mkpath
   end
 
   def caveats

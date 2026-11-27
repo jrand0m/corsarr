@@ -167,6 +167,7 @@ v_homebrew() {
     local tap=corsarr-ci/samples
     brew untap "$tap" >/dev/null 2>&1 || true
     brew tap-new --no-git "$tap" >/dev/null
+    brew trust "$tap" >/dev/null 2>&1 || true   # newer Homebrew only loads trusted local taps
     cp "$dep/homebrew/corsarr.rb" "$(brew --repository "$tap")/Formula/"
     check "brew audit" brew audit --strict --formula "$tap/corsarr"
     brew untap "$tap" >/dev/null 2>&1 || true

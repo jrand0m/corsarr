@@ -61,6 +61,7 @@ jobs:
           scripts/deploy-samples.sh validate launchd
           tap=corsarr-ci/samples
           brew tap-new --no-git "$tap"
+          brew trust "$tap" || true
           cp deploy/homebrew/corsarr.rb "$(brew --repository "$tap")/Formula/"
           brew audit --strict --formula "$tap/corsarr"
           brew install "$tap/corsarr"
