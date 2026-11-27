@@ -3,10 +3,11 @@ name: release
 # A version tag (v1.2.3) on master builds the release twice, on an amd64 and an
 # arm64 runner, inside the pinned builder (Dockerfile + scripts/release.sh).
 # The release fails unless both builds are byte-for-byte identical. Then the
-# first build is published: six archives with SHA256SUMS, an SBOM and a
-# build-provenance attestation per archive, and the multi-arch image with a
-# keyless cosign signature, provenance and SBOM attestations (release tags also
-# move :latest and :stable). Build jobs have no secrets and read-only access;
+# first build is published: six archives and six Linux packages (.deb, .rpm,
+# .apk) with SHA256SUMS, an SBOM and a build-provenance attestation per file, and
+# the multi-arch image with a keyless cosign signature, provenance and SBOM
+# attestations (release tags also move :latest and :stable and publish the Helm
+# chart to ghcr.io/<owner>/charts). Build jobs have no secrets and read-only access;
 # publishing uses short-lived OIDC credentials. VERIFYING.md explains how
 # to check any of it.
 on:
@@ -154,7 +155,9 @@ jobs:
           path: corsarr-image-*.spdx.json
           retention-days: 3
 
-  archives:
+  files:
+    # One SBOM per archive and package (the Go modules inside its binary), attested
+    # together with build provenance.
     needs: compare
     runs-on: ubuntu-24.04
     permissions:
@@ -163,13 +166,8 @@ jobs:
       attestations: write
     strategy:
       matrix:
-        archive:
-          - corsarr-linux-amd64.tar.gz
-          - corsarr-linux-arm64.tar.gz
-          - corsarr-darwin-amd64.tar.gz
-          - corsarr-darwin-arm64.tar.gz
-          - corsarr-windows-amd64.zip
-          - corsarr-windows-arm64.zip
+        id: [linux-amd64, linux-arm64, darwin-amd64, darwin-arm64, windows-amd64, windows-arm64,
+             deb-amd64, deb-arm64, rpm-amd64, rpm-arm64, apk-amd64, apk-arm64]
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -177,32 +175,82 @@ jobs:
           path: build
       - uses: anchore/sbom-action/download-syft@dfcb83b97731532d72be422cbc51ee64adb6fd56 # v0.24.4
         id: syft
-      - name: SBOM for ${{ matrix.archive }}
+      - name: SBOM for ${{ matrix.id }}
         env:
-          ARCHIVE: ${{ matrix.archive }}
+          ID: ${{ matrix.id }}
+          SYFT: ${{ steps.syft.outputs.cmd }}
         run: |
           set -euo pipefail
-          name="${ARCHIVE%.tar.gz}"; name="${name%.zip}"
-          mkdir x
-          case "$ARCHIVE" in *.zip) unzip -q "build/archives/$ARCHIVE" -d x ;; *) tar -xzf "build/archives/$ARCHIVE" -C x ;; esac
-          "${{ steps.syft.outputs.cmd }}" scan "dir:x/$name" --source-name corsarr --source-version "$GITHUB_REF_NAME" \
-            -o "spdx-json=$name.spdx.json"
-          echo "SBOM=$name.spdx.json" >> "$GITHUB_ENV"
+          cd build/archives
+          kind="${ID%-*}" arch="${ID#*-}"
+          rarch=x86_64; [ "$arch" = arm64 ] && rarch=aarch64
+          case "$kind" in
+            windows) file="corsarr-$ID.zip" ;;
+            linux|darwin) file="corsarr-$ID.tar.gz" ;;
+            deb) file=$(ls corsarr_*_"$arch".deb) ;;
+            rpm) file=$(ls corsarr-*."$rarch".rpm) ;;
+            apk) file=$(ls corsarr_*_"$rarch".apk) ;;
+          esac
+          # a package carries the linux binary of its architecture
+          src="corsarr-$ID"; case "$kind" in deb|rpm|apk) src="corsarr-linux-$arch" ;; esac
+          mkdir -p ../x
+          case "$src" in
+            corsarr-windows-*) unzip -q "$src.zip" -d ../x ;;
+            *) tar -xzf "$src.tar.gz" -C ../x ;;
+          esac
+          "$SYFT" scan "dir:../x/$src" --source-name corsarr --source-version "$GITHUB_REF_NAME" \
+            -o "spdx-json=../$file.spdx.json"
+          echo "FILE=build/archives/$file" >> "$GITHUB_ENV"
+          echo "SBOM=build/$file.spdx.json" >> "$GITHUB_ENV"
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: build/archives/${{ matrix.archive }}
+          subject-path: ${{ env.FILE }}
       - uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
-          subject-path: build/archives/${{ matrix.archive }}
+          subject-path: ${{ env.FILE }}
           sbom-path: ${{ env.SBOM }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: sbom-${{ matrix.archive }}
+          name: sbom-${{ matrix.id }}
           path: ${{ env.SBOM }}
           retention-days: 3
 
+  chart:
+    # The Helm chart as an OCI artifact, for releases only (no -rc.N); its version
+    # and appVersion are the release's.
+    needs: image
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: push
+        name: Package and push the chart to ghcr.io/<owner>/charts/corsarr
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "$TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          helm package deploy/helm/corsarr --version "${GITHUB_REF_NAME#v}" --app-version "$GITHUB_REF_NAME" --destination chart
+          out=$(helm push chart/corsarr-*.tgz "oci://ghcr.io/$owner/charts" 2>&1) || { echo "$out"; exit 1; }
+          echo "$out"
+          echo "name=ghcr.io/$owner/charts/corsarr" >> "$GITHUB_OUTPUT"
+          echo "digest=$(echo "$out" | sed -n 's/^Digest: //p')" >> "$GITHUB_OUTPUT"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.push.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
   publish:
-    needs: [image, archives]
+    needs: [image, files]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -244,7 +292,7 @@ jobs:
             echo
           } > notes.md
           cd build/archives
-          gh release create "$GITHUB_REF_NAME" corsarr-* SHA256SUMS ../../sbom/*.spdx.json \
+          gh release create "$GITHUB_REF_NAME" corsarr[-_]* SHA256SUMS ../../sbom/*.spdx.json \
             --repo "$GITHUB_REPOSITORY" --title "corsarr $GITHUB_REF_NAME" \
             --notes-file ../../notes.md --generate-notes \
             $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)
