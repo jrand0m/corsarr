@@ -1,0 +1,32 @@
+# corsarr-bin: the release binary with the hardened systemd unit and system user.
+pkgname=corsarr-bin
+pkgver=0.4.0
+pkgrel=1
+pkgdesc='Media automation server in one static binary'
+arch=('x86_64' 'aarch64')
+url='https://github.com/jrand0m/corsarr'
+license=('AGPL-3.0-or-later')
+provides=('corsarr')
+conflicts=('corsarr')
+backup=('etc/corsarr/corsarr.yml')
+# Unit, user and default config: copies of deploy/systemd/ published next to this PKGBUILD.
+source=('corsarr.service'
+        'corsarr.sysusers'
+        'corsarr.yml')
+source_x86_64=("corsarr-${pkgver}-x86_64.tar.gz::${url}/releases/download/v${pkgver}/corsarr-linux-amd64.tar.gz")
+source_aarch64=("corsarr-${pkgver}-aarch64.tar.gz::${url}/releases/download/v${pkgver}/corsarr-linux-arm64.tar.gz")
+sha256sums=('b7bfabc003270b0375e807fed2b13404b609b9ccf5c344b1be3ed3978a0692db'
+            '6f61cba5d63fb6ffef4a1df566903dd1d1d8aac5568c58f2e9ca92a6cbd2a81d'
+            'a2e6ec70463a6fac9156b3db99d7854cefe298447bdab5f3c5481b164feb6653')
+sha256sums_x86_64=('e8063b0ed93fcec330a220ff5bb0e60963a4af419a3be0098d262b3c4b14169a')
+sha256sums_aarch64=('83a5bd2545a401408293a7e4865f7f4a114911c2329ab6f38b8e0ede3fafb5c1')
+
+package() {
+  local dir=corsarr-linux-amd64
+  [ "$CARCH" = aarch64 ] && dir=corsarr-linux-arm64
+  install -Dm0755 "$dir/corsarr" "$pkgdir/usr/bin/corsarr"
+  install -Dm0644 corsarr.service "$pkgdir/usr/lib/systemd/system/corsarr.service"
+  install -Dm0644 corsarr.sysusers "$pkgdir/usr/lib/sysusers.d/corsarr.conf"
+  install -Dm0640 corsarr.yml "$pkgdir/etc/corsarr/corsarr.yml"
+  install -Dm0644 "$dir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
