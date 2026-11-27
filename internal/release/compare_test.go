@@ -51,7 +51,7 @@ func TestComparePackages(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(b, "corsarr_1.0.0_amd64.deb"), []byte("other!"), 0o644))
 	got, err := CompareArchives(a, b)
 	must(t, err)
-	if len(got) != 3 || !got[0].Same || !got[2].Same || got[1].Detail !="package bytes differ (4 vs 6 bytes); diffoscope shows where" {
+	if len(got) != 3 || !got[0].Same || !got[2].Same || got[1].Detail != "package bytes differ (4 vs 6 bytes); diffoscope shows where" {
 		t.Fatalf("%v", got)
 	}
 }
