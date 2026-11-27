@@ -48,6 +48,27 @@ func TestConfigSchema(t *testing.T) {
 	}
 }
 
+func TestConfigDefaultsFormats(t *testing.T) {
+	for format, want := range map[string]string{
+		"":                  "CORSARR_SERVER_ADDRESS",
+		"--format=table":    "KEY",
+		"--format=markdown": "# Configuration reference",
+		"--format=yaml":     "address: :8090",
+		"--format=env":      "CORSARR_LOG_LEVEL=info\n",
+	} {
+		args := []string{"config", "defaults"}
+		if format != "" {
+			args = append(args, format)
+		}
+		if code, out, _ := cliRun(t, nil, args...); code != 0 || !strings.Contains(out, want) {
+			t.Fatalf("%s: %d %s", format, code, out)
+		}
+	}
+	if code, _, errs := cliRun(t, nil, "config", "defaults", "--format=xml"); code != 2 || !strings.Contains(errs, "--format") {
+		t.Fatalf("bad format: %d %s", code, errs)
+	}
+}
+
 func TestConfigExportFormats(t *testing.T) {
 	env := []string{"CORSARR_LOG_LEVEL=debug", "CORSARR_INDEXERS_A_TYPE=fakeidx", "CORSARR_INDEXERS_A_APIKEY=s3cret"}
 	code, out, _ := cliRun(t, env, "config", "export")

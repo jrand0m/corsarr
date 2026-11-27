@@ -77,15 +77,34 @@ test kind="fast" pkg="./...":
       *) echo "unknown kind {{kind}} (fast|full|go|ui|budget)"; exit 2 ;;
     esac
 
+# ── docs ─────────────────────────────────────────────────────────────────────
+# just docs [config] [out-dir]   regenerate the configuration reference and example file
+docs target="config" out=".":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{target}}" in
+      config)
+        mkdir -p "{{out}}/docs" "{{out}}/deploy"
+        {{x}} go run ./cmd/corsarr config defaults --format=markdown > "{{out}}/docs/configuration.md"
+        {{x}} go run ./cmd/corsarr config defaults --format=yaml > "{{out}}/deploy/corsarr.example.yml" ;;
+      *) echo "unknown target {{target}} (config)"; exit 2 ;;
+    esac
+
 # ── lint ─────────────────────────────────────────────────────────────────────
-# just lint [all|go|ui|quality]
+# just lint [all|go|ui|docs|quality]
 lint target="all":
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{target}}" in
       go)      test -z "$({{x}} gofmt -l cmd internal)" || { {{x}} gofmt -l cmd internal; exit 1; }; {{x}} go vet ./... ;;
       ui)      cd ui && {{x}} npm run check ;;
+      docs)
+        tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+        just docs config "$tmp"
+        for f in docs/configuration.md deploy/corsarr.example.yml; do
+          diff -u "$f" "$tmp/$f" || { echo "$f is out of date: run just docs config"; exit 1; }
+        done ;;
       quality) scripts/quality.sh ;;
-      all)     just lint go; just lint ui ;;
-      *) echo "unknown target {{target}} (all|go|ui|quality)"; exit 2 ;;
+      all)     just lint go; just lint ui; just lint docs ;;
+      *) echo "unknown target {{target}} (all|go|ui|docs|quality)"; exit 2 ;;
     esac

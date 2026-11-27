@@ -90,12 +90,18 @@ Configuration has exactly one source per start, chosen in this order:
 
 The three forms map one to one, and `corsarr config export --format=yaml|env` converts
 between them. Secrets are never written in plain text: use `${env:NAME}` or
-`${file:/run/secrets/name}` references. A full example is in
-[`deploy/corsarr.example.yml`](deploy/corsarr.example.yml).
+`${file:/run/secrets/name}` references.
+
+Every setting, with its default, its argument and variable forms and a short explanation, is
+listed in [`docs/configuration.md`](docs/configuration.md).
+[`deploy/corsarr.example.yml`](deploy/corsarr.example.yml) is a commented file holding every
+default, ready to copy and edit.
 
 ```bash
+corsarr config defaults          # every setting, its default and what it does
+corsarr config defaults --format=yaml > corsarr.yml   # the same as a commented config file
 corsarr config validate --plan   # check a config and print what it would change
-corsarr config schema            # every key, its type and default
+corsarr config schema            # every key, its type and default as JSON Schema
 corsarr healthcheck              # exit status for container health checks
 ```
 
