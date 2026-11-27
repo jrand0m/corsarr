@@ -94,15 +94,16 @@ const (
 	PrioForce  Priority = "force" // start now, ahead of the client's queue limits
 )
 
+var (
+	priorityLevels = map[Priority]bool{PrioLow: true, PrioNormal: true, PrioHigh: true, PrioForce: true}
+	priorityMoves  = map[Priority]bool{PrioTop: true, PrioUp: true, PrioDown: true, PrioBottom: true}
+)
+
 // IsLevel reports whether p is a priority level rather than a queue move.
-func (p Priority) IsLevel() bool {
-	return p == PrioLow || p == PrioNormal || p == PrioHigh || p == PrioForce
-}
+func (p Priority) IsLevel() bool { return priorityLevels[p] }
 
 // IsMove reports whether p moves a download in its client's queue.
-func (p Priority) IsMove() bool {
-	return p == PrioTop || p == PrioUp || p == PrioDown || p == PrioBottom
-}
+func (p Priority) IsMove() bool { return priorityMoves[p] }
 
 // Downloader drives one download client (qBittorrent, SABnzbd-compatible, …).
 type Downloader interface {

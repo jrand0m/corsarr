@@ -144,14 +144,8 @@ func (s *Service) RetryImport(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	retryFailed := d.State == domain.StateFailed && s.payloadKept(d)
-	if !importable[d.State] && d.State != domain.StateImportBlocked && !retryFailed {
-		return fmt.Errorf("%w (download %d is %s)", ErrNotImportable, id, d.State)
-	}
-	if d.OnHold() {
-		return fmt.Errorf("%w: %d", ErrHeld, id)
-	}
-	if err := s.guard(ctx, d, "retry-import", nil); err != nil {
+	retryFailed, err := s.retryable(ctx, d)
+	if err != nil {
 		return err
 	}
 	if retryFailed {
@@ -161,6 +155,19 @@ func (s *Service) RetryImport(ctx context.Context, id int64) error {
 	}
 	s.publish(domain.EvDownloadCompleted, "user", s.d.ItemTitles(ctx, refsOf(d.Links)), s.eventData(ctx, &d))
 	return nil
+}
+
+// retryable checks that the import may run again for d and reports whether d
+// is a failed download that first moves back to import-pending.
+func (s *Service) retryable(ctx context.Context, d store.StoredDownload) (bool, error) {
+	retryFailed := d.State == domain.StateFailed && s.payloadKept(d)
+	if !importable[d.State] && d.State != domain.StateImportBlocked && !retryFailed {
+		return false, fmt.Errorf("%w (download %d is %s)", ErrNotImportable, d.ID, d.State)
+	}
+	if d.OnHold() {
+		return false, fmt.Errorf("%w: %d", ErrHeld, d.ID)
+	}
+	return retryFailed, s.guard(ctx, d, "retry-import", nil)
 }
 
 // payloadKept reports whether a failed download had finished and its payload
