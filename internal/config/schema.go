@@ -10,6 +10,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/jrand0m/corsarr/internal/domain"
@@ -78,9 +79,13 @@ func NewSchema(reg *plugin.Registry) *Schema {
 		{Name: "server", Node: obj("HTTP server (bootstrap).",
 			Field{Name: "address", Node: &Node{Kind: KindString, Default: ":8090", Doc: "Listen address host:port.", Check: checkAddress}},
 			Field{Name: "basePath", Node: &Node{Kind: KindString, Doc: "URL path prefix behind a reverse proxy, e.g. /corsarr.", Check: checkBasePath}},
+			Field{Name: "egressAllow", Node: &Node{Kind: KindList, Elem: &Node{Kind: KindString, Check: checkEgressHost},
+				Doc: "Hosts outbound requests may reach (name, *.domain or CIDR); empty allows every host."}},
 		)},
 		{Name: "data", Node: obj("Data directory (bootstrap).",
 			Field{Name: "dir", Node: &Node{Kind: KindString, Default: "/data", Doc: "Holds corsarr.db, secret.key, backups and logs."}},
+			Field{Name: "umask", Node: &Node{Kind: KindString, Default: "002", Check: checkUmask,
+				Doc: "Octal file creation mask for everything corsarr writes; 002 lets a shared group write."}},
 		)},
 		{Name: "log", Node: obj("Logging (bootstrap).",
 			Field{Name: "level", Node: enum("info", "Minimum log level.", "debug", "info", "warn", "error")},
@@ -245,6 +250,33 @@ func checkBasePath(s string) error {
 func nonNegative(s string) error {
 	if strings.HasPrefix(strings.TrimSpace(s), "-") {
 		return fmt.Errorf("must be 0 or more")
+	}
+	return nil
+}
+
+func checkUmask(s string) error {
+	if _, err := ParseUmask(s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ParseUmask reads an octal file creation mask such as 002 or 0027.
+func ParseUmask(s string) (int, error) {
+	v, err := strconv.ParseUint(s, 8, 32)
+	if err != nil || v > 0o777 {
+		return 0, fmt.Errorf("must be an octal mask between 000 and 777, e.g. 002")
+	}
+	return int(v), nil
+}
+
+func checkEgressHost(s string) error {
+	if _, _, err := net.ParseCIDR(s); err == nil {
+		return nil
+	}
+	host := strings.TrimPrefix(s, "*.")
+	if host == "" || strings.ContainsAny(host, "/:*@ ") {
+		return fmt.Errorf("must be a host name, *.domain, an IP address or a CIDR range")
 	}
 	return nil
 }
