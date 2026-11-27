@@ -306,16 +306,27 @@ func TestFinishedDownloadsMissingTheirImportAreReannounced(t *testing.T) {
 func TestShadowKindGetsNoClientWritesExceptSafety(t *testing.T) {
 	e := newEnv(t)
 	a, b := e.grab(t, "aaa"), e.grab(t, "bbb") // grabbed while active, then the kind goes to shadow
-	e.svc.d.Modes = func(domain.MediaKind) domain.KindMode { return domain.ModeShadow }
-	var me domain.ModeError
-	for name, op := range map[string]func() error{
+	mode := domain.ModeShadow
+	e.svc.d.Modes = func(domain.MediaKind) domain.KindMode { return mode }
+	ops := map[string]func() error{
 		"pause":    func() error { return e.svc.Pause(ctx, a.ID) },
 		"resume":   func() error { return e.svc.Resume(ctx, a.ID) },
 		"priority": func() error { return e.svc.SetPriority(ctx, a.ID, plugin.PrioTop) },
 		"remove":   func() error { return e.svc.Remove(ctx, a.ID, RemoveOptions{DeleteFiles: true}) },
-	} {
-		if err := op(); !errors.As(err, &me) || me.Mode != domain.ModeShadow {
+	}
+	for name, op := range ops { // a user's write in a shadow kind is recorded, not sent
+		if err := op(); !errors.Is(err, ErrShadowed) {
 			t.Errorf("%s in shadow: %v", name, err)
+		}
+	}
+	if sh := e.rec.Of(domain.EvClientShadowed); len(sh) != len(ops) || sh[0].Data.(domain.ClientActionData).DownloadID != a.ID {
+		t.Fatalf("would-be actions: %+v", sh)
+	}
+	mode = domain.ModeDisabled
+	var me domain.ModeError
+	for name, op := range ops { // a disabled kind refuses
+		if err := op(); !errors.As(err, &me) || me.Mode != domain.ModeDisabled {
+			t.Errorf("%s when disabled: %v", name, err)
 		}
 	}
 	if len(e.dl.removed) != 0 || len(e.dl.ops) != 0 {

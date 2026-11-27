@@ -83,6 +83,7 @@ const eventViews: Record<string, EventView> = {
   'grab.sent': { label: 'Grabbed', family: 'download', value: 'queued' },
   'grab.failed': { label: 'Grab failed', family: 'download', value: 'failed' },
   'decision.shadowed': { label: 'Would grab (shadow)', family: 'kindMode', value: 'shadow' },
+  'downloader.shadowed': { label: 'Would change the client (shadow)', family: 'kindMode', value: 'shadow' },
   'download.failed': { label: 'Download failed', family: 'download', value: 'failed' },
   'download.removed': { label: 'Removed', family: 'download', value: 'removed' },
   'import.completed': { label: 'Imported', family: 'importOutcome', value: 'imported' },

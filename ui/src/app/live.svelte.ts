@@ -7,7 +7,7 @@ import type { Connection } from '../lib/components/templates/AppShell/AppShell.s
 
 /** Every streamed type of the server's event catalogue; EventSource needs a listener per named event. */
 export const EVENT_TYPES = [
-  'item.added', 'item.updated', 'item.deleted', 'item.available', 'search.completed', 'grab.sent', 'grab.failed', 'decision.shadowed',
+  'item.added', 'item.updated', 'item.deleted', 'item.available', 'search.completed', 'grab.sent', 'grab.failed', 'decision.shadowed', 'downloader.shadowed',
   'download.progress', 'download.state_changed', 'download.completed', 'download.failed', 'download.removed',
   'import.completed', 'import.blocked', 'import.failed', 'payload.rejected', 'file.renamed', 'file.deleted',
   'blocklist.added', 'blocklist.removed', 'rule.acted', 'rule.run_completed', 'rule.undone', 'health.changed',
