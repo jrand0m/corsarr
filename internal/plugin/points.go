@@ -109,6 +109,75 @@ type FileLister interface {
 	Files(ctx context.Context, downloadID string) ([]FileEntry, error)
 }
 
+// GlobalPauser is an optional downloader capability: stop and restart every
+// download of the client at once.
+type GlobalPauser interface {
+	PauseAll(ctx context.Context) error
+	ResumeAll(ctx context.Context) error
+}
+
+// SpeedLimits are a client's global transfer limits in KiB/s; 0 is unlimited.
+type SpeedLimits struct {
+	DownKiB int64 `json:"downKiB"`
+	UpKiB   int64 `json:"upKiB"`
+}
+
+// SpeedLimiter is an optional downloader capability: global speed limits and
+// the client's alternative-speed mode. A client lacking one part (an upload
+// limit, an alternative mode) answers ErrUnsupported for that part.
+type SpeedLimiter interface {
+	SpeedLimits(ctx context.Context) (SpeedLimits, error)
+	SetSpeedLimits(ctx context.Context, l SpeedLimits) error
+	AltSpeed(ctx context.Context) (bool, error)
+	SetAltSpeed(ctx context.Context, on bool) error
+}
+
+// Rechecker is an optional downloader capability: verify a download's data again.
+type Rechecker interface {
+	Recheck(ctx context.Context, downloadID string) error
+}
+
+// Reannouncer is an optional downloader capability: contact the trackers now.
+type Reannouncer interface {
+	Reannounce(ctx context.Context, downloadID string) error
+}
+
+// Categoriser is an optional downloader capability: move a download to
+// another client category.
+type Categoriser interface {
+	SetCategory(ctx context.Context, downloadID, category string) error
+}
+
+// ClientStatus is the client-wide state at one moment.
+type ClientStatus struct {
+	DownSpeed int64       `json:"downSpeed"` // bytes/s
+	UpSpeed   int64       `json:"upSpeed"`   // bytes/s
+	FreeSpace int64       `json:"freeSpace"` // bytes free at the default save path; -1 unknown
+	Paused    bool        `json:"paused"`    // every download is stopped
+	Limits    SpeedLimits `json:"limits"`
+	AltSpeed  bool        `json:"altSpeed"`
+}
+
+// ClientStats is an optional downloader capability: current speeds, free
+// space, paused state and limits in one call.
+type ClientStats interface {
+	Stats(ctx context.Context) (ClientStatus, error)
+}
+
+// Tracker is one tracker of a download as the client reports it.
+type Tracker struct {
+	URL     string `json:"url"`
+	Status  string `json:"status"` // working | updating | not_contacted | not_working | disabled
+	Message string `json:"message,omitempty"`
+	Seeds   int    `json:"seeds"`
+	Peers   int    `json:"peers"`
+}
+
+// TrackerLister is an optional downloader capability: a download's trackers.
+type TrackerLister interface {
+	Trackers(ctx context.Context, downloadID string) ([]Tracker, error)
+}
+
 // ── metadata ─────────────────────────────────────────────────────────────────
 
 // MovieRecord is the movie metadata shape.

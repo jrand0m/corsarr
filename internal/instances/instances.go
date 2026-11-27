@@ -8,6 +8,7 @@ package instances
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"reflect"
 	"sort"
@@ -220,20 +221,31 @@ func (m *Manager) TestAll(ctx context.Context) error {
 			continue
 		}
 		for _, r := range list {
-			m.test(ctx, r)
+			_ = m.test(ctx, r) // health records the outcome
 		}
 	}
 	return nil
 }
 
-func (m *Manager) test(ctx context.Context, r Running) {
+// Test self-tests one instance, reports its health and returns the failure.
+func (m *Manager) Test(ctx context.Context, kind plugin.Kind, key domain.ObjectKey) error {
+	for _, r := range m.All(kind) {
+		if r.Key == key {
+			return m.test(ctx, r)
+		}
+	}
+	return fmt.Errorf("no running %s %q", kind, key)
+}
+
+func (m *Manager) test(ctx context.Context, r Running) error {
 	t, ok := r.Impl.(plugin.Tester)
 	if !ok {
-		return
+		return nil
 	}
 	if err := t.Test(ctx); err != nil {
 		m.rep.Report(r.Ref(), health.Observation{Class: classOf(err, health.ClassUnreachable), Message: err.Error()})
-		return
+		return err
 	}
 	m.rep.Report(r.Ref(), health.Observation{OK: true})
+	return nil
 }

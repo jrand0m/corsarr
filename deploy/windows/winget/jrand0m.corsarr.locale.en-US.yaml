@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: jrand0m.corsarr
+PackageVersion: 0.4.0
+PackageLocale: en-US
+Publisher: corsarr
+PublisherUrl: https://github.com/jrand0m/corsarr
+PackageName: corsarr
+PackageUrl: https://github.com/jrand0m/corsarr
+License: AGPL-3.0-or-later
+LicenseUrl: https://github.com/jrand0m/corsarr/blob/master/LICENSE
+ShortDescription: Media automation server in one static binary.
+Description: >-
+  corsarr searches your indexers for the movies and series you want, sends the best release
+  to your download client and files the result into your library, in one process with one
+  SQLite file.
+Tags:
+  - media
+  - automation
+  - pvr
+ReleaseNotesUrl: https://github.com/jrand0m/corsarr/releases/tag/v0.4.0
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

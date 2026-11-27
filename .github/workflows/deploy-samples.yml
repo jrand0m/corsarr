@@ -1,0 +1,134 @@
+name: deploy-samples
+
+# Validates every deployment sample in deploy/ (lint, render, dry-run) and smoke-runs the
+# container ones against an image built from this commit.
+on:
+  push:
+    branches: [master]
+    paths: ["deploy/**", "scripts/deploy-samples.sh", "Dockerfile", ".github/workflows/deploy-samples.yml"]
+  pull_request:
+    paths: ["deploy/**", "scripts/deploy-samples.sh", "Dockerfile", ".github/workflows/deploy-samples.yml"]
+
+permissions:
+  contents: read
+
+env:
+  KUBECONFORM_VERSION: v0.7.0
+  NFPM_VERSION: v2.43.0
+  KIND_VERSION: v0.29.0
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@v4
+      - name: Install validators
+        run: |
+          set -euo pipefail
+          r() { for i in 1 2 3 4 5; do "$@" && return 0; sleep $((i*5)); done; return 1; }
+          r go install "github.com/yannh/kubeconform/cmd/kubeconform@${KUBECONFORM_VERSION}"
+          r go install "github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          r sudo apt-get update -q
+          r sudo apt-get install -y -q podman libxml2-utils yamllint jq shellcheck ruby
+      - name: Validate samples
+        run: |
+          set -euo pipefail
+          # tools with no Ubuntu package (namcap, nomad, plutil) are covered elsewhere or skipped
+          scripts/deploy-samples.sh validate all
+
+  validate-arch:
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: namcap
+        run: |
+          pacman -Syu --noconfirm --needed namcap
+          scripts/deploy-samples.sh validate aur
+
+  validate-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: launchd plist and Homebrew formula
+        run: |
+          set -euo pipefail
+          scripts/deploy-samples.sh validate launchd
+          tap=corsarr-ci/samples
+          brew tap-new --no-git "$tap"
+          brew trust "$tap" || true
+          cp deploy/homebrew/corsarr.rb "$(brew --repository "$tap")/Formula/"
+          brew audit --strict --formula "$tap/corsarr"
+          brew install "$tap/corsarr"
+          brew test "$tap/corsarr"
+
+  validate-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scoop install from the sample manifest
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+          Invoke-RestMethod -Uri https://get.scoop.sh -OutFile install-scoop.ps1
+          .\install-scoop.ps1 -RunAsAdmin
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          scoop install deploy\windows\scoop\corsarr.json
+          corsarr version
+
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the image from this commit
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          tags: corsarr:ci
+          outputs: type=docker,dest=/tmp/corsarr-image.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: corsarr-image
+          path: /tmp/corsarr-image.tar
+          retention-days: 1
+
+  smoke:
+    needs: image
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [docker, compose, helm, kubernetes, podman, packages]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: corsarr-image
+          path: /tmp
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          r() { for i in 1 2 3 4 5; do "$@" && return 0; sleep $((i*5)); done; return 1; }
+          docker load -i /tmp/corsarr-image.tar
+          r go install "sigs.k8s.io/kind@${KIND_VERSION}"
+          r go install "github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          if [ "${{ matrix.target }}" = podman ]; then
+            r sudo apt-get update -q && r sudo apt-get install -y -q podman
+            loginctl enable-linger "$USER" || true
+          fi
+      - name: Smoke ${{ matrix.target }}
+        env:
+          SMOKE_IMAGE: corsarr:ci
+        run: scripts/deploy-samples.sh smoke ${{ matrix.target }}

@@ -1,0 +1,41 @@
+{
+    "version": "0.4.0",
+    "description": "Media automation server in one static binary.",
+    "homepage": "https://github.com/jrand0m/corsarr",
+    "license": "AGPL-3.0-or-later",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/jrand0m/corsarr/releases/download/v0.4.0/corsarr-windows-amd64.zip",
+            "hash": "96e9570210041c7db5d36fbc5d0cd24fc7e7d32d8ada78d1771ba3139c55d4a5",
+            "extract_dir": "corsarr-windows-amd64"
+        },
+        "arm64": {
+            "url": "https://github.com/jrand0m/corsarr/releases/download/v0.4.0/corsarr-windows-arm64.zip",
+            "hash": "44d3f7dfd0a2f0f28e1a8fcf3b52253bca2ab982ae524d53fe1c0c33e69c888f",
+            "extract_dir": "corsarr-windows-arm64"
+        }
+    },
+    "bin": "corsarr.exe",
+    "notes": [
+        "Start: corsarr --data.dir=\"$env:LOCALAPPDATA\\corsarr\"  then open http://localhost:8090",
+        "Run at logon: see https://github.com/jrand0m/corsarr/tree/master/deploy/windows"
+    ],
+    "checkver": {
+        "github": "https://github.com/jrand0m/corsarr"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/jrand0m/corsarr/releases/download/v$version/corsarr-windows-amd64.zip",
+                "extract_dir": "corsarr-windows-amd64"
+            },
+            "arm64": {
+                "url": "https://github.com/jrand0m/corsarr/releases/download/v$version/corsarr-windows-arm64.zip",
+                "extract_dir": "corsarr-windows-arm64"
+            }
+        },
+        "hash": {
+            "url": "$baseurl/SHA256SUMS"
+        }
+    }
+}

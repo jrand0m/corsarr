@@ -1,0 +1,22 @@
+# corsarr on plain Kubernetes: kubectl apply -k deploy/kubernetes/base
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: corsarr
+labels:
+  - pairs:
+      app.kubernetes.io/name: corsarr
+      app.kubernetes.io/part-of: corsarr
+    includeSelectors: true
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+configMapGenerator:
+  - name: corsarr-config
+    files:
+      - corsarr.yml
+images:
+  - name: ghcr.io/jrand0m/corsarr
+    newTag: v0.4.0

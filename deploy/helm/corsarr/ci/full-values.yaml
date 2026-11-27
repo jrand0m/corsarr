@@ -1,0 +1,34 @@
+# Turns on every optional template; CI renders and schema-checks this as well as the defaults.
+image:
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+envFromSecrets: [corsarr-secrets]
+extraEnv:
+  - name: TZ
+    value: Etc/UTC
+media:
+  - name: media
+    mountPath: /media
+    volume:
+      persistentVolumeClaim:
+        claimName: media
+  - name: archive
+    mountPath: /archive
+    readOnly: true
+    volume:
+      persistentVolumeClaim:
+        claimName: archive
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: corsarr.example.com
+      paths: [{ path: /, pathType: Prefix }]
+  tls:
+    - secretName: corsarr-tls
+      hosts: [corsarr.example.com]
+httpRoute:
+  enabled: true
+  parentRefs: [{ name: gateway, namespace: gateway-system }]
+  hostnames: [corsarr.example.com]
+serviceMonitor:
+  enabled: true

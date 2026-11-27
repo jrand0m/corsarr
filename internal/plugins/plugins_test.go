@@ -9,7 +9,7 @@ import (
 
 func TestEveryBuiltInIsRegisteredAndValid(t *testing.T) {
 	want := map[string]plugin.Kind{
-		"torznab": plugin.KindIndexer, "qbittorrent": plugin.KindDownloader, "tmdb": plugin.KindMetadata,
+		"torznab": plugin.KindIndexer, "qbittorrent": plugin.KindDownloader, "sabnzbd": plugin.KindDownloader, "tmdb": plugin.KindMetadata,
 		"plex": plugin.KindMediaServer, "native": plugin.KindNotifier, "shoutrrr": plugin.KindNotifier,
 		"knaben": plugin.KindIndexer, "thepiratebay": plugin.KindIndexer,
 		"musicbrainz": plugin.KindMetadata, "trubadurcamp": plugin.KindSource, "mechanicalwavescloud": plugin.KindSource,

@@ -1,0 +1,3 @@
+# Named volume for /data (database and key file), created on first start.
+[Volume]
+VolumeName=corsarr-data

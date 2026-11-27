@@ -1,0 +1,23 @@
+# /data: the SQLite database and key file. Back this volume up.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: corsarr-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+# /media: downloads and library on one filesystem, so imports are hardlinks. Replace this
+# claim with your existing media volume (NFS, hostPath on a single node, a CSI share, …)
+# and mount it at the same path in the download client.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: corsarr-media
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi

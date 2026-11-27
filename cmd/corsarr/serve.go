@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"sync/atomic"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/health"
 	"github.com/jrand0m/corsarr/internal/httpx"
 	"github.com/jrand0m/corsarr/internal/plugin"
+	"github.com/jrand0m/corsarr/internal/preflight"
 	"github.com/jrand0m/corsarr/internal/scheduler"
 	"github.com/jrand0m/corsarr/internal/store"
 	"github.com/jrand0m/corsarr/internal/web"
@@ -53,7 +55,12 @@ func (c cli) serve(ctx context.Context, ready func(addr string)) int {
 		return 2 // invalid bootstrap config refuses start
 	}
 	applyRuntimeDefaults(c.in.Environ)
-	k, err := startKernel(ctx, cfg, newLogger(c, cfg.Log.Level))
+	log := newLogger(c, cfg.Log.Level)
+	if err := c.preflight(cfg, log); err != nil {
+		fmt.Fprintln(c.stderr, "corsarr:", err)
+		return 1
+	}
+	k, err := startKernel(ctx, cfg, log)
 	if err != nil {
 		fmt.Fprintln(c.stderr, "corsarr:", err)
 		return 1
@@ -71,6 +78,19 @@ func (c cli) serve(ctx context.Context, ready func(addr string)) int {
 		ready(ln.Addr().String())
 	}
 	return k.wait(ctx, srv, ln)
+}
+
+// preflight refuses root without --allow-root, applies the configured umask
+// and proves the data and temp dirs are writable before anything is opened.
+func (c cli) preflight(cfg *config.Config, log *slog.Logger) error {
+	warning, err := preflight.Run(preflight.Options{
+		ID: preflight.Current(), DataDir: cfg.Data.Dir, TempDir: os.TempDir(), Umask: cfg.Data.Umask,
+		AllowRoot: c.has("allow-root"), Container: preflight.InContainer(preflight.FileExists, os.Getenv),
+	})
+	if warning != "" {
+		log.Warn(warning)
+	}
+	return err
 }
 
 func newLogger(c cli, level string) *slog.Logger {
@@ -114,7 +134,7 @@ func startKernel(ctx context.Context, cfg *config.Config, log *slog.Logger) (*ke
 	if list, err := st.Health().List(ctx); err == nil {
 		k.health.Load(list)
 	}
-	k.http = httpx.New(httpx.Options{Version: version, Reporter: k.health})
+	k.http = httpx.New(httpx.Options{Version: version, Reporter: k.health, Allow: cfg.Server.EgressAllow})
 	k.health.OK(configRef)
 	k.jobs = scheduler.New(scheduler.Options{Store: st.Jobs(), Events: k.bus,
 		OnError: func(job string, err error) { log.Warn("job failed", "job", job, "err", err) }})

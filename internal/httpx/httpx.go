@@ -46,11 +46,13 @@ type Options struct {
 	Sleep       func(context.Context, time.Duration) error
 	Now         func() time.Time
 	Jitter      func(n int64) int64 // uniform [0,n)
+	Allow       []string            // outbound host allow list; empty allows every host
 }
 
 // Client is safe for concurrent use.
 type Client struct {
 	o     Options
+	allow *egress
 	mu    sync.Mutex
 	hosts map[string]*host
 }
@@ -82,7 +84,7 @@ func New(o Options) *Client {
 	if o.Jitter == nil {
 		o.Jitter = func(n int64) int64 { return rand.Int64N(max(n, 1)) }
 	}
-	return &Client{o: o, hosts: map[string]*host{}}
+	return &Client{o: o, allow: newEgress(o.Allow), hosts: map[string]*host{}}
 }
 
 func pick[T comparable](v, def T) T {
@@ -144,6 +146,11 @@ func (d doerFor) Do(req *http.Request) (*http.Response, error) { return d.c.do(r
 
 func (c *Client) do(req *http.Request, ref *domain.IntegrationRef) (*http.Response, error) {
 	req.Header.Set("User-Agent", userAgent(req.Header.Get("User-Agent"), pick(c.o.Version, "dev")))
+	if !c.allow.allows(req.URL.Hostname()) {
+		err := error(ErrEgressBlocked{Host: req.URL.Hostname()})
+		c.report(ref, nil, err)
+		return nil, err
+	}
 	h := c.host(req.URL.Hostname())
 	retries := c.o.MaxRetries
 	if ref != nil && c.blocked(*ref) {

@@ -1,0 +1,20 @@
+# Shadow mode: corsarr decides and records what it would grab, never touches the
+# download client or media, and mounts media read-only.
+#   kubectl apply -k deploy/kubernetes/overlays/shadow
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+configMapGenerator:
+  - name: corsarr-config
+    behavior: replace
+    files:
+      - corsarr.yml
+patches:
+  - target:
+      kind: Deployment
+      name: corsarr
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/2/readOnly
+        value: true
