@@ -1,0 +1,18 @@
+---
+# ansible-playbook -i inventory.ini playbook.yml   (from deploy/ansible)
+- name: Install corsarr
+  hosts: corsarr
+  become: true
+  vars:
+    corsarr_install_mode: binary          # or container (Docker + community.docker)
+    corsarr_media_dir: /srv/media
+    corsarr_config:
+      metadata:
+        tmdb:
+          type: tmdb
+          apiKey: "${env:TMDB_API_KEY}"
+    # keep the value in a vault: ansible-vault encrypt_string
+    corsarr_env:
+      TMDB_API_KEY: "{{ vault_tmdb_api_key | default('replace-me') }}"
+  roles:
+    - corsarr

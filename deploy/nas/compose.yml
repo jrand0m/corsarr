@@ -2,7 +2,9 @@
 # app, QNAP Container Station, UGREEN UGOS Docker). Self-contained: no .env, no config
 # file; corsarr starts on its defaults and is configured in the web UI.
 #
-# Set the three paths and the user to your NAS's values (see README.md).
+# Set the two paths and the user to your NAS's values (see README.md): edit the value after
+# ":-", or set PUID, PGID, DATA_DIR, MEDIA_DIR and PORT where your NAS takes variables
+# (Portainer's app template does).
 services:
   corsarr:
     image: ghcr.io/jrand0m/corsarr:v0.4.0
@@ -10,7 +12,7 @@ services:
     restart: unless-stopped
     # The NAS user that owns the media share (Synology: `id` over SSH, often 1026:100;
     # TrueNAS: apps 568:568; QNAP/UGOS: 1000:100). It must be able to write both paths below.
-    user: "1000:100"
+    user: "${PUID:-1000}:${PGID:-100}"
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -19,12 +21,12 @@ services:
     environment:
       GOMEMLIMIT: 96MiB
     ports:
-      - "8090:8090"
+      - "${PORT:-8090}:8090"
     volumes:
-      - /volume1/docker/corsarr:/data       # database and key file: back this up
-      - /volume1/data/media:/media          # downloads + library on one share
+      - ${DATA_DIR:-/volume1/docker/corsarr}:/data   # database and key file: back this up
+      - ${MEDIA_DIR:-/volume1/data/media}:/media     # downloads + library on one share
       # Shadow mode (corsarr never writes media):
-      # - /volume1/data/media:/media:ro
+      # - ${MEDIA_DIR:-/volume1/data/media}:/media:ro
     healthcheck:
       test: ["CMD", "/corsarr", "healthcheck"]
       interval: 30s

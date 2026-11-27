@@ -1,0 +1,14 @@
+---
+- name: Check the install mode
+  ansible.builtin.assert:
+    that: corsarr_install_mode in ['binary', 'container']
+    fail_msg: "corsarr_install_mode must be binary or container, not {{ corsarr_install_mode }}"
+    quiet: true
+
+- name: Install as binary
+  ansible.builtin.include_tasks: binary.yml
+  when: corsarr_install_mode == 'binary'
+
+- name: Install as container
+  ansible.builtin.include_tasks: container.yml
+  when: corsarr_install_mode == 'container'

@@ -1,4 +1,5 @@
 # Run corsarr at logon as the current user, restarted on failure, with no admin rights.
+# (With admin rights prefer the Windows service: corsarr service install.)
 #   powershell -ExecutionPolicy Bypass -File corsarr-task.ps1
 # Remove: Unregister-ScheduledTask -TaskName corsarr -Confirm:$false
 $ErrorActionPreference = 'Stop'

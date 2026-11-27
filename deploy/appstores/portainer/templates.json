@@ -1,0 +1,27 @@
+{
+  "version": "3",
+  "templates": [
+    {
+      "id": 1,
+      "type": 3,
+      "title": "corsarr",
+      "name": "corsarr",
+      "description": "Media automation server in one static binary: indexers, download client and library in one process.",
+      "note": "Runs as PUID:PGID with a read-only root filesystem. That user must be able to write DATA_DIR and MEDIA_DIR. Open http://&lt;host&gt;:8090 and create the admin account.",
+      "categories": ["Multimedia", "Downloaders"],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/jrand0m/corsarr/master/deploy/appstores/icon.svg",
+      "repository": {
+        "url": "https://github.com/jrand0m/corsarr",
+        "stackfile": "deploy/nas/compose.yml"
+      },
+      "env": [
+        { "name": "DATA_DIR", "label": "Data directory (database, keys)", "default": "/srv/corsarr" },
+        { "name": "MEDIA_DIR", "label": "Media directory (downloads + library, one filesystem)", "default": "/srv/media" },
+        { "name": "PUID", "label": "User id that owns both directories", "default": "1000" },
+        { "name": "PGID", "label": "Group id", "default": "1000" },
+        { "name": "PORT", "label": "Web UI port", "default": "8090" }
+      ]
+    }
+  ]
+}

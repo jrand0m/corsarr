@@ -1,0 +1,76 @@
+# corsarr as a CasaOS app: the NAS compose sample (../../../nas/compose.yml) with CasaOS
+# metadata and paths. Install: App Store → Custom Install → Import, paste this file.
+name: corsarr
+services:
+  corsarr:
+    image: ghcr.io/jrand0m/corsarr:v0.4.0
+    container_name: corsarr
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      GOMEMLIMIT: 96MiB
+    ports:
+      - target: 8090
+        published: "8090"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: /DATA/AppData/corsarr/data
+        target: /data
+      - type: bind
+        source: /DATA/Media
+        target: /media
+    healthcheck:
+      test: ["CMD", "/corsarr", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    mem_limit: 256m
+    x-casaos:
+      envs:
+        - container: GOMEMLIMIT
+          description:
+            en_us: Soft heap limit; keep below the memory limit
+      ports:
+        - container: "8090"
+          description:
+            en_us: Web UI and API
+      volumes:
+        - container: /data
+          description:
+            en_us: Database and keys; back this up. Must be writable by PUID.
+        - container: /media
+          description:
+            en_us: Downloads and library on one filesystem, the same path as in your download client.
+
+x-casaos:
+  architectures: [amd64, arm64]
+  main: corsarr
+  author: corsarr
+  developer: corsarr
+  category: Media
+  icon: https://raw.githubusercontent.com/jrand0m/corsarr/master/deploy/appstores/icon.svg
+  tagline:
+    en_us: Media automation in one static binary
+  title:
+    en_us: corsarr
+  description:
+    en_us: >-
+      corsarr searches your indexers for the movies, series and music you want, sends the best
+      release to your download client and files the result into your library, in one process
+      with one SQLite file.
+  port_map: "8090"
+  index: /
+  scheme: http
+  store_app_id: corsarr
+  tips:
+    before_install:
+      en_us: >-
+        corsarr runs as PUID:PGID with a read-only root filesystem. Make /DATA/AppData/corsarr/data
+        and /DATA/Media writable by that user.

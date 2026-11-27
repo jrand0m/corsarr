@@ -1,0 +1,15 @@
+---
+- name: Restart corsarr
+  ansible.builtin.systemd_service:
+    name: corsarr
+    state: restarted
+    daemon_reload: true
+  when: corsarr_service_manage | bool
+
+- name: Restart the corsarr container
+  community.docker.docker_container:
+    name: "{{ corsarr_container_name }}"
+    state: started
+    restart: true
+    comparisons:
+      "*": ignore

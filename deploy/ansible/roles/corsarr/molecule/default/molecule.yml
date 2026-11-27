@@ -1,0 +1,29 @@
+---
+# Binary mode in a plain Debian container: downloads and verifies the release archive,
+# installs the binary, user, config and unit; the service itself is not started (no
+# systemd in the container). Run from deploy/ansible/roles/corsarr: molecule test
+driver:
+  name: docker
+platforms:
+  - name: corsarr-debian
+    image: python:3.12-slim-bookworm
+    pre_build_image: true
+provisioner:
+  name: ansible
+  inventory:
+    host_vars:
+      corsarr-debian:
+        corsarr_service_manage: false
+        corsarr_config:
+          log:
+            level: debug
+scenario:
+  test_sequence:
+    - destroy
+    - create
+    - converge
+    - idempotence
+    - verify
+    - destroy
+verifier:
+  name: ansible

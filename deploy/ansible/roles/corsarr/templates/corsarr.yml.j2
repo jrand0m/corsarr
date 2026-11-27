@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# corsarr configuration: the role's defaults merged with corsarr_config. Every option is
+# listed by `corsarr config defaults --format=yaml`. Secrets only as ${env:NAME} or
+# ${file:/path} references.
+{% set base = {
+  'version': 1,
+  'server': {'address': ':' ~ corsarr_listen_port},
+  'data': {'dir': corsarr_data_dir},
+  'log': {'level': 'info'},
+  'auth': {'mode': 'password'},
+} %}
+{{ base | combine(corsarr_config, recursive=True) | to_nice_yaml(indent=2, sort_keys=False) }}

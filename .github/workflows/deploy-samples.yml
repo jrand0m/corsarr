@@ -5,9 +5,9 @@ name: deploy-samples
 on:
   push:
     branches: [master]
-    paths: ["deploy/**", "scripts/deploy-samples.sh", "Dockerfile", ".github/workflows/deploy-samples.yml"]
+    paths: ["deploy/**", "scripts/deploy-samples.sh", "scripts/pins.sh", "cmd/corsarr/service*.go", "Dockerfile", ".github/workflows/deploy-samples.yml"]
   pull_request:
-    paths: ["deploy/**", "scripts/deploy-samples.sh", "Dockerfile", ".github/workflows/deploy-samples.yml"]
+    paths: ["deploy/**", "scripts/deploy-samples.sh", "scripts/pins.sh", "cmd/corsarr/service*.go", "Dockerfile", ".github/workflows/deploy-samples.yml"]
 
 permissions:
   contents: read
@@ -34,11 +34,13 @@ jobs:
           r go install "github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           r sudo apt-get update -q
-          r sudo apt-get install -y -q podman libxml2-utils yamllint jq shellcheck ruby
+          r sudo apt-get install -y -q podman libxml2-utils yamllint jq shellcheck ruby python3-yaml
+          r pipx install --include-deps ansible-lint
+          r ansible-galaxy collection install -r deploy/ansible/requirements.yml
       - name: Validate samples
         run: |
           set -euo pipefail
-          # tools with no Ubuntu package (namcap, nomad, plutil) are covered elsewhere or skipped
+          # tools with no Ubuntu package (namcap, nomad, plutil, nix, molecule) are covered elsewhere or skipped
           scripts/deploy-samples.sh validate all
 
   validate-arch:
@@ -50,6 +52,28 @@ jobs:
         run: |
           pacman -Syu --noconfirm --needed namcap
           scripts/deploy-samples.sh validate aur
+
+  validate-nix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: nix flake check
+        run: scripts/deploy-samples.sh validate nixos
+
+  validate-ansible:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: molecule (binary mode in a Debian container)
+        run: |
+          set -euo pipefail
+          r() { for i in 1 2 3 4 5; do "$@" && return 0; sleep $((i*5)); done; return 1; }
+          r pipx install --include-deps ansible-lint
+          r pipx install --include-deps molecule
+          r pipx inject molecule 'molecule-plugins[docker]'
+          r ansible-galaxy collection install -r deploy/ansible/requirements.yml
+          MOLECULE=1 STRICT=1 scripts/deploy-samples.sh validate ansible
 
   validate-macos:
     runs-on: macos-latest
@@ -80,6 +104,27 @@ jobs:
           $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
           scoop install deploy\windows\scoop\corsarr.json
           corsarr version
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Windows service from this commit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:ProgramFiles 'corsarr-ci'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $env:CGO_ENABLED = '0'
+          go build -o "$dir\corsarr.exe" ./cmd/corsarr
+          $exe = "$dir\corsarr.exe"
+          & $exe service install; if ($LASTEXITCODE) { exit 1 }
+          & $exe service start; if ($LASTEXITCODE) { Get-EventLog -LogName Application -Source corsarr -Newest 20 | Format-List; exit 1 }
+          & $exe service status; if ($LASTEXITCODE) { exit 1 }
+          for ($i = 0; $i -lt 30; $i++) { try { Invoke-RestMethod http://127.0.0.1:8090/api/v1/health | Out-Null; break } catch { Start-Sleep 2 } }
+          & $exe healthcheck; if ($LASTEXITCODE) { exit 1 }
+          if (-not (Test-Path "$env:ProgramData\corsarr\data\corsarr.log")) { throw 'no log file in the data dir' }
+          & $exe service stop; if ($LASTEXITCODE) { exit 1 }
+          & $exe service uninstall; if ($LASTEXITCODE) { exit 1 }
+          & $exe service status; if ($LASTEXITCODE -ne 4) { throw 'service still installed' }
 
   image:
     runs-on: ubuntu-24.04
@@ -105,7 +150,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [docker, compose, helm, kubernetes, podman, packages]
+        target: [docker, compose, helm, kubernetes, podman, packages, proxmox]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0

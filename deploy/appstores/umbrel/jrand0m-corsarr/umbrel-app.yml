@@ -1,0 +1,29 @@
+manifestVersion: 1
+id: jrand0m-corsarr
+category: media
+name: corsarr
+version: "0.4.0"
+tagline: Media automation in one static binary
+icon: https://raw.githubusercontent.com/jrand0m/corsarr/master/deploy/appstores/icon.svg
+description: >-
+  corsarr searches your indexers for the movies, series and music you want, sends the best
+  release to your download client and files the result into your library, in one process
+  with one SQLite file.
+
+
+  Downloads and the library live in Umbrel's downloads storage, mounted at /media, so a
+  download client using the same storage gets hardlinked imports.
+releaseNotes: >-
+  See https://github.com/jrand0m/corsarr/releases
+developer: corsarr
+website: https://github.com/jrand0m/corsarr
+dependencies: []
+repo: https://github.com/jrand0m/corsarr
+support: https://github.com/jrand0m/corsarr/issues
+port: 8090
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: corsarr
+submission: https://github.com/jrand0m/corsarr
