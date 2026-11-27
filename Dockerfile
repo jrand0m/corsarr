@@ -66,9 +66,11 @@ COPY README.md LICENSE ./
 COPY deploy/corsarr.example.yml deploy/
 COPY deploy/systemd/ deploy/systemd/
 COPY deploy/packages/ deploy/packages/
-# file modes from the checkout depend on the umask; packages take them as they are
+# file modes and times from the checkout depend on the umask and the clock;
+# packages (the apk control scripts among them) take them as they are
 RUN find README.md LICENSE deploy -type d -exec chmod 0755 {} + \
  && find README.md LICENSE deploy -type f -exec chmod 0644 {} + \
+ && find README.md LICENSE deploy -exec touch -d "@$SOURCE_DATE_EPOCH" {} + \
  && go build -o /usr/local/bin/repro ./scripts/repro \
  && mkdir -p /dist \
  && for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do \
