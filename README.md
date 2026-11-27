@@ -135,6 +135,52 @@ Requests go through the same TV, movie and queue services as corsarr's own UI, s
 series here behaves exactly like adding it in the UI, shadow mode included. Only the endpoints
 these tools use are implemented; anything else under `/legacy` answers 404.
 
+## Connecting an AI assistant (MCP)
+
+corsarr speaks the [Model Context Protocol](https://modelcontextprotocol.io), so an AI
+assistant can answer "what's downloading?" or "is anything unhealthy?" and, when you allow it,
+request a movie, a show, an album or a single track. It is off until you switch it on (the
+section applies live):
+
+```yaml
+mcp:
+  enabled: true
+  scope: read          # read: only tools that change nothing; write: requests, searches, monitoring
+  # tools: [find_media, request_status, get_health]   # expose only these
+  # rateLimit: 60      # calls per minute per key; 0 = unlimited
+  # allowedOrigins: ["http://localhost:6274"]          # browser-based clients, e.g. MCP Inspector
+```
+
+**Over HTTP** (Streamable HTTP): point the client at `http://<host>:8090/mcp` (behind a base
+path, `/corsarr/mcp`) and send an API key as `Authorization: Bearer <key>` or `X-Api-Key`.
+Use the main API key, or issue a **read-only key** that can only call read tools:
+`GET /api/v1/auth/apikey/readonly` (created on first call; `POST …/readonly/rotate` replaces it,
+`DELETE /api/v1/auth/apikey/readonly` revokes it). The read-only key opens nothing but `/mcp`.
+
+**Over stdio** for a local agent: run `corsarr mcp stdio` with the same configuration as the
+server (for example `--configFile=/etc/corsarr/corsarr.yml`). While the server is running it
+relays to the server's endpoint with the stored API key; otherwise it runs corsarr in-process
+for the session. Nothing new listens on the network either way. A desktop client entry looks
+like:
+
+```json
+{ "mcpServers": { "corsarr": { "command": "corsarr", "args": ["mcp", "stdio", "--configFile=/etc/corsarr/corsarr.yml"] } } }
+```
+
+Tools: `find_media`, `request_movie`, `request_show`, `request_music` (artist, album or track —
+a track is requested as the album, EP or single that holds it), `request_book`,
+`request_status`, `cancel_request`, `search_library`, `get_item`, `list_wanted`,
+`get_calendar`, `get_history`, `get_health`, `search_releases` (preview, never grabs),
+`list_profiles`, `list_root_folders`, `set_monitored`, `start_search` and `rescan_item`.
+Resources: `corsarr://queue`, `corsarr://health` and `corsarr://item/{kind}/{id}`, with
+change notifications for subscribers.
+
+Every tool goes through the same services as the UI (a kind in shadow mode records decisions
+and grabs nothing; a disabled kind is refused with the reason). Tools that change anything are
+marked as such, so the client asks you first, and need `scope: write` plus the main key. Every
+call is recorded in History as `mcp.called` with the client name, tool, arguments (secrets
+redacted) and outcome. Lists are paged (50 items by default).
+
 ## Build from source
 
 Requirements: Go and Node.js (versions in `.tool-versions`) and [`just`](https://github.com/casey/just).
