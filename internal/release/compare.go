@@ -31,7 +31,8 @@ func (r Result) String() string {
 	return fmt.Sprintf("%-34s DIFFERS: %s", r.Name, r.Detail)
 }
 
-// CompareArchives compares every .tar.gz and .zip in two folders by name.
+// CompareArchives compares every release file (archives and Linux packages)
+// in two folders by name.
 func CompareArchives(a, b string) ([]Result, error) {
 	names, err := archiveNames(a, b)
 	if err != nil {
@@ -52,7 +53,7 @@ func archiveNames(dirs ...string) ([]string, error) {
 			return nil, err
 		}
 		for _, e := range entries {
-			if n := e.Name(); strings.HasSuffix(n, ".tar.gz") || strings.HasSuffix(n, ".zip") {
+			if n := e.Name(); isArchive(n) || isPackage(n) {
 				seen[n] = true
 			}
 		}
@@ -76,7 +77,16 @@ func compareArchive(name, a, b string) Result {
 	case bytes.Equal(ab, bb):
 		return Result{Name: name, Same: true}
 	}
+	if isPackage(name) {
+		return Result{Name: name, Detail: fmt.Sprintf("package bytes differ (%d vs %d bytes); diffoscope shows where", len(ab), len(bb))}
+	}
 	return Result{Name: name, Detail: firstEntryDiff(name, ab, bb)}
+}
+
+func isArchive(n string) bool { return strings.HasSuffix(n, ".tar.gz") || strings.HasSuffix(n, ".zip") }
+
+func isPackage(n string) bool {
+	return strings.HasSuffix(n, ".deb") || strings.HasSuffix(n, ".rpm") || strings.HasSuffix(n, ".apk")
 }
 
 // member is one archive entry reduced to what a difference can be in.

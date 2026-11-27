@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Reproducible release builds: build, compare and verify against what was published.
 #
-#   scripts/release.sh build <out-dir> [ref]   archives + image (OCI layout) for ref (default: the working tree)
+#   scripts/release.sh build <out-dir> [ref]   archives, packages + image (OCI layout) for ref (default: the working tree)
 #   scripts/release.sh compare <left> <right>  identical / first difference per artifact
 #   scripts/release.sh twice [ref]             build twice without cache and compare
 #   scripts/release.sh verify <tag>            rebuild a published release and compare with its downloads
@@ -22,8 +22,6 @@ BUILDER="corsarr-repro"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 REPO="${REPO:-jrand0m/corsarr}"
 IMAGE="${IMAGE:-ghcr.io/$REPO}"
-ARCHIVES=(corsarr-linux-amd64.tar.gz corsarr-linux-arm64.tar.gz corsarr-darwin-amd64.tar.gz
-  corsarr-darwin-arm64.tar.gz corsarr-windows-amd64.zip corsarr-windows-arm64.zip)
 
 top="$(cd "$(dirname "$0")/.." && pwd)"
 r() { for i in 1 2 3 4 5; do "$@" && return 0; echo "retry $i: $*" >&2; sleep $((i * 5)); done; return 1; }
@@ -118,8 +116,10 @@ verify() {
   git -C "$top" rev-parse --verify --quiet "refs/tags/$tag" >/dev/null || { echo "tag $tag not found; fetch it first" >&2; exit 1; }
   echo "== downloading $tag from github.com/$REPO" >&2
   mkdir -p "$work/published/archives" "$work/published/image"
-  for f in "${ARCHIVES[@]}" SHA256SUMS; do
-    r curl -fsSL -o "$work/published/archives/$f" "https://github.com/$REPO/releases/download/$tag/$f"
+  base="https://github.com/$REPO/releases/download/$tag"
+  r curl -fsSL -o "$work/published/archives/SHA256SUMS" "$base/SHA256SUMS"
+  for f in $(awk '{print $2}' "$work/published/archives/SHA256SUMS"); do
+    r curl -fsSL -o "$work/published/archives/$f" "$base/$f"
   done
   (cd "$work/published/archives" && sumcheck) || { echo "published files do not match their SHA256SUMS" >&2; exit 1; }
   r docker buildx imagetools inspect "$IMAGE:$tag" --format '{{json .Manifest}}' > "$work/published/image/image.json"

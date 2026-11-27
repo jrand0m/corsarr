@@ -25,6 +25,10 @@ COPY go.mod go.sum ./
 ARG GOPROXY
 RUN ok=; for i in 1 2 3 4 5; do go mod download && ok=1 && break; sleep $((i*10)); done; [ -n "$ok" ]
 
+# Packaging tool, pinned by version and verified against the Go checksum database
+FROM godeps AS tools
+RUN ok=; for i in 1 2 3 4 5; do go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.0 && ok=1 && break; sleep $((i*10)); done; [ -n "$ok" ]
+
 # UI bundle (platform independent)
 FROM uideps AS ui
 COPY ui/ ./
@@ -49,24 +53,40 @@ ARG DIRTY=false
 ARG SOURCE_DATE_EPOCH=0
 RUN scripts/gobuild.sh "$TARGETOS" "$TARGETARCH" /corsarr
 
-# The six release archives plus SHA256SUMS
+# The six release archives, Linux packages (.deb, .rpm, .apk for amd64 and
+# arm64; release versions only) and SHA256SUMS
 FROM gosrc AS pack
 ARG VERSION=dev
 ARG COMMIT=
 ARG TAG=
 ARG DIRTY=false
 ARG SOURCE_DATE_EPOCH=0
-COPY README.md LICENSE deploy/corsarr.example.yml /extra/
-RUN go build -o /usr/local/bin/repro ./scripts/repro \
+COPY --from=tools /go/bin/nfpm /usr/local/bin/nfpm
+COPY README.md LICENSE ./
+COPY deploy/corsarr.example.yml deploy/
+COPY deploy/systemd/ deploy/systemd/
+COPY deploy/packages/ deploy/packages/
+# file modes from the checkout depend on the umask; packages take them as they are
+RUN find README.md LICENSE deploy -type d -exec chmod 0755 {} + \
+ && find README.md LICENSE deploy -type f -exec chmod 0644 {} + \
+ && go build -o /usr/local/bin/repro ./scripts/repro \
  && mkdir -p /dist \
  && for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do \
       os=${t%/*} arch=${t#*/} name="corsarr-${t%/*}-${t#*/}" ext= fmt=tar.gz; \
       [ "$os" = windows ] && ext=.exe fmt=zip; \
-      mkdir -p "/stage/$name" && cp /extra/* "/stage/$name/" \
+      mkdir -p "/stage/$name" && cp README.md LICENSE deploy/corsarr.example.yml "/stage/$name/" \
       && scripts/gobuild.sh "$os" "$arch" "/stage/$name/corsarr$ext" \
       && repro pack "/stage/$name" "/dist/$name.$fmt" || exit 1; \
     done \
- && cd /dist && sha256sum corsarr-* > SHA256SUMS
+ && case "$VERSION" in v[0-9]*) \
+      for arch in amd64 arm64; do \
+        install -D -m 0755 "/stage/corsarr-linux-$arch/corsarr" dist/package/corsarr \
+        && for p in deb rpm apk; do \
+             VERSION="${VERSION#v}" ARCH=$arch nfpm package --config deploy/packages/nfpm.yaml --packager $p --target /dist/ || exit 1; \
+           done; \
+      done ;; \
+    esac \
+ && cd /dist && sha256sum corsarr[-_]* > SHA256SUMS
 
 FROM scratch AS archives
 COPY --from=pack /dist/ /

@@ -42,6 +42,20 @@ func TestCompareArchives(t *testing.T) {
 	}
 }
 
+func TestComparePackages(t *testing.T) {
+	a, b := t.TempDir(), t.TempDir()
+	for _, n := range []string{"corsarr_1.0.0_amd64.deb", "corsarr-1.0.0-1.x86_64.rpm", "corsarr_1.0.0_x86_64.apk", "notes.txt"} {
+		must(t, os.WriteFile(filepath.Join(a, n), []byte("same"), 0o644))
+		must(t, os.WriteFile(filepath.Join(b, n), []byte("same"), 0o644))
+	}
+	must(t, os.WriteFile(filepath.Join(b, "corsarr_1.0.0_amd64.deb"), []byte("other!"), 0o644))
+	got, err := CompareArchives(a, b)
+	must(t, err)
+	if len(got) != 3 || !got[0].Same || !got[2].Same || got[1].Detail !="package bytes differ (4 vs 6 bytes); diffoscope shows where" {
+		t.Fatalf("%v", got)
+	}
+}
+
 func TestCompareArchiveDetails(t *testing.T) {
 	a, b := t.TempDir(), t.TempDir()
 	packInto(t, a, nil)
