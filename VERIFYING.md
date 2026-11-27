@@ -134,7 +134,8 @@ just verify compare dir1 dir2     # compare two build outputs
 ### With plain docker
 
 The same steps without just or Go. Use the BuildKit image named in the release notes (it
-is also `BUILDKIT_IMAGE` in `scripts/release.sh` at that tag).
+is also the `FROM` line of `build/buildkit/Dockerfile` at that tag; older tags set it as
+`BUILDKIT_IMAGE` in `scripts/release.sh`).
 
 ```bash
 git clone https://github.com/jrand0m/corsarr && cd corsarr

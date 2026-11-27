@@ -25,7 +25,9 @@ COPY go.mod go.sum ./
 ARG GOPROXY
 RUN ok=; for i in 1 2 3 4 5; do go mod download && ok=1 && break; sleep $((i*10)); done; [ -n "$ok" ]
 
-# Packaging tool, pinned by version and verified against the Go checksum database
+# Packaging tool, pinned by version and verified against the Go checksum database;
+# `just release deps` checks it against NFPM_VERSION in the deploy-samples workflow
+# and the newest release
 FROM godeps AS tools
 RUN ok=; for i in 1 2 3 4 5; do go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.0 && ok=1 && break; sleep $((i*10)); done; [ -n "$ok" ]
 

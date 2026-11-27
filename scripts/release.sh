@@ -5,8 +5,10 @@
 #   scripts/release.sh compare <left> <right>  identical / first difference per artifact
 #   scripts/release.sh twice [ref]             build twice without cache and compare
 #   scripts/release.sh verify <tag>            rebuild a published release and compare with its downloads
+#   scripts/release.sh deps                    build tool pins: in agreement everywhere, and the newest releases
 #
-# Everything is built by the Dockerfile inside a BuildKit pinned by digest, so
+# Everything is built by the Dockerfile inside a BuildKit pinned by digest
+# (build/buildkit/Dockerfile, kept current by dependency updates), so
 # the only host requirements are bash, git, docker with buildx, curl and Go (for
 # the comparison report). Environment:
 #   PLATFORMS  image platforms (default linux/amd64,linux/arm64)
@@ -17,13 +19,15 @@
 #              reach it (for example http://host.docker.internal:3128)
 set -euo pipefail
 
-BUILDKIT_IMAGE="moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe"
-BUILDER="corsarr-repro"
+top="$(cd "$(dirname "$0")/.." && pwd)"
+BUILDKIT_IMAGE="$(sed -n 's/^FROM //p' "$top/build/buildkit/Dockerfile")"
+[[ "$BUILDKIT_IMAGE" == moby/buildkit:*@sha256:* ]] || { echo "no pinned BuildKit in build/buildkit/Dockerfile" >&2; exit 1; }
+# one builder per BuildKit pin, so a new pin never reuses an old builder
+BUILDER="corsarr-repro-$(printf '%s' "${BUILDKIT_IMAGE##*sha256:}" | cut -c1-12)"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 REPO="${REPO:-jrand0m/corsarr}"
 IMAGE="${IMAGE:-ghcr.io/$REPO}"
 
-top="$(cd "$(dirname "$0")/.." && pwd)"
 r() { for i in 1 2 3 4 5; do "$@" && return 0; echo "retry $i: $*" >&2; sleep $((i * 5)); done; return 1; }
 gorun() { if command -v mise >/dev/null 2>&1; then (cd "$top" && mise exec -- go "$@"); else (cd "$top" && go "$@"); fi; }
 
@@ -129,12 +133,44 @@ verify() {
   compare "$work/rebuilt" "$work/published"
 }
 
+# latest <owner/name>: the newest release tag of a GitHub project.
+latest() {
+  local auth=()
+  [ -n "${GITHUB_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
+  r curl -fsSL ${auth[@]+"${auth[@]}"} "https://api.github.com/repos/$1/releases/latest" |
+    sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p'
+}
+
+# deps: the build tools dependency updates cannot follow (nfpm is installed
+# with go install) must agree wherever they are pinned; every pin is compared
+# with the newest release. Exits 1 when a pin disagrees or is behind.
+deps() {
+  local status=0 nfpm_docker nfpm_ci nfpm_new bk bk_new
+  nfpm_docker=$(sed -n 's|.*goreleaser/nfpm/v2/cmd/nfpm@\(v[0-9.]*\).*|\1|p' "$top/Dockerfile" | head -1)
+  nfpm_ci=$(sed -n 's/^ *NFPM_VERSION: *\(v[0-9.]*\).*/\1/p' "$top/.github/workflows/deploy-samples.yml")
+  if [ -z "$nfpm_docker" ] || [ "$nfpm_docker" != "$nfpm_ci" ]; then
+    echo "nfpm: Dockerfile pins '$nfpm_docker', deploy-samples.yml pins '$nfpm_ci'; they must agree"; status=1
+  fi
+  nfpm_new=$(latest goreleaser/nfpm)
+  bk=${BUILDKIT_IMAGE#moby/buildkit:}; bk=${bk%@*}
+  bk_new=$(latest moby/buildkit)
+  report() { # name pinned newest where
+    if [ -z "$3" ]; then echo "$1: pinned $2, newest unknown (GitHub unreachable)"; status=1
+    elif [ "$2" = "$3" ]; then echo "$1: $2 is current"
+    else echo "$1: pinned $2, newest $3 — update $4"; status=1; fi
+  }
+  report nfpm "$nfpm_docker" "$nfpm_new" "Dockerfile and NFPM_VERSION in .github/workflows/deploy-samples.yml"
+  report buildkit "$bk" "$bk_new" "build/buildkit/Dockerfile (tag and digest; dependency updates propose it too)"
+  return $status
+}
+
 cmd=${1:-}; shift || true
 case "$cmd" in
   build) build "${1:-}" "${2:-}" ;;
   compare) compare "$@" ;;
   twice) twice "${1:-}" ;;
   verify) verify "${1:-}" ;;
+  deps) deps ;;
   env) provenance "$top" ;;
-  *) echo "usage: release.sh build|compare|twice|verify|env …" >&2; exit 2 ;;
+  *) echo "usage: release.sh build|compare|twice|verify|deps|env …" >&2; exit 2 ;;
 esac
