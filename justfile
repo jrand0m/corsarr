@@ -137,3 +137,13 @@ lint target="all":
 # just deploy [validate|smoke] [all|<target>]   e.g. just deploy validate helm, just deploy smoke compose
 deploy action="validate" target="all":
     {{x}} scripts/deploy-samples.sh {{action}} {{target}}
+
+# ── release ──────────────────────────────────────────────────────────────────
+# just release pins <vX.Y.Z> [SHA256SUMS]   move every deploy/ sample to a published release
+release action version sums="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{action}}" in
+      pins) scripts/pins.sh "{{version}}" {{sums}} ;;
+      *) echo "unknown action {{action}} (pins)"; exit 2 ;;
+    esac
