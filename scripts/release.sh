@@ -13,6 +13,7 @@
 #   REPO       owner/name on GitHub (default jrand0m/corsarr)
 #   IMAGE      published image (default ghcr.io/$REPO)
 #   GOPROXY    Go module mirror for the build (go.sum still pins every module)
+#   HTTP_PROXY, HTTPS_PROXY, NO_PROXY   passed to the build's downloads
 set -euo pipefail
 
 BUILDKIT_IMAGE="moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe"
@@ -63,6 +64,9 @@ build() (
   args=()
   while IFS= read -r line; do args+=(--build-arg "$line"); done < <(provenance "$src")
   [ -z "${GOPROXY:-}" ] || args+=(--build-arg "GOPROXY=$GOPROXY")
+  # proxy settings are predefined build args: they reach downloads but neither
+  # the cache keys nor the output
+  for p in HTTP_PROXY HTTPS_PROXY NO_PROXY; do [ -z "${!p:-}" ] || args+=(--build-arg "$p=${!p}"); done
   builder
   # NO_CACHE: rebuild everything except the downloaded dependencies (pinned by
   # lockfile and go.sum); NO_CACHE=all drops those too.
