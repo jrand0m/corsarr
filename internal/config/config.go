@@ -76,6 +76,8 @@ type Config struct {
 	RuleModes map[string]string
 	// Legacy maps a compatibility API app (sonarr, radarr, …) → enabled.
 	Legacy map[string]bool
+	// MCP is the assistant endpoint's settings.
+	MCP MCP
 	// Instances maps section (indexers, downloadClients, …) → key → instance.
 	Instances map[string]map[domain.ObjectKey]Instance
 	Source    Source
@@ -250,6 +252,7 @@ func build(s *Schema, t tree) *Config {
 	}
 	c.RuleModes = ruleModes(t)
 	c.Legacy = legacyApps(t)
+	c.MCP = mcpOf(t)
 	return c
 }
 
@@ -270,6 +273,40 @@ func legacyApps(t tree) map[string]bool {
 	for app, v := range apps {
 		on, _ := v.(tree)["enabled"].(bool)
 		out[app] = on
+	}
+	return out
+}
+
+// MCP is the mcp section.
+type MCP struct {
+	Enabled        bool
+	Scope          string // read | write
+	Tools          []string
+	RateLimit      int
+	AllowedOrigins []string
+}
+
+func mcpOf(t tree) MCP {
+	m, _ := t["mcp"].(tree)
+	out := MCP{Scope: MCPScopeRead}
+	out.Enabled, _ = m["enabled"].(bool)
+	if s, ok := m["scope"].(string); ok {
+		out.Scope = s
+	}
+	if n, ok := m["rateLimit"].(int64); ok {
+		out.RateLimit = int(n)
+	}
+	out.Tools, out.AllowedOrigins = stringList(m["tools"]), stringList(m["allowedOrigins"])
+	return out
+}
+
+func stringList(v any) []string {
+	list, _ := v.([]any)
+	out := make([]string, 0, len(list))
+	for _, x := range list {
+		if s, ok := x.(string); ok {
+			out = append(out, s)
+		}
 	}
 	return out
 }

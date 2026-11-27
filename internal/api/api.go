@@ -86,6 +86,27 @@ type KeyMounter interface {
 	HandleAPIKey(pattern string, h, deny http.HandlerFunc)
 }
 
+// KeyScope is what an API key presented by a client may do.
+type KeyScope int
+
+const (
+	ScopeNone KeyScope = iota // no valid key
+	ScopeRead                 // the read-only key
+	ScopeFull                 // the API key
+)
+
+// ScopedMounter is implemented by the mounter modules receive: routes outside
+// /api/v1 that authenticate by key (header X-Api-Key or a Bearer token, never
+// the query) and do their own refusal; h sees the key's scope, ScopeNone
+// included.
+type ScopedMounter interface {
+	HandleScoped(pattern string, h func(w http.ResponseWriter, r *http.Request, scope KeyScope))
+}
+
+func (m authedMounter) HandleScoped(pattern string, h func(http.ResponseWriter, *http.Request, KeyScope)) {
+	m.s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) { h(w, r, m.s.KeyScope(r)) })
+}
+
 type authedMounter struct{ s *Server }
 
 func (m authedMounter) HandleAPIKey(pattern string, h, deny http.HandlerFunc) {
@@ -110,7 +131,8 @@ type Server struct {
 	d      Deps
 	mux    *http.ServeMux
 	apiKey atomic.Pointer[string]
-	paths  []string // module paths for the OpenAPI index
+	roKey  atomic.Pointer[string] // read-only key; "" when none is issued
+	paths  []string               // module paths for the OpenAPI index
 }
 
 // New builds the handler tree. The API key must already exist (EnsureAPIKey).
@@ -127,6 +149,9 @@ func New(ctx context.Context, d Deps) (*Server, error) {
 		return nil, errors.Join(errors.New("api key missing; call EnsureAPIKey first"), err)
 	}
 	s.apiKey.Store(&key)
+	if err := s.loadReadOnlyKey(ctx); err != nil {
+		return nil, err
+	}
 	s.routes()
 	return s, nil
 }
@@ -142,6 +167,9 @@ func (s *Server) routes() {
 	authed := func(pattern string, h http.HandlerFunc) { s.mux.Handle(pattern, s.requireAuth(h)) }
 	authed("GET /api/v1/auth/apikey", s.getAPIKey)
 	authed("POST /api/v1/auth/apikey/rotate", s.rotateAPIKey)
+	authed("GET /api/v1/auth/apikey/readonly", s.getReadOnlyKey)
+	authed("POST /api/v1/auth/apikey/readonly/rotate", s.rotateReadOnlyKey)
+	authed("DELETE /api/v1/auth/apikey/readonly", s.revokeReadOnlyKey)
 	authed("GET /api/v1/system/status", s.status)
 	authed("GET /api/v1/config/schema", s.configSchema)
 	authed("GET /api/v1/config/export", s.configExport)

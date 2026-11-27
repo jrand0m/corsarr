@@ -42,6 +42,7 @@ const (
 	EvCommandUpdated    EventType = "command.updated"
 	EvMigrationProgress EventType = "migration.progress"
 	EvMigrationComplete EventType = "migration.run_completed"
+	EvMCPCalled         EventType = "mcp.called" // an assistant called a tool over MCP (audit)
 )
 
 // eventFlags records which events go to History (H) and SSE (S).
@@ -59,6 +60,7 @@ var eventFlags = map[EventType]struct{ History, Stream bool }{
 	EvConfigDrifted: {true, true}, EvMediaKindMode: {true, true}, EvPluginLoaded: {false, true},
 	EvJobUpdated: {false, true}, EvCommandUpdated: {false, true},
 	EvMigrationProgress: {false, true}, EvMigrationComplete: {true, true},
+	EvMCPCalled: {true, false},
 }
 
 // Persisted reports whether the event belongs in History.
