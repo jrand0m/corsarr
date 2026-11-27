@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -43,6 +44,10 @@ type fakeQB struct {
 	noQueueing bool
 	logins     int
 	prefs      map[string]any // app/preferences; nil answers 404
+	dlLimit    int64          // bytes/s
+	upLimit    int64
+	alt        bool
+	trackers   map[string][]map[string]any
 }
 
 func newFake(t *testing.T, version string) *fakeQB {
@@ -151,8 +156,60 @@ func (f *fakeQB) route(w http.ResponseWriter, r *http.Request, path string) {
 			w.WriteHeader(http.StatusConflict)
 		}
 	default:
+		f.transfer(w, r, path)
+	}
+}
+
+// transfer serves the global transfer, sync and per-torrent maintenance calls.
+func (f *fakeQB) transfer(w http.ResponseWriter, r *http.Request, path string) {
+	_ = r.ParseForm()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	switch path {
+	case "transfer/downloadLimit":
+		_, _ = w.Write([]byte(strconv.FormatInt(f.dlLimit, 10)))
+	case "transfer/uploadLimit":
+		_, _ = w.Write([]byte(strconv.FormatInt(f.upLimit, 10)))
+	case "transfer/setDownloadLimit":
+		f.dlLimit, _ = strconv.ParseInt(r.PostForm.Get("limit"), 10, 64)
+	case "transfer/setUploadLimit":
+		f.upLimit, _ = strconv.ParseInt(r.PostForm.Get("limit"), 10, 64)
+	case "transfer/speedLimitsMode":
+		_, _ = w.Write([]byte(map[bool]string{true: "1", false: "0"}[f.alt]))
+	case "transfer/toggleSpeedLimitsMode":
+		f.alt = !f.alt
+	case "torrents/recheck", "torrents/reannounce":
+		f.calls = append(f.calls, path+"="+r.PostForm.Get("hashes"))
+	case "torrents/setCategory":
+		f.setCategory(w, r)
+	case "torrents/trackers":
+		_ = json.NewEncoder(w).Encode(f.trackers[r.URL.Query().Get("hash")])
+	case "sync/maindata":
+		f.mainData(w)
+	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+func (f *fakeQB) setCategory(w http.ResponseWriter, r *http.Request) {
+	cat := r.PostForm.Get("category")
+	if _, ok := f.categories[cat]; !ok && cat != "" {
+		w.WriteHeader(http.StatusConflict)
+		return
+	}
+	if ti := f.torrents[r.PostForm.Get("hashes")]; ti != nil {
+		ti["category"] = cat
+	}
+}
+
+func (f *fakeQB) mainData(w http.ResponseWriter) {
+	torrents := map[string]any{}
+	for h, ti := range f.torrents {
+		torrents[h] = map[string]any{"state": ti["state"]}
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"torrents": torrents, "server_state": map[string]any{
+		"dl_info_speed": 2048, "up_info_speed": 1024, "free_space_on_disk": 5 << 30,
+		"dl_rate_limit": f.dlLimit, "up_rate_limit": f.upLimit, "use_alt_speed_limits": f.alt}})
 }
 
 func (f *fakeQB) preferences(w http.ResponseWriter) {

@@ -29,7 +29,7 @@ var defaultCategories = map[string]any{"tv": "tv", "movie": "movies", "music": "
 var manifest = plugin.Manifest{
 	ID: ID, Kind: plugin.KindDownloader, Version: "1.0.0", APIVersion: plugin.APIVersion,
 	Name: "qBittorrent", Delivery: "builtin",
-	Capabilities: []string{"torrent", "magnet", "categories", "priority", "pause"},
+	Capabilities: []string{"torrent", "magnet", "categories", "priority", "pause", "pause-all", "speed-limits", "alt-speed", "recheck", "reannounce", "set-category", "stats", "trackers"},
 	Settings: []plugin.Field{
 		{Key: "url", Type: plugin.FieldURL, Label: "Web UI address", Required: true,
 			Help: "Address of the qBittorrent Web UI, for example http://qbittorrent:8080. A reverse-proxy sub-path is allowed."},
