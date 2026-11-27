@@ -21,11 +21,11 @@ jobs:
   validate:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
       - name: Install validators
         run: |
           set -euo pipefail
@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-24.04
     container: archlinux:latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: namcap
         run: |
           pacman -Syu --noconfirm --needed namcap
@@ -54,7 +54,7 @@ jobs:
   validate-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: launchd plist and Homebrew formula
         run: |
           set -euo pipefail
@@ -70,7 +70,7 @@ jobs:
   validate-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Scoop install from the sample manifest
         shell: pwsh
         run: |
@@ -84,16 +84,16 @@ jobs:
   image:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
       - name: Build the image from this commit
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64
           tags: corsarr:ci
           outputs: type=docker,dest=/tmp/corsarr-image.tar
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: corsarr-image
           path: /tmp/corsarr-image.tar
@@ -107,12 +107,12 @@ jobs:
       matrix:
         target: [docker, compose, helm, kubernetes, podman, packages]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: azure/setup-helm@v4
-      - uses: actions/download-artifact@v4
+      - uses: azure/setup-helm@v5
+      - uses: actions/download-artifact@v8
         with:
           name: corsarr-image
           path: /tmp
