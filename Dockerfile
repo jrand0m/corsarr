@@ -5,7 +5,7 @@
 # images by digest, Node and Go by version, dependencies by lockfile and go.sum.
 # The UI is built once and Go cross-compiles on the build machine, so no
 # emulation is needed. Two builds of one commit with the same build args give
-# identical bytes; docs/verifying.md shows how to check a release.
+# identical bytes; VERIFYING.md shows how to check a release.
 #
 # Build args (scripts/release.sh fills them from git):
 #   VERSION, COMMIT, TAG, DIRTY   provenance stamped into the binary

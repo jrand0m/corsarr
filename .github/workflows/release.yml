@@ -7,7 +7,7 @@ name: release
 # build-provenance attestation per archive, and the multi-arch image with a
 # keyless cosign signature, provenance and SBOM attestations (release tags also
 # move :latest and :stable). Build jobs have no secrets and read-only access;
-# publishing uses short-lived OIDC credentials. docs/verifying.md explains how
+# publishing uses short-lived OIDC credentials. VERIFYING.md explains how
 # to check any of it.
 on:
   push:
@@ -240,7 +240,7 @@ jobs:
             echo "just verify release $GITHUB_REF_NAME   # rebuild from source and compare"
             echo '```'
             echo
-            echo "Details: https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/docs/verifying.md"
+            echo "Details: https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/VERIFYING.md"
             echo
           } > notes.md
           cd build/archives

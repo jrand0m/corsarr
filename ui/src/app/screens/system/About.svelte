@@ -29,7 +29,7 @@
   {/if}
   <p class="note">
     Every release can be rebuilt from its tag and compared byte for byte with the published files.
-    <Link external href="https://github.com/jrand0m/corsarr/blob/master/docs/verifying.md">How to verify a release</Link>
+    <Link external href="https://github.com/jrand0m/corsarr/blob/master/VERIFYING.md">How to verify a release</Link>
   </p>
 </section>
 
