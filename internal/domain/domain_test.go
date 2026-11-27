@@ -50,6 +50,8 @@ func TestCheckTransition(t *testing.T) {
 		{StateImported, StateDownloading, ActorDownloader, false},
 		{StateRemoved, StateQueued, ActorUser, false},
 		{StateImported, StateFailed, ActorUser, false},
+		{StateFailed, StateImportPending, ActorUser, true},
+		{StateFailed, StateImportPending, ActorImport, false},
 	}
 	for _, c := range cases {
 		err := CheckTransition(c.from, c.to, c.by)

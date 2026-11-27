@@ -216,8 +216,8 @@ mcp:
 #     # The full API key from the SABnzbd general settings (not the NZB key). Give the value,
 #     # ${env:NAME} or ${file:/path}.
 #     apiKey:
-#     # SABnzbd category used for each media kind (movie, tv, music, book). The categories must
-#     # exist in SABnzbd.
+#     # SABnzbd category used for each media kind (movie, tv, music, book). A missing category is
+#     # created in SABnzbd.
 #     categories:
 #       book: books
 #       movie: movies

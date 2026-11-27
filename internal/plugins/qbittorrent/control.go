@@ -63,6 +63,33 @@ func (c *Client) SetPriority(ctx context.Context, id string, p plugin.Priority) 
 	return err
 }
 
+var _ plugin.PriorityLeveler = (*Client)(nil)
+
+// levelMoves is where each priority level puts a torrent. qBittorrent has no
+// per-torrent priority level (its file priorities only choose which files to
+// fetch), so levels map onto the queue and force start: force starts the
+// torrent now, ahead of the queue limits; high and low clear force start and
+// move it to the top or bottom of the queue; normal only clears force start
+// and keeps the position.
+var levelMoves = map[plugin.Priority]plugin.Priority{
+	plugin.PrioHigh: plugin.PrioTop, plugin.PrioNormal: "", plugin.PrioLow: plugin.PrioBottom,
+}
+
+// SetPriorityLevel sets a torrent's level (see levelMoves). High and low need
+// torrent queueing enabled in qBittorrent.
+func (c *Client) SetPriorityLevel(ctx context.Context, id string, level plugin.Priority) error {
+	move, ok := levelMoves[level]
+	if !ok && level != plugin.PrioForce {
+		return plugin.Errorf(plugin.ClassConfig, "unknown priority level %q", level)
+	}
+	form := hashes(id)
+	form.Set("value", strconv.FormatBool(level == plugin.PrioForce))
+	if _, err := c.postForm(ctx, "torrents/setForceStart", form); err != nil || move == "" {
+		return err
+	}
+	return c.SetPriority(ctx, id, move)
+}
+
 type categoryInfo struct {
 	SavePath string `json:"savePath"`
 }

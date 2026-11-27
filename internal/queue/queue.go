@@ -92,10 +92,13 @@ type Deps struct {
 	// TestClient self-tests one downloader and records its health; nil = the
 	// plugin's own Test.
 	TestClient func(ctx context.Context, key domain.ObjectKey) error
-	FastPoll   time.Duration
-	SlowPoll   time.Duration
-	Now        func() time.Time
-	Log        *slog.Logger
+	// PayloadExists reports whether a download's payload is still on disk;
+	// nil = look at the local file system.
+	PayloadExists func(path string) bool
+	FastPoll      time.Duration
+	SlowPoll      time.Duration
+	Now           func() time.Time
+	Log           *slog.Logger
 }
 
 // Service is the queue module.

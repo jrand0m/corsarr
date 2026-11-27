@@ -1,13 +1,17 @@
 # Keeps every pin current: action commits, base image digests, Go modules and UI packages.
+# Build tools installed with `go install` (nfpm) are outside its reach: `just release deps`
+# checks them.
 version: 2
 updates:
+  # every workflow in .github/workflows; actions are pinned by commit with a version comment
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
     groups:
       actions: { patterns: ["*"] }
+  # the image's base images (Dockerfile) and the release BuildKit (build/buildkit/Dockerfile)
   - package-ecosystem: docker
-    directory: /
+    directories: [/, /build/buildkit]
     schedule: { interval: weekly }
   - package-ecosystem: gomod
     directory: /

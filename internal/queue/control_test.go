@@ -34,7 +34,10 @@ func (c *capDL) SetSpeedLimits(_ context.Context, l plugin.SpeedLimits) error {
 func (c *capDL) AltSpeed(context.Context) (bool, error)       { return c.alt, c.opErr }
 func (c *capDL) SetAltSpeed(_ context.Context, on bool) error { c.alt = on; return c.op("alt") }
 func (c *capDL) Recheck(context.Context, string) error        { return c.op("recheck") }
-func (c *capDL) Reannounce(context.Context, string) error     { return c.op("reannounce") }
+func (c *capDL) SetPriorityLevel(_ context.Context, _ string, l plugin.Priority) error {
+	return c.op("level:" + string(l))
+}
+func (c *capDL) Reannounce(context.Context, string) error { return c.op("reannounce") }
 func (c *capDL) SetCategory(_ context.Context, _, cat string) error {
 	return c.op("category:" + cat)
 }
@@ -102,6 +105,71 @@ func TestPerDownloadControl(t *testing.T) {
 	}
 }
 
+func TestPriorityMovesAndLevels(t *testing.T) {
+	e, c, srv := controlEnv(t)
+	d := e.grab(t, "aaa")
+	p := "/api/v1/queue/" + strconv.FormatInt(d.ID, 10) + "/priority"
+	run(t, srv, []step{
+		{"POST", p, `{"priority":"top"}`, 200, ""},
+		{"POST", p, `{"priority":"force"}`, 200, ""},
+		{"POST", p, `{"priority":"sideways"}`, 400, "unknown priority"},
+	})
+	if strings.Join(c.ops, ",") != "prio:top,level:force" {
+		t.Fatalf("ops %v", c.ops)
+	}
+	e.svc.d.Plugins = &plugins{ix: e.ix, dls: []Downloader{{Key: "qb", Impl: e.dl}}} // no levels
+	run(t, srv, []step{{"POST", p, `{"priority":"high"}`, 501, "unsupported"}})
+}
+
+// failImport walks a finished download through a failed import.
+func failImport(t *testing.T, e *env, id int64) {
+	t.Helper()
+	for _, step := range []struct {
+		to domain.DownloadState
+		by domain.Actor
+	}{{domain.StateCompleted, domain.ActorDownloader}, {domain.StateImportPending, domain.ActorImport},
+		{domain.StateImporting, domain.ActorImport}, {domain.StateFailed, domain.ActorImport}} {
+		if err := e.svc.Transition(ctx, id, step.to, step.by, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestRetryImportAfterAFailedImport(t *testing.T) {
+	e, _, srv := controlEnv(t)
+	d := e.grab(t, "aaa")
+	d.ContentPath = "/dl/Example"
+	if err := e.st.Queue().Save(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	failImport(t, e, d.ID)
+	kept := false
+	e.svc.d.PayloadExists = func(path string) bool { return kept && path == "/dl/Example" }
+	p := "/api/v1/queue/" + strconv.FormatInt(d.ID, 10) + "/retry-import"
+	run(t, srv, []step{{"POST", p, "", 409, "not_importable"}}) // the payload is gone
+	kept = true
+	before := len(e.rec.Of(domain.EvDownloadCompleted))
+	run(t, srv, []step{{"POST", p, "", 200, `"state":"import-pending"`}})
+	if len(e.rec.Of(domain.EvDownloadCompleted)) != before+1 {
+		t.Fatal("retry import must hand the download to the import")
+	}
+	if got := states(e.rec); got[len(got)-1] != "failed>import-pending" {
+		t.Fatalf("transitions %v", got)
+	}
+
+	never := e.grab(t, "bbb") // failed before it finished: nothing to import
+	if err := e.svc.Transition(ctx, never.ID, domain.StateFailed, domain.ActorUser, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.RetryImport(ctx, never.ID); !errors.Is(err, ErrNotImportable) {
+		t.Fatal(err)
+	}
+	e.svc.d.PayloadExists = nil // the real file system: the path does not exist
+	if e.svc.payloadKept(d) {
+		t.Fatal("a missing path counts as kept")
+	}
+}
+
 func TestMissingCapabilityIsUnsupported(t *testing.T) {
 	e, _, srv := controlEnv(t)
 	d := e.grab(t, "aaa")
@@ -141,7 +209,7 @@ func TestPerClientControl(t *testing.T) {
 	e, c, srv := controlEnv(t)
 	run(t, srv, []step{
 		{"GET", "/api/v1/downloaders", "", 200, `"key":"plain"`},
-		{"GET", "/api/v1/downloaders/qb", "", 200, `"capabilities":["files","trackers","pause-all","speed-limits","recheck","reannounce","set-category","stats"]`},
+		{"GET", "/api/v1/downloaders/qb", "", 200, `"capabilities":["files","priority-levels","trackers","pause-all","speed-limits","recheck","reannounce","set-category","stats"]`},
 		{"POST", "/api/v1/downloaders/qb/pause-all", "", 200, `"paused":true`},
 		{"POST", "/api/v1/downloaders/qb/resume-all", "", 200, `"paused":false`},
 		{"POST", "/api/v1/downloaders/qb/speed-limits", `{"downKiB":500,"upKiB":50}`, 200, `"downKiB":500`},

@@ -178,8 +178,8 @@ func (f *fakeQB) transfer(w http.ResponseWriter, r *http.Request, path string) {
 		_, _ = w.Write([]byte(map[bool]string{true: "1", false: "0"}[f.alt]))
 	case "transfer/toggleSpeedLimitsMode":
 		f.alt = !f.alt
-	case "torrents/recheck", "torrents/reannounce":
-		f.calls = append(f.calls, path+"="+r.PostForm.Get("hashes"))
+	case "torrents/recheck", "torrents/reannounce", "torrents/setForceStart":
+		f.calls = append(f.calls, path+"="+r.PostForm.Get("hashes")+r.PostForm.Get("value"))
 	case "torrents/setCategory":
 		f.setCategory(w, r)
 	case "torrents/trackers":

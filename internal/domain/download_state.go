@@ -48,6 +48,8 @@ var transitions = map[edge][]Actor{
 	{StateImporting, StateImported}:      {ActorImport},
 	{StateImporting, StateImportBlocked}: {ActorImport},
 	{StateImporting, StateFailed}:        {ActorImport},
+	// a user retries the import of a finished download whose import failed
+	{StateFailed, StateImportPending}: {ActorUser},
 }
 
 // failable states may move to failed or removed by downloader, automation,

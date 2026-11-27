@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/plugin"
@@ -18,7 +19,7 @@ var (
 	// ErrUnknownClient: no configured downloader has this key.
 	ErrUnknownClient = errors.New("no downloader with this key")
 	// ErrNotImportable: the download is not finished, or already imported.
-	ErrNotImportable = errors.New("only a finished download waiting for or held back from its import can be imported again")
+	ErrNotImportable = errors.New("only a finished download waiting for its import, held back from it, or whose import failed while its files are still there can be imported again")
 )
 
 // unsupported names the capability a client lacks.
@@ -80,10 +81,22 @@ func (s *Service) Resume(ctx context.Context, id int64) error {
 	return s.client(ctx, id, clientOp{name: "resume", run: func(c plugin.Downloader, cid string) error { return c.Resume(ctx, cid) }}, nil)
 }
 
-// SetPriority moves a download in its client's queue.
+// SetPriority moves a download in its client's queue (top, up, down,
+// bottom) or sets its priority level (low, normal, high, force) where the
+// client has levels.
 func (s *Service) SetPriority(ctx context.Context, id int64, p plugin.Priority) error {
-	return s.client(ctx, id, clientOp{name: "priority", args: map[string]any{"priority": p},
-		run: func(c plugin.Downloader, cid string) error { return c.SetPriority(ctx, cid, p) }}, nil)
+	if !p.IsMove() && !p.IsLevel() {
+		return plugin.Errorf(plugin.ClassConfig, "unknown priority %q: use top, up, down, bottom, low, normal, high or force", p)
+	}
+	op := clientOp{name: "priority", args: map[string]any{"priority": p},
+		run: func(c plugin.Downloader, cid string) error { return c.SetPriority(ctx, cid, p) }}
+	if !p.IsLevel() {
+		return s.client(ctx, id, op, nil)
+	}
+	op.run = func(c plugin.Downloader, cid string) error {
+		return c.(plugin.PriorityLeveler).SetPriorityLevel(ctx, cid, p)
+	}
+	return s.client(ctx, id, op, is[plugin.PriorityLeveler])
 }
 
 // Recheck verifies a download's data again.
@@ -121,21 +134,51 @@ func (s *Service) setCategory(ctx context.Context, id int64, category *string) e
 }
 
 // RetryImport hands a finished download back to the import: one that waits
-// for it, or one the import held back. A held download stays held.
+// for it, one the import held back, or one that failed after it finished
+// while its payload is still on disk (it moves back to import-pending). A held
+// download stays held.
 func (s *Service) RetryImport(ctx context.Context, id int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	d, err := s.load(ctx, id)
 	if err != nil {
 		return err
 	}
-	if !importable[d.State] && d.State != domain.StateImportBlocked {
-		return fmt.Errorf("%w (download %d is %s)", ErrNotImportable, id, d.State)
-	}
-	if d.OnHold() {
-		return fmt.Errorf("%w: %d", ErrHeld, id)
-	}
-	if err := s.guard(ctx, d, "retry-import", nil); err != nil {
+	retryFailed, err := s.retryable(ctx, d)
+	if err != nil {
 		return err
+	}
+	if retryFailed {
+		if err := s.transition(ctx, &d, change{to: domain.StateImportPending, actor: domain.ActorUser, reason: "import retried by user"}); err != nil {
+			return err
+		}
 	}
 	s.publish(domain.EvDownloadCompleted, "user", s.d.ItemTitles(ctx, refsOf(d.Links)), s.eventData(ctx, &d))
 	return nil
+}
+
+// retryable checks that the import may run again for d and reports whether d
+// is a failed download that first moves back to import-pending.
+func (s *Service) retryable(ctx context.Context, d store.StoredDownload) (bool, error) {
+	retryFailed := d.State == domain.StateFailed && s.payloadKept(d)
+	if !importable[d.State] && d.State != domain.StateImportBlocked && !retryFailed {
+		return false, fmt.Errorf("%w (download %d is %s)", ErrNotImportable, d.ID, d.State)
+	}
+	if d.OnHold() {
+		return false, fmt.Errorf("%w: %d", ErrHeld, d.ID)
+	}
+	return retryFailed, s.guard(ctx, d, "retry-import", nil)
+}
+
+// payloadKept reports whether a failed download had finished and its payload
+// is still on disk, so its import can run again.
+func (s *Service) payloadKept(d store.StoredDownload) bool {
+	if d.CompletedAt == nil || d.ContentPath == "" {
+		return false
+	}
+	if s.d.PayloadExists != nil {
+		return s.d.PayloadExists(d.ContentPath)
+	}
+	_, err := os.Stat(d.ContentPath)
+	return err == nil
 }

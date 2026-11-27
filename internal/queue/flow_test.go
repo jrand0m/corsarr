@@ -28,8 +28,11 @@ func TestGrabCreatesOneDownloadAndPollsToCompletion(t *testing.T) {
 	if err := e.svc.Poll(ctx); err != nil {
 		t.Fatal(err)
 	}
-	e.dl.set("aaa", func(s *plugin.Snapshot) { s.Progress = 0.7 })
+	e.dl.set("aaa", func(s *plugin.Snapshot) { s.Progress, s.UpSpeed, s.Ratio, s.Seeders, s.Peers = 0.7, 300, 0.4, 5, 9 })
 	_ = e.svc.Poll(ctx)
+	if got, _ := e.svc.Get(ctx, d.ID); got.UpSpeed != 300 || got.Ratio != 0.4 || got.Seeders != 5 || got.Peers != 9 {
+		t.Fatalf("upload, ratio and swarm not recorded: %+v", got)
+	}
 	e.dl.set("aaa", func(s *plugin.Snapshot) {
 		s.State, s.Progress, s.ContentPath, s.SavePath = domain.StateCompleted, 1, "/dl/Example", "/dl"
 	})

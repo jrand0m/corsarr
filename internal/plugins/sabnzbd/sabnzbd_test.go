@@ -28,6 +28,7 @@ type fakeSAB struct {
 	cats    []string
 	paused  bool
 	limit   string
+	locked  bool // configuration locked: set_config fails
 	calls   []string
 	next    int
 }
@@ -75,6 +76,12 @@ func (f *fakeSAB) route(r *http.Request, q map[string][]string) any {
 	case "config":
 		f.limit = get("value")
 		return map[string]any{"status": true}
+	case "set_config":
+		if f.locked {
+			return map[string]any{"status": false, "error": "Configuration locked"}
+		}
+		f.cats = append(f.cats, strings.ToLower(get("name")))
+		return map[string]any{"config": map[string]any{"categories": []any{map[string]any{"name": get("name"), "dir": get("dir")}}}}
 	}
 	return map[string]any{"status": false, "error": "not implemented"}
 }
@@ -233,8 +240,35 @@ func TestPriorityMovesInTheQueue(t *testing.T) {
 			t.Errorf("%s: %d", p, got)
 		}
 	}
-	if err := c.EnsureCategory(ctx, "books", ""); plugin.ClassOf(err) != plugin.ClassConfig {
-		t.Fatal(err)
+}
+
+func TestPriorityLevels(t *testing.T) {
+	f := newFake(t)
+	c := newClient(t, f, nil)
+	for level, v := range map[plugin.Priority]string{plugin.PrioLow: "-1", plugin.PrioNormal: "0", plugin.PrioHigh: "1", plugin.PrioForce: "2"} {
+		if err := c.SetPriorityLevel(t.Context(), "a", level); err != nil || !f.called("queue:priority:a") {
+			t.Errorf("%s (%s): %v", level, v, err)
+		}
+	}
+	if err := c.SetPriorityLevel(t.Context(), "a", plugin.PrioTop); plugin.ClassOf(err) != plugin.ClassConfig {
+		t.Errorf("a move is not a level: %v", err)
+	}
+}
+
+func TestEnsureCategoryCreatesMissingOnes(t *testing.T) {
+	f := newFake(t)
+	c := newClient(t, f, plugin.Settings{"pathMap": []any{"/downloads=/mnt/dl"}})
+	ctx := t.Context()
+	if err := c.EnsureCategory(ctx, "Movies", ""); err != nil || f.called("set_config::") {
+		t.Fatalf("existing category, any case: %v", err)
+	}
+	if err := c.EnsureCategory(ctx, "books", "/mnt/dl/books"); err != nil || !slices.Contains(f.cats, "books") {
+		t.Fatalf("create: %v %v", err, f.cats)
+	}
+	f.locked = true
+	err := c.EnsureCategory(ctx, "music", "")
+	if plugin.ClassOf(err) != plugin.ClassConfig || !strings.Contains(err.Error(), `create the category "music" in SABnzbd`) {
+		t.Fatalf("locked: %v", err)
 	}
 }
 

@@ -113,7 +113,7 @@ func TestPersistent403IsAuthAfterOneRetry(t *testing.T) {
 func TestSnapshotMapping(t *testing.T) {
 	f := newFake(t, "v5.0.1")
 	f.put("h1", map[string]any{"name": "Movie", "category": "movies", "state": "stalledDL", "progress": 0.5, "size": 1000,
-		"downloaded": 500, "dlspeed": 10, "eta": 60, "num_seeds": 3, "num_leechs": 4, "save_path": "/d", "last_activity": 1700000000})
+		"downloaded": 500, "dlspeed": 10, "upspeed": 7, "ratio": 0.25, "eta": 60, "num_seeds": 3, "num_leechs": 4, "save_path": "/d", "last_activity": 1700000000})
 	f.put("h2", map[string]any{"name": "Done", "category": "movies", "state": "stoppedUP", "progress": 1, "eta": 8640000,
 		"content_path": "/d/Done", "save_path": "/d"})
 	f.put("h3", map[string]any{"name": "Bad", "category": "movies", "state": "missingFiles"})
@@ -129,7 +129,7 @@ func TestSnapshotMapping(t *testing.T) {
 	}
 	s1 := by["h1"]
 	if s1.State != domain.StateStalled || s1.ETASeconds != 60 || s1.Seeders != 3 || s1.Peers != 4 || s1.Size != 1000 ||
-		s1.Downloaded != 500 || s1.Speed != 10 || s1.SavePath != "/d" || s1.LastActivityAt == nil || s1.Progress != 0.5 || s1.Files != nil {
+		s1.Downloaded != 500 || s1.Speed != 10 || s1.UpSpeed != 7 || s1.Ratio != 0.25 || s1.SavePath != "/d" || s1.LastActivityAt == nil || s1.Progress != 0.5 || s1.Files != nil {
 		t.Errorf("h1 %+v", s1)
 	}
 	if s2 := by["h2"]; s2.State != domain.StateCompleted || s2.ETASeconds != 0 || len(s2.Files) != 1 || s2.Files[0] != "/d/Done" {
@@ -349,6 +349,31 @@ func TestSetPriority(t *testing.T) {
 	}
 	f.noQueueing = true
 	if err := c.SetPriority(t.Context(), "h", plugin.PrioTop); plugin.ClassOf(err) != plugin.ClassConfig {
+		t.Errorf("queueing disabled: %v", err)
+	}
+}
+
+func TestSetPriorityLevel(t *testing.T) {
+	f := newFake(t, "v5.0.1")
+	c := newClient(t, f, nil)
+	cases := []struct {
+		level      plugin.Priority
+		force, mov string
+	}{{plugin.PrioForce, "true", ""}, {plugin.PrioHigh, "false", "topPrio"}, {plugin.PrioLow, "false", "bottomPrio"}, {plugin.PrioNormal, "false", ""}}
+	for _, tc := range cases {
+		f.calls = nil
+		if err := c.SetPriorityLevel(t.Context(), "h", tc.level); err != nil || !f.called("torrents/setForceStart=h"+tc.force) {
+			t.Errorf("%s: %v %v", tc.level, err, f.calls)
+		}
+		if moved := f.called("torrents/topPrio") || f.called("torrents/bottomPrio"); moved != (tc.mov != "") || (tc.mov != "" && !f.called("torrents/"+tc.mov)) {
+			t.Errorf("%s moved %v: %v", tc.level, moved, f.calls)
+		}
+	}
+	if err := c.SetPriorityLevel(t.Context(), "h", plugin.PrioTop); plugin.ClassOf(err) != plugin.ClassConfig {
+		t.Errorf("a move is not a level: %v", err)
+	}
+	f.noQueueing = true
+	if err := c.SetPriorityLevel(t.Context(), "h", plugin.PrioHigh); plugin.ClassOf(err) != plugin.ClassConfig {
 		t.Errorf("queueing disabled: %v", err)
 	}
 }

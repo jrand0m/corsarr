@@ -140,10 +140,12 @@ deploy action="validate" target="all":
 
 # ── release ──────────────────────────────────────────────────────────────────
 # just release pins <vX.Y.Z> [SHA256SUMS]   move every deploy/ sample to a published release
-release action version sums="":
+# just release deps                         build tool pins (nfpm, BuildKit): consistent and current
+release action version="" sums="":
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{action}}" in
       pins) scripts/pins.sh "{{version}}" {{sums}} ;;
-      *) echo "unknown action {{action}} (pins)"; exit 2 ;;
+      deps) scripts/release.sh deps ;;
+      *) echo "unknown action {{action}} (pins|deps)"; exit 2 ;;
     esac

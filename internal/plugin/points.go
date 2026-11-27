@@ -56,6 +56,8 @@ type Snapshot struct {
 	Downloaded     int64
 	Speed          int64
 	ETASeconds     int64
+	UpSpeed        int64   // bytes/s sent to peers; 0 for clients that do not upload
+	Ratio          float64 // uploaded / downloaded as the client reports it; 0 when it has none
 	Seeders        int
 	Peers          int
 	SavePath       string
@@ -83,6 +85,26 @@ const (
 	PrioBottom Priority = "bottom"
 )
 
+// Priority levels set a download's standing in its client instead of moving
+// it one step; a client that has levels implements PriorityLeveler.
+const (
+	PrioLow    Priority = "low"
+	PrioNormal Priority = "normal"
+	PrioHigh   Priority = "high"
+	PrioForce  Priority = "force" // start now, ahead of the client's queue limits
+)
+
+var (
+	priorityLevels = map[Priority]bool{PrioLow: true, PrioNormal: true, PrioHigh: true, PrioForce: true}
+	priorityMoves  = map[Priority]bool{PrioTop: true, PrioUp: true, PrioDown: true, PrioBottom: true}
+)
+
+// IsLevel reports whether p is a priority level rather than a queue move.
+func (p Priority) IsLevel() bool { return priorityLevels[p] }
+
+// IsMove reports whether p moves a download in its client's queue.
+func (p Priority) IsMove() bool { return priorityMoves[p] }
+
 // Downloader drives one download client (qBittorrent, SABnzbd-compatible, …).
 type Downloader interface {
 	Tester
@@ -107,6 +129,12 @@ type FileEntry struct {
 // empty while torrent metadata is still unknown.
 type FileLister interface {
 	Files(ctx context.Context, downloadID string) ([]FileEntry, error)
+}
+
+// PriorityLeveler is an optional downloader capability: set a download's
+// priority level (low, normal, high, force).
+type PriorityLeveler interface {
+	SetPriorityLevel(ctx context.Context, downloadID string, level Priority) error
 }
 
 // GlobalPauser is an optional downloader capability: stop and restart every
