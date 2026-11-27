@@ -37,7 +37,8 @@ Volume=%h/media:/media
 # Secrets: `podman secret create tmdb_api_key -`, then reference ${env:TMDB_API_KEY}.
 # Secret=tmdb_api_key,type=env,target=TMDB_API_KEY
 
-HealthCmd=/corsarr healthcheck
+# JSON form runs the binary directly: the image has no shell.
+HealthCmd=["/corsarr","healthcheck"]
 HealthInterval=30s
 HealthTimeout=5s
 HealthStartPeriod=15s

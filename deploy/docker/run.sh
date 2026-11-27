@@ -1,6 +1,7 @@
 #!/bin/sh
 # Start corsarr with one `docker run`: non-root, read-only root filesystem, no
-# capabilities, health-checked, restarted by Docker.
+# capabilities, health-checked, restarted by Docker. The health check is the image's own
+# (`corsarr healthcheck`, exec form: the image has no shell, so --health-cmd cannot be used).
 #
 #   MEDIA_DIR=/srv/media ./run.sh            then open http://localhost:8090
 #
@@ -27,8 +28,7 @@ docker run --detach --name "$NAME" \
   --read-only --tmpfs /tmp:rw,size=64m,mode=1777 \
   --cap-drop ALL --security-opt no-new-privileges \
   --memory 256m --pids-limit 256 --env GOMEMLIMIT=96MiB \
-  --health-cmd '/corsarr healthcheck' --health-interval 30s \
-  --health-timeout 5s --health-start-period 15s --health-retries 3 \
+  --health-interval 30s --health-timeout 5s --health-start-period 15s --health-retries 3 \
   --publish "$PORT:8090" \
   --volume "$VOLUME:/data" \
   "$@" \
