@@ -8,7 +8,7 @@ Before you start, on every NAS:
 
 1. Create a folder for corsarr's data (for example `docker/corsarr`).
 2. Find the user and group that own your media share and give that user write access to
-   the data folder. Put the numeric ids in `user:`.
+   the data folder. Put the numeric ids in `user:` (the values after `:-`; paths likewise).
 3. Keep downloads and the library in one share, and mount it at `/media` in your download
    client too, so imports are hardlinks.
 
@@ -27,7 +27,7 @@ Upgrade: change the image tag in the project, **Build**. Backup: Hyper Backup ta
 1. Datasets: `apps/corsarr` for data and your media dataset; grant the `apps` user
    (568:568) modify access, or use your own user's ids.
 2. **Apps → Discover Apps → ⋮ → Install via YAML**, name `corsarr`, paste `compose.yml`
-   with `/mnt/<pool>/…` paths and `user: "568:568"`.
+   with `/mnt/<pool>/…` paths and the user `568:568`.
 3. **Save**; open `http://<nas>:8090`.
 
 Upgrade: **Apps → corsarr → Edit**, change the tag. Backup: snapshot the `apps/corsarr`
