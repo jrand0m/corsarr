@@ -167,7 +167,7 @@ just run storybook               # the component library
 ```
 
 Builds are `CGO_ENABLED=0`, so cross-compiling needs no C toolchain. Release builds run in
-a pinned builder (Docker with BuildKit): `just build release` writes the six archives and
+a pinned builder (Docker with BuildKit): `just build release` writes the archives, packages and
 the image to `dist/`, and `just verify rebuild` builds twice from scratch and compares.
 
 ## Project status

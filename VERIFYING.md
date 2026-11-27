@@ -15,13 +15,16 @@ digest and the source date used for that build.
 | File | What it is |
 | --- | --- |
 | `corsarr-{linux,darwin}-{amd64,arm64}.tar.gz`, `corsarr-windows-{amd64,arm64}.zip` | the binary with `README.md`, `LICENSE` and an example config |
-| `SHA256SUMS` | SHA-256 of the six archives |
-| `corsarr-*.spdx.json` | an SPDX SBOM per archive and per image platform |
+| `corsarr_<version>_{amd64,arm64}.deb`, `corsarr-<version>-1.{x86_64,aarch64}.rpm`, `corsarr_<version>_{x86_64,aarch64}.apk` | Linux packages ([`deploy/packages`](deploy/packages)) |
+| `SHA256SUMS` | SHA-256 of the archives and packages |
+| `*.spdx.json` | an SPDX SBOM per archive, package and image platform |
 | `ghcr.io/jrand0m/corsarr:<tag>` | the multi-arch image (`linux/amd64`, `linux/arm64`) |
+| `oci://ghcr.io/jrand0m/charts/corsarr` | the Helm chart (releases only, not `-rc.N`) |
 
-Every archive and the image have a build-provenance attestation (SLSA) and an SBOM
-attestation, signed with the workflow's short-lived identity. The image also has a keyless
-cosign signature. Nothing is signed with a long-lived key.
+Every archive, package, the image and the chart have a build-provenance attestation
+(SLSA); archives, packages and the image also have an SBOM attestation. All are signed
+with the workflow's short-lived identity, and the image also has a keyless cosign
+signature. Nothing is signed with a long-lived key.
 
 ## 1. Check what you downloaded
 
@@ -78,8 +81,8 @@ time the build ran: that is what makes two builds identical.
 ### What makes the build reproducible
 
 - Every input is pinned: the Go and Node versions, the base images and the Dockerfile
-  frontend by digest, the BuildKit image by digest, UI dependencies by `package-lock.json`
-  and Go modules by `go.sum`.
+  frontend by digest, the BuildKit image by digest, UI dependencies by `package-lock.json`,
+  Go modules by `go.sum` and the packaging tool (nfpm) by version.
 - Binaries are built with `-trimpath`, `-buildvcs=false` and an empty build id; the version,
   commit, tag and build date are passed in as build arguments.
 - `SOURCE_DATE_EPOCH` is the commit time of the tag. Archive entries are sorted, all carry
@@ -91,7 +94,7 @@ time the build ran: that is what makes two builds identical.
   attestation, so it does not change the image digest).
 
 Every release is built twice, on an amd64 and an arm64 runner; the release fails if any of
-the six archives or the image digest differs.
+the archives, the packages or the image digest differs.
 
 ### With just
 
@@ -103,8 +106,8 @@ git clone https://github.com/jrand0m/corsarr && cd corsarr
 just verify release v1.2.3
 ```
 
-This checks out the tag in a temporary worktree, builds the six archives and the
-two-platform image in the pinned builder, downloads the published archives and the
+This checks out the tag in a temporary worktree, builds the archives, packages and the
+two-platform image in the pinned builder, downloads every published file and the
 image's manifest list, and prints one line per artifact:
 
 ```
@@ -145,7 +148,7 @@ docker buildx create --name corsarr-repro --driver docker-container \
   --driver-opt image=moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
 args="--build-arg VERSION --build-arg COMMIT --build-arg TAG --build-arg DIRTY --build-arg SOURCE_DATE_EPOCH"
 
-# the six archives and their SHA256SUMS
+# the archives, the Linux packages and their SHA256SUMS
 docker buildx build --builder corsarr-repro $args --target archives \
   --output type=local,dest=rebuilt .
 curl -fsSLO https://github.com/jrand0m/corsarr/releases/download/v1.2.3/SHA256SUMS
