@@ -65,6 +65,7 @@ run target="dev":
 
 # ── test ─────────────────────────────────────────────────────────────────────
 # just test [fast|full|go|ui|budget] [package-pattern]
+# just test container [docker|podman]   build the image and run it unprivileged, any-uid and read-only
 test kind="fast" pkg="./...":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -74,7 +75,11 @@ test kind="fast" pkg="./...":
       ui)     cd ui && {{x}} npm run test ;;
       budget) just build go && scripts/budget.sh ;;
       full)   just test go; just test ui; just test budget ;;
-      *) echo "unknown kind {{kind}} (fast|full|go|ui|budget)"; exit 2 ;;
+      container)
+        engine="{{pkg}}"; [ "$engine" = "./..." ] && engine=docker
+        "$engine" build --build-arg VERSION={{version}} -t corsarr:container-test .
+        scripts/container-test.sh corsarr:container-test "$engine" ;;
+      *) echo "unknown kind {{kind}} (fast|full|go|ui|budget|container)"; exit 2 ;;
     esac
 
 # ── docs ─────────────────────────────────────────────────────────────────────

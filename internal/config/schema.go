@@ -10,6 +10,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/jrand0m/corsarr/internal/domain"
@@ -78,9 +79,13 @@ func NewSchema(reg *plugin.Registry) *Schema {
 		{Name: "server", Node: obj("Web server (applies at start).",
 			Field{Name: "address", Node: &Node{Kind: KindString, Default: ":8090", Doc: "Address and port the web UI and API listen on; change the port when 8090 is taken, or add a host to listen on one network interface only.", Check: checkAddress}},
 			Field{Name: "basePath", Node: &Node{Kind: KindString, Doc: "Path prefix when a reverse proxy serves corsarr under a sub-path, for example /corsarr; leave empty when it has its own host name.", Check: checkBasePath}},
+			Field{Name: "egressAllow", Node: &Node{Kind: KindList, Elem: &Node{Kind: KindString, Check: checkEgressHost},
+				Doc: "Hosts corsarr may contact (exact name, *.domain or an IP range); leave empty to allow every host, or list hosts to lock outgoing traffic down."}},
 		)},
 		{Name: "data", Node: obj("Data folder (applies at start).",
 			Field{Name: "dir", Node: &Node{Kind: KindString, Default: "/data", Doc: "Folder for the database, the secret key, backups and logs; point it at storage that survives restarts and upgrades."}},
+			Field{Name: "umask", Node: &Node{Kind: KindString, Default: "002", Check: checkUmask,
+				Doc: "Permission mask for every file corsarr creates, in octal; 002 lets a shared media group write, 022 keeps files writable by corsarr only."}},
 		)},
 		{Name: "log", Node: obj("Logging (applies at start).",
 			Field{Name: "level", Node: enum("info", "How much is logged; use debug while tracking down a problem, warn or error to keep logs short.", "debug", "info", "warn", "error")},
@@ -263,6 +268,33 @@ func checkBasePath(s string) error {
 func nonNegative(s string) error {
 	if strings.HasPrefix(strings.TrimSpace(s), "-") {
 		return fmt.Errorf("must be 0 or more")
+	}
+	return nil
+}
+
+func checkUmask(s string) error {
+	if _, err := ParseUmask(s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ParseUmask reads an octal file creation mask such as 002 or 0027.
+func ParseUmask(s string) (int, error) {
+	v, err := strconv.ParseUint(s, 8, 32)
+	if err != nil || v > 0o777 {
+		return 0, fmt.Errorf("must be an octal mask between 000 and 777, e.g. 002")
+	}
+	return int(v), nil
+}
+
+func checkEgressHost(s string) error {
+	if _, _, err := net.ParseCIDR(s); err == nil {
+		return nil
+	}
+	host := strings.TrimPrefix(s, "*.")
+	if host == "" || strings.ContainsAny(host, "/:*@ ") {
+		return fmt.Errorf("must be a host name, *.domain, an IP address or a CIDR range")
 	}
 	return nil
 }

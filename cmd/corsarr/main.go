@@ -1,6 +1,6 @@
 // Command corsarr is the single-binary media automation server.
 //
-//	corsarr [serve]                         run the server (default)
+//	corsarr [serve] [--allow-root]          run the server (default); root is refused without --allow-root
 //	corsarr healthcheck                     exit 0 when the running server is ready
 //	corsarr config validate [--plan]        validate the active config source
 //	corsarr config export [--format=yaml|env] [--full]
@@ -48,7 +48,7 @@ type cli struct {
 }
 
 // commandFlags are subcommand flags, kept out of the config args.
-var commandFlags = map[string]bool{"plan": true, "format": true, "full": true, "username": true}
+var commandFlags = map[string]bool{"plan": true, "format": true, "full": true, "username": true, "allow-root": true}
 
 func init() {
 	for _, f := range migrateFlags {

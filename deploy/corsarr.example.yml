@@ -17,12 +17,19 @@ server:
   # Path prefix when a reverse proxy serves corsarr under a sub-path, for example /corsarr;
   # leave empty when it has its own host name.
   # basePath:
+  # Hosts corsarr may contact (exact name, *.domain or an IP range); leave empty to allow every
+  # host, or list hosts to lock outgoing traffic down.
+  # egressAllow:
+  #   -
 
 # Data folder (applies at start).
 data:
   # Folder for the database, the secret key, backups and logs; point it at storage that survives
   # restarts and upgrades.
   dir: /data
+  # Permission mask for every file corsarr creates, in octal; 002 lets a shared media group
+  # write, 022 keeps files writable by corsarr only.
+  umask: "002"
 
 # Logging (applies at start).
 log:
