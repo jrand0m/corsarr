@@ -20,6 +20,8 @@ type torrentInfo struct {
 	Size         int64   `json:"size"`
 	Downloaded   int64   `json:"downloaded"`
 	DLSpeed      int64   `json:"dlspeed"`
+	UPSpeed      int64   `json:"upspeed"`
+	Ratio        float64 `json:"ratio"`
 	ETA          int64   `json:"eta"`
 	NumSeeds     int     `json:"num_seeds"`
 	NumLeechs    int     `json:"num_leechs"`
@@ -104,6 +106,7 @@ func (c *Client) snapshot(ti torrentInfo) plugin.Snapshot {
 	s := plugin.Snapshot{
 		DownloadID: ti.Hash, Name: ti.Name, Category: ti.Category, State: mapState(ti.State),
 		Progress: ti.Progress, Size: ti.Size, Downloaded: ti.Downloaded, Speed: ti.DLSpeed,
+		UpSpeed: ti.UPSpeed, Ratio: ti.Ratio,
 		Seeders: ti.NumSeeds, Peers: ti.NumLeechs, SavePath: c.local(ti.SavePath), ContentPath: c.local(ti.ContentPath),
 		Error: warnings[ti.State],
 	}

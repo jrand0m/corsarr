@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"mime/multipart"
 	"net/url"
 	"slices"
@@ -264,17 +265,52 @@ func position(p plugin.Priority, cur, n int) (int, bool) {
 	return 0, false
 }
 
-// EnsureCategory checks that the category exists: categories and their
-// folders are managed in SABnzbd itself.
-func (c *Client) EnsureCategory(ctx context.Context, category, _ string) error {
+// sabLevels are SABnzbd's job priorities: -1 low, 0 normal, 1 high, 2 force.
+var sabLevels = map[plugin.Priority]string{plugin.PrioLow: "-1", plugin.PrioNormal: "0", plugin.PrioHigh: "1", plugin.PrioForce: "2"}
+
+// SetPriorityLevel sets a queued job's priority; SABnzbd reorders its queue
+// by it. A finished job has no priority, which is not an error.
+func (c *Client) SetPriorityLevel(ctx context.Context, id string, level plugin.Priority) error {
+	v, ok := sabLevels[level]
+	if !ok {
+		return plugin.Errorf(plugin.ClassConfig, "unknown priority level %q", level)
+	}
+	return c.call(ctx, "queue", url.Values{"name": {"priority"}, "value": {id}, "value2": {v}}, maxSmall, nil)
+}
+
+// EnsureCategory creates a missing category through the configuration API;
+// an existing one is left as it is, its folder managed in SABnzbd. When the
+// configuration is locked the error says to create it by hand.
+func (c *Client) EnsureCategory(ctx context.Context, category, savePath string) error {
+	if ok, err := c.hasCategory(ctx, category); err != nil || ok {
+		return err
+	}
+	q := url.Values{"section": {"categories"}, "name": {category}}
+	if savePath != "" {
+		dir, _ := c.paths.ToRemote(savePath)
+		q.Set("dir", dir)
+	}
+	err := c.call(ctx, "set_config", q, maxSmall, nil)
+	if err == nil {
+		var ok bool
+		if ok, err = c.hasCategory(ctx, category); err == nil && !ok {
+			err = errors.New("it is still missing")
+		}
+	}
+	if err != nil {
+		return plugin.Errorf(plugin.ClassConfig, "create the category %q in SABnzbd (creating it failed: %v)", category, err)
+	}
+	return nil
+}
+
+// hasCategory reports whether SABnzbd knows the category; it compares
+// without case, as SABnzbd stores names in lower case.
+func (c *Client) hasCategory(ctx context.Context, category string) (bool, error) {
 	var out struct {
 		Categories []string `json:"categories"`
 	}
 	if err := c.call(ctx, "get_cats", nil, maxSmall, &out); err != nil {
-		return err
+		return false, err
 	}
-	if !slices.Contains(out.Categories, category) {
-		return plugin.Errorf(plugin.ClassConfig, "create the category %q in SABnzbd", category)
-	}
-	return nil
+	return slices.ContainsFunc(out.Categories, func(s string) bool { return strings.EqualFold(s, category) }), nil
 }

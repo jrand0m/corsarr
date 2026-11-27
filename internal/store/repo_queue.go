@@ -17,7 +17,7 @@ type Queue struct{ s *Store }
 func (s *Store) Queue() Queue { return Queue{s} }
 
 const downloadCols = `id, grab_id, downloader, download_id, protocol, kind, title, state, progress, size, downloaded,
-	speed, eta, seeders, peers, category, save_path, content_path, held, status_reason, added_at, completed_at, last_activity_at`
+	speed, up_speed, ratio, eta, seeders, peers, category, save_path, content_path, held, status_reason, added_at, completed_at, last_activity_at`
 
 // ContentPath is kept beside the domain shape: the payload's file or folder.
 func scanDownload(sc scanner) (domain.Download, string, error) {
@@ -26,7 +26,7 @@ func scanDownload(sc scanner) (domain.Download, string, error) {
 	var added int64
 	var completed, activity sql.NullInt64
 	err := sc.Scan(&d.ID, &d.GrabID, &downloader, &d.DownloadID, &proto, &kind, &d.Title, &state, &d.Progress, &d.Size,
-		&d.Downloaded, &d.Speed, &d.ETASeconds, &d.Seeders, &d.Peers, &d.Category, &d.SavePath, &content, &d.Held,
+		&d.Downloaded, &d.Speed, &d.UpSpeed, &d.Ratio, &d.ETASeconds, &d.Seeders, &d.Peers, &d.Category, &d.SavePath, &content, &d.Held,
 		&d.StatusReason, &added, &completed, &activity)
 	d.Downloader, d.Protocol, d.Kind, d.State = domain.ObjectKey(downloader), domain.Protocol(proto), domain.MediaKind(kind), domain.DownloadState(state)
 	d.AddedAt, d.CompletedAt, d.LastActivityAt = fromMS(added), ptrMS(completed), ptrMS(activity)
@@ -188,9 +188,9 @@ func placeholders(n int) string {
 func (r Queue) Save(ctx context.Context, d StoredDownload) error {
 	return r.s.Write(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `UPDATE downloads SET title = ?, state = ?, progress = ?, size = ?, downloaded = ?,
-			speed = ?, eta = ?, seeders = ?, peers = ?, category = ?, save_path = ?, content_path = ?, held = ?,
+			speed = ?, up_speed = ?, ratio = ?, eta = ?, seeders = ?, peers = ?, category = ?, save_path = ?, content_path = ?, held = ?,
 			status_reason = ?, completed_at = ?, last_activity_at = ? WHERE id = ?`, d.Title, string(d.State), d.Progress,
-			d.Size, d.Downloaded, d.Speed, d.ETASeconds, d.Seeders, d.Peers, d.Category, d.SavePath, d.ContentPath, d.Held,
+			d.Size, d.Downloaded, d.Speed, d.UpSpeed, d.Ratio, d.ETASeconds, d.Seeders, d.Peers, d.Category, d.SavePath, d.ContentPath, d.Held,
 			d.StatusReason, nullMS(d.CompletedAt), nullMS(d.LastActivityAt), d.ID)
 		if err != nil {
 			return err

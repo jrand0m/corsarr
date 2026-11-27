@@ -270,6 +270,8 @@ type Download struct {
 	Size           int64          `json:"size"`
 	Downloaded     int64          `json:"downloaded"`
 	Speed          int64          `json:"speed"`
+	UpSpeed        int64          `json:"upSpeed"` // bytes/s sent to peers
+	Ratio          float64        `json:"ratio"`   // uploaded / downloaded, as the client reports it
 	ETASeconds     int64          `json:"eta"`
 	Seeders        int            `json:"seeders"`
 	Peers          int            `json:"peers"`

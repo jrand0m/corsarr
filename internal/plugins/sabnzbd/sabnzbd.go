@@ -29,14 +29,14 @@ var defaultCategories = map[string]any{"tv": "tv", "movie": "movies", "music": "
 var manifest = plugin.Manifest{
 	ID: ID, Kind: plugin.KindDownloader, Version: "1.0.0", APIVersion: plugin.APIVersion,
 	Name: "SABnzbd-compatible", Delivery: "builtin",
-	Capabilities: []string{"nzb", "categories", "priority", "pause", "pause-all", "speed-limits", "stats"},
+	Capabilities: []string{"nzb", "categories", "priority", "priority-levels", "pause", "pause-all", "speed-limits", "stats"},
 	Settings: []plugin.Field{
 		{Key: "url", Type: plugin.FieldURL, Label: "Address", Required: true,
 			Help: "Address of the SABnzbd web interface, for example http://sabnzbd:8080. A reverse-proxy sub-path is allowed."},
 		{Key: "apiKey", Type: plugin.FieldSecret, Label: "API key", Required: true,
 			Help: "The full API key from the SABnzbd general settings (not the NZB key)."},
 		{Key: "categories", Type: plugin.FieldMap, Label: "Category per media kind", Default: defaultCategories,
-			Help: "SABnzbd category used for each media kind (movie, tv, music, book). The categories must exist in SABnzbd."},
+			Help: "SABnzbd category used for each media kind (movie, tv, music, book). A missing category is created in SABnzbd."},
 		{Key: "pathMap", Type: plugin.FieldList, Label: "Path mapping", Check: plugin.CheckPathRule,
 			Help: "Needed when SABnzbd sees its folders under other paths than corsarr. One remote=local entry per folder, for example /downloads=/mnt/media/downloads. The longest matching prefix wins."},
 	},

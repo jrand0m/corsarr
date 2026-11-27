@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	_ plugin.GlobalPauser = (*Client)(nil)
-	_ plugin.SpeedLimiter = (*Client)(nil)
-	_ plugin.ClientStats  = (*Client)(nil)
+	_ plugin.GlobalPauser    = (*Client)(nil)
+	_ plugin.SpeedLimiter    = (*Client)(nil)
+	_ plugin.ClientStats     = (*Client)(nil)
+	_ plugin.PriorityLeveler = (*Client)(nil)
 )
 
 // PauseAll pauses the whole download queue.

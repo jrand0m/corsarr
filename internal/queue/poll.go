@@ -222,6 +222,7 @@ func copySnapshot(d *store.StoredDownload, sn plugin.Snapshot) bool {
 	moved := sn.Progress != d.Progress || sn.Downloaded != d.Downloaded
 	d.Progress, d.Downloaded, d.Speed, d.ETASeconds = sn.Progress, sn.Downloaded, sn.Speed, sn.ETASeconds
 	d.Seeders, d.Peers, d.SavePath, d.LastActivityAt = sn.Seeders, sn.Peers, sn.SavePath, sn.LastActivityAt
+	d.UpSpeed, d.Ratio = sn.UpSpeed, sn.Ratio
 	if sn.Size > 0 {
 		d.Size = sn.Size
 	}

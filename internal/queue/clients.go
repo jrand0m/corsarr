@@ -35,7 +35,7 @@ var capabilityChecks = []struct {
 	name string
 	has  func(plugin.Downloader) bool
 }{
-	{"files", is[plugin.FileLister]}, {"trackers", is[plugin.TrackerLister]}, {"pause-all", is[plugin.GlobalPauser]},
+	{"files", is[plugin.FileLister]}, {"priority-levels", is[plugin.PriorityLeveler]}, {"trackers", is[plugin.TrackerLister]}, {"pause-all", is[plugin.GlobalPauser]},
 	{"speed-limits", is[plugin.SpeedLimiter]}, {"recheck", is[plugin.Rechecker]}, {"reannounce", is[plugin.Reannouncer]},
 	{"set-category", is[plugin.Categoriser]}, {"stats", is[plugin.ClientStats]},
 }

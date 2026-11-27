@@ -130,7 +130,7 @@ Each entry under a connection section names its plugin with `type`; the plugin a
 |---|---|---|---|---|---|
 | `downloadClients.<name>.url` | — | `CORSARR_DOWNLOADCLIENTS_<NAME>_URL` | `--downloadClients.<name>.url=` | yes | Address of the SABnzbd web interface, for example http://sabnzbd:8080. A reverse-proxy sub-path is allowed. |
 | `downloadClients.<name>.apiKey` | (secret, unset) | `CORSARR_DOWNLOADCLIENTS_<NAME>_APIKEY` | `--downloadClients.<name>.apiKey=` | yes | The full API key from the SABnzbd general settings (not the NZB key). Give the value, ${env:NAME} or ${file:/path}. |
-| `downloadClients.<name>.categories.<name>` | `book=books movie=movies music=music tv=tv` | `CORSARR_DOWNLOADCLIENTS_<NAME>_CATEGORIES_<NAME>` | `--downloadClients.<name>.categories.<name>=` | yes | SABnzbd category used for each media kind (movie, tv, music, book). The categories must exist in SABnzbd. |
+| `downloadClients.<name>.categories.<name>` | `book=books movie=movies music=music tv=tv` | `CORSARR_DOWNLOADCLIENTS_<NAME>_CATEGORIES_<NAME>` | `--downloadClients.<name>.categories.<name>=` | yes | SABnzbd category used for each media kind (movie, tv, music, book). A missing category is created in SABnzbd. |
 | `downloadClients.<name>.pathMap.<n>` | — | `CORSARR_DOWNLOADCLIENTS_<NAME>_PATHMAP_<N>` | `--downloadClients.<name>.pathMap.<n>=` | yes | Needed when SABnzbd sees its folders under other paths than corsarr. One remote=local entry per folder, for example /downloads=/mnt/media/downloads. The longest matching prefix wins. |
 
 ### Metadata plugins (`metadata`)
