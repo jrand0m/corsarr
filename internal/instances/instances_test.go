@@ -93,7 +93,13 @@ func TestApplyBuildsTestsAndSwaps(t *testing.T) {
 		t.Fatalf("disabled: %+v", h)
 	}
 	_ = m.TestAll(context.Background())
-	if good.tested != 1 || bad.tested != 1 || note.tested != 0 {
+	if err := m.Test(context.Background(), plugin.KindIndexer, "a"); err == nil || bad.tested != 2 {
+		t.Fatal("one instance's test returns its failure")
+	}
+	if err := m.Test(context.Background(), plugin.KindIndexer, "zz"); err == nil {
+		t.Fatal("unknown instance")
+	}
+	if good.tested != 1 || bad.tested != 2 || note.tested != 0 {
 		t.Fatalf("tests: %d %d %d (notifiers never)", good.tested, bad.tested, note.tested)
 	}
 	if h, _ := rep.Get(RefOf(plugin.KindIndexer, "a")); h.Status != domain.HealthActionNeeded {
