@@ -17,6 +17,10 @@ Tags:
   - media
   - automation
   - pvr
+InstallationNotes: >-
+  Run it as a Windows service from an administrator shell: corsarr service install, then
+  corsarr service start, and open http://localhost:8090. Install with --scope machine so the
+  service account can read the binary.
 ReleaseNotesUrl: https://github.com/jrand0m/corsarr/releases/tag/v0.4.0
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

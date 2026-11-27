@@ -18,7 +18,7 @@ systemd credentials.
 | Podman, rootless | [`podman/`](podman) | `systemctl --user start corsarr` |
 | Debian, Fedora, Alpine packages | [`packages/`](packages) | `apt install ./corsarr_*.deb` |
 | Homebrew (macOS, Linux) | [`homebrew/`](homebrew) | `brew install jrand0m/tap/corsarr` |
-| Windows (Scoop, winget) | [`windows/`](windows) | `scoop install …/corsarr.json` |
+| Windows (Scoop, winget, service) | [`windows/`](windows) | `scoop install -g …/corsarr.json; corsarr service install` |
 | macOS, launchd | [`launchd/`](launchd) | `launchctl bootstrap gui/$(id -u) …plist` |
 | From source (`go install`) | [`go-install/`](go-install) | `go install github.com/jrand0m/corsarr/cmd/corsarr@v0.4.0` |
 | Unraid | [`unraid/`](unraid) | Docker → Add Container → corsarr |

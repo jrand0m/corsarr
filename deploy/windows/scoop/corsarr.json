@@ -17,8 +17,12 @@
     },
     "bin": "corsarr.exe",
     "notes": [
-        "Start: corsarr --data.dir=\"$env:LOCALAPPDATA\\corsarr\"  then open http://localhost:8090",
-        "Run at logon: see https://github.com/jrand0m/corsarr/tree/master/deploy/windows"
+        "Run as a Windows service (administrator shell): corsarr service install; corsarr service start",
+        "then open http://localhost:8090. Install with -g so the service account can read the binary.",
+        "Without admin rights: see https://github.com/jrand0m/corsarr/tree/master/deploy/windows"
+    ],
+    "pre_uninstall": [
+        "if (Get-Service corsarr -ErrorAction SilentlyContinue) { Stop-Service corsarr -ErrorAction SilentlyContinue }"
     ],
     "checkver": {
         "github": "https://github.com/jrand0m/corsarr"

@@ -87,6 +87,7 @@ var commands = map[string]func(c cli, ctx context.Context) int{
 	"migrate plan":         func(c cli, ctx context.Context) int { return c.migrate(ctx, "plan") },
 	"migrate run":          func(c cli, ctx context.Context) int { return c.migrate(ctx, "run") },
 	"admin reset-password": func(c cli, ctx context.Context) int { return c.resetPassword(ctx) },
+	"service":              func(c cli, ctx context.Context) int { return c.service(ctx, "") },
 }
 
 func run(ctx context.Context, args, environ []string, stdout, stderr io.Writer) int {
