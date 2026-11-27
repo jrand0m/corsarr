@@ -1,8 +1,12 @@
-# corsarr configuration for the container samples.
-# Generated from `corsarr config defaults --format=yaml`; regenerate rather than hand-edit
-# defaults. A config file is the only source when present: CORSARR_* variables are then
-# ignored, so secrets go in as references — ${env:NAME} or ${file:/run/secrets/name} — and
-# never as values. See deploy/corsarr.example.yml for indexers, download clients and the rest.
+# corsarr configuration for the compose samples: a minimal working setup with TMDB
+# metadata, one Torznab indexer and qBittorrent.
+# Server, data, log, auth and media-kind settings are generated from
+# `corsarr config defaults --format=yaml`; deploy/corsarr.example.yml lists every option.
+#
+# A config file is the only source when present (CORSARR_* variables are then ignored), so
+# secrets are references, never values:
+#   ${env:NAME}               an environment variable set in compose (from .env)
+#   ${file:/run/secrets/name} a Compose secret
 version: 1
 server:
   address: ":8090"
@@ -20,3 +24,24 @@ mediaKinds:
   # Shadow mode: decide and record, never grab or touch files. Pair it with a read-only
   # media mount.
   # movie: { mode: shadow }
+rootFolders:
+  - path: /media/movies
+    kind: movie
+  - path: /media/tv
+    kind: tv
+metadata:
+  tmdb:
+    type: tmdb
+    apiKey: ${env:TMDB_API_KEY}
+indexers:
+  myindexer:
+    type: torznab
+    name: My indexer
+    url: https://indexer.example.com/api      # your indexer's Torznab endpoint
+    apiKey: ${env:INDEXER_API_KEY}
+downloadClients:
+  qbit:
+    type: qbittorrent
+    url: http://qbittorrent:8080              # the compose service, or your client's address
+    username: admin
+    password: ${file:/run/secrets/qbit_password}

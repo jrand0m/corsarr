@@ -10,6 +10,7 @@ set -eu
 
 IMAGE="${IMAGE:-ghcr.io/jrand0m/corsarr:v0.4.0}"
 NAME="${NAME:-corsarr}"
+VOLUME="${VOLUME:-corsarr-data}"   # named volume for /data
 PORT="${PORT:-8090}"
 MEDIA_DIR="${MEDIA_DIR:-/srv/media}"
 MEDIA_MODE="${MEDIA_MODE:-rw}"   # ro for shadow mode: corsarr never writes media
@@ -19,7 +20,7 @@ if [ -n "${CONFIG:-}" ]; then
   set -- "$@" --volume "$CONFIG:/etc/corsarr/corsarr.yml:ro"
 fi
 
-docker volume create corsarr-data >/dev/null
+docker volume create "$VOLUME" >/dev/null
 docker run --detach --name "$NAME" \
   --restart unless-stopped \
   --user 65532:65532 \
@@ -29,6 +30,6 @@ docker run --detach --name "$NAME" \
   --health-cmd '/corsarr healthcheck' --health-interval 30s \
   --health-timeout 5s --health-start-period 15s --health-retries 3 \
   --publish "$PORT:8090" \
-  --volume corsarr-data:/data \
+  --volume "$VOLUME:/data" \
   "$@" \
   "$IMAGE"

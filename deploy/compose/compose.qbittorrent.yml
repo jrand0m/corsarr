@@ -1,6 +1,8 @@
 # corsarr + qBittorrent on one host.
-#   echo 'the-qbittorrent-web-ui-password' > secrets/qbit_password.txt
+#   cp .env.example .env                       # media path and API keys
+#   echo 'qbittorrent-password' > secrets/qbit_password.txt
 #   docker compose -f compose.qbittorrent.yml up -d
+# corsarr.yml already points at http://qbittorrent:8080.
 #
 # Both containers mount the media filesystem at /media, so a download finished at
 # /media/downloads/x is hardlinked into /media/movies/x without a copy or a pathMap.
@@ -18,11 +20,13 @@ services:
     command: ["--configFile=/etc/corsarr/corsarr.yml"]
     environment:
       GOMEMLIMIT: 96MiB
+      TMDB_API_KEY: ${TMDB_API_KEY:?set TMDB_API_KEY in .env}
+      INDEXER_API_KEY: ${INDEXER_API_KEY:?set INDEXER_API_KEY in .env}
     secrets: [qbit_password]
     ports:
       - "8090:8090"
     volumes:
-      - ./corsarr.qbittorrent.yml:/etc/corsarr/corsarr.yml:ro
+      - ./corsarr.yml:/etc/corsarr/corsarr.yml:ro
       - corsarr-data:/data
       - ${MEDIA_DIR:-/srv/media}:/media
     healthcheck:

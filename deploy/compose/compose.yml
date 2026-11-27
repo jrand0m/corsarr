@@ -1,6 +1,9 @@
-# corsarr with Docker Compose.
-#   cp -r deploy/compose ~/corsarr && cd ~/corsarr && docker compose up -d
-#   then open http://localhost:8090 and create the admin account.
+# corsarr with Docker Compose, using a download client you already run.
+#   cp .env.example .env                       # media path and API keys
+#   echo 'qbittorrent-password' > secrets/qbit_password.txt
+#   docker compose up -d                       # then open http://localhost:8090
+# Set the qBittorrent address in corsarr.yml. To run qBittorrent here too, use
+# compose.qbittorrent.yml instead.
 #
 # Downloads and the library must live on ONE filesystem, mounted at the SAME path the
 # download client uses, so imports are hardlinks instead of copies.
@@ -18,9 +21,10 @@ services:
     command: ["--configFile=/etc/corsarr/corsarr.yml"]
     environment:
       GOMEMLIMIT: 96MiB                      # soft heap limit; keep below the memory limit
-      # Secrets referenced from corsarr.yml as ${env:NAME}, values kept in .env:
-      # TMDB_API_KEY: ${TMDB_API_KEY:?set it in .env}
-    # secrets: [indexer_api_key]             # referenced as ${file:/run/secrets/indexer_api_key}
+      # referenced from corsarr.yml as ${env:NAME}; values live in .env
+      TMDB_API_KEY: ${TMDB_API_KEY:?set TMDB_API_KEY in .env}
+      INDEXER_API_KEY: ${INDEXER_API_KEY:?set INDEXER_API_KEY in .env}
+    secrets: [qbit_password]                 # referenced as ${file:/run/secrets/qbit_password}
     ports:
       - "8090:8090"
     volumes:
@@ -38,9 +42,9 @@ services:
     mem_limit: 256m
     pids_limit: 256
 
-# secrets:
-#   indexer_api_key:
-#     file: ./secrets/indexer_api_key.txt
+secrets:
+  qbit_password:
+    file: ./secrets/qbit_password.txt
 
 volumes:
   corsarr-data: {}

@@ -13,8 +13,10 @@ MEDIA_DIR=/srv/media ./run.sh
 ```
 
 Open http://localhost:8090 and create the admin account. Variables: `IMAGE`, `NAME`,
-`PORT`, `MEDIA_DIR`, `MEDIA_MODE=ro` (shadow mode), `CONFIG` (a config file to mount; see
-[`../compose/corsarr.yml`](../compose/corsarr.yml)).
+`PORT`, `VOLUME`, `MEDIA_DIR`, `MEDIA_MODE=ro` (shadow mode), `CONFIG` (a config file to
+mount; for one that references secrets, such as
+[`../compose/corsarr.yml`](../compose/corsarr.yml), use the compose sample, which wires
+them up).
 
 **Data**: the named volume `corsarr-data` at `/data` (SQLite database and key file).
 

@@ -1,0 +1,59 @@
+# corsarr on Docker Swarm:
+#   docker config create corsarr_yml ../compose/corsarr.yml
+#   printf %s 'qbittorrent-password' | docker secret create qbit_password -
+#   TMDB_API_KEY=… INDEXER_API_KEY=… docker stack deploy -c stack.yml corsarr
+# One replica pinned to the node that holds the data volume and the media share.
+services:
+  corsarr:
+    image: ghcr.io/jrand0m/corsarr:v0.4.0
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    command: ["--configFile=/etc/corsarr/corsarr.yml"]
+    environment:
+      GOMEMLIMIT: 96MiB
+      TMDB_API_KEY: ${TMDB_API_KEY:?}      # from the deploying shell
+      INDEXER_API_KEY: ${INDEXER_API_KEY:?}
+    ports:
+      - target: 8090
+        published: 8090
+        mode: host
+    configs:
+      - source: corsarr_yml
+        target: /etc/corsarr/corsarr.yml
+    secrets: [qbit_password]             # referenced as ${file:/run/secrets/qbit_password}
+    volumes:
+      - corsarr-data:/data
+      - /srv/media:/media
+      - type: tmpfs
+        target: /tmp
+        tmpfs: { size: 67108864 }
+    healthcheck:
+      test: ["CMD", "/corsarr", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      replicas: 1
+      update_config:
+        order: stop-first              # never two tasks on one SQLite file
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 256M
+      placement:
+        constraints:
+          - node.labels.corsarr == true   # docker node update --label-add corsarr=true <node>
+
+configs:
+  corsarr_yml:
+    external: true
+
+secrets:
+  qbit_password:
+    external: true
+
+volumes:
+  corsarr-data: {}
