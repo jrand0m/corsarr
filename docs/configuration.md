@@ -57,7 +57,7 @@ or `env`). A commented file with every default is in
 | `indexers.<name>.queryLimit` | `0` | `CORSARR_INDEXERS_<NAME>_QUERYLIMIT` | `--indexers.<name>.queryLimit=` | yes | Most searches sent to this indexer per queryLimitPer, for sites that limit API use; 0 means no limit. Past the limit the indexer is skipped until the window frees up. |
 | `indexers.<name>.queryLimitPer` | `day` | `CORSARR_INDEXERS_<NAME>_QUERYLIMITPER` | `--indexers.<name>.queryLimitPer=` | yes | Whether queryLimit counts per hour or per day. One of: hour, day. |
 | `indexers.<name>.<setting>` | — | `CORSARR_INDEXERS_<NAME>_<SETTING>` | `--indexers.<name>.<setting>=` | yes | Settings of the chosen indexer plugin; each plugin's settings are listed below. |
-| `downloadClients.<name>.type` | — | `CORSARR_DOWNLOADCLIENTS_<NAME>_TYPE` | `--downloadClients.<name>.type=` | yes | Which plugin this entry uses; its own settings are listed per plugin. One of: qbittorrent. |
+| `downloadClients.<name>.type` | — | `CORSARR_DOWNLOADCLIENTS_<NAME>_TYPE` | `--downloadClients.<name>.type=` | yes | Which plugin this entry uses; its own settings are listed per plugin. One of: qbittorrent, sabnzbd. |
 | `downloadClients.<name>.name` | — | `CORSARR_DOWNLOADCLIENTS_<NAME>_NAME` | `--downloadClients.<name>.name=` | yes | Name shown in the web UI. |
 | `downloadClients.<name>.enabled` | `true` | `CORSARR_DOWNLOADCLIENTS_<NAME>_ENABLED` | `--downloadClients.<name>.enabled=` | yes | Set to false to keep the entry but stop using it. true or false. |
 | `downloadClients.<name>.<setting>` | — | `CORSARR_DOWNLOADCLIENTS_<NAME>_<SETTING>` | `--downloadClients.<name>.<setting>=` | yes | Settings of the chosen download client plugin; each plugin's settings are listed below. |
@@ -123,6 +123,15 @@ Each entry under a connection section names its plugin with `type`; the plugin a
 | `downloadClients.<name>.password` | (secret, unset) | `CORSARR_DOWNLOADCLIENTS_<NAME>_PASSWORD` | `--downloadClients.<name>.password=` | yes | Web UI password. Give the value, ${env:NAME} or ${file:/path}. |
 | `downloadClients.<name>.categories.<name>` | `book=books movie=movies music=music tv=tv` | `CORSARR_DOWNLOADCLIENTS_<NAME>_CATEGORIES_<NAME>` | `--downloadClients.<name>.categories.<name>=` | yes | qBittorrent category used for each media kind (movie, tv, music, book). Imports only look at these categories. |
 | `downloadClients.<name>.pathMap.<n>` | — | `CORSARR_DOWNLOADCLIENTS_<NAME>_PATHMAP_<N>` | `--downloadClients.<name>.pathMap.<n>=` | yes | Needed when qBittorrent sees its download folders under other paths than corsarr (another host, or containers with different mounts). One remote=local entry per folder, for example /downloads=/mnt/media/downloads. The longest matching prefix wins. |
+
+#### SABnzbd-compatible (`type: sabnzbd`)
+
+| Key | Default | Env | Flag | Live | Explanation |
+|---|---|---|---|---|---|
+| `downloadClients.<name>.url` | — | `CORSARR_DOWNLOADCLIENTS_<NAME>_URL` | `--downloadClients.<name>.url=` | yes | Address of the SABnzbd web interface, for example http://sabnzbd:8080. A reverse-proxy sub-path is allowed. |
+| `downloadClients.<name>.apiKey` | (secret, unset) | `CORSARR_DOWNLOADCLIENTS_<NAME>_APIKEY` | `--downloadClients.<name>.apiKey=` | yes | The full API key from the SABnzbd general settings (not the NZB key). Give the value, ${env:NAME} or ${file:/path}. |
+| `downloadClients.<name>.categories.<name>` | `book=books movie=movies music=music tv=tv` | `CORSARR_DOWNLOADCLIENTS_<NAME>_CATEGORIES_<NAME>` | `--downloadClients.<name>.categories.<name>=` | yes | SABnzbd category used for each media kind (movie, tv, music, book). The categories must exist in SABnzbd. |
+| `downloadClients.<name>.pathMap.<n>` | — | `CORSARR_DOWNLOADCLIENTS_<NAME>_PATHMAP_<N>` | `--downloadClients.<name>.pathMap.<n>=` | yes | Needed when SABnzbd sees its folders under other paths than corsarr. One remote=local entry per folder, for example /downloads=/mnt/media/downloads. The longest matching prefix wins. |
 
 ### Metadata plugins (`metadata`)
 
