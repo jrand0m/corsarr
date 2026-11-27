@@ -5,8 +5,6 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 set positional-arguments
 
 x := "mise exec --"
-version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
-ldflags := "-s -w -X main.version=" + version
 
 default:
     @just --list --unsorted
@@ -26,11 +24,14 @@ setup target="all":
     esac
 
 # ── build ────────────────────────────────────────────────────────────────────
-# just build [all|ui|go|storybook|image] [os/arch]   e.g. just build go linux/arm64
+# just build [all|ui|go|storybook|image|release] [os/arch]   e.g. just build go linux/arm64
+# (release: the six archives and the OCI image in dist/, built in the pinned builder)
 build target="all" platform="":
     #!/usr/bin/env bash
     set -euo pipefail
     platform="{{platform}}"
+    # version, commit, tag, build date and dirty flag of this checkout
+    set -a; eval "$(scripts/release.sh env)"; set +a
     case "{{target}}" in
       ui)
         cd ui && {{x}} npm run build ;;
@@ -38,17 +39,33 @@ build target="all" platform="":
         cd ui && {{x}} npm run build-storybook ;;
       go)
         plat="{{platform}}"; [ -z "$plat" ] && plat="$({{x}} go env GOOS)/$({{x}} go env GOARCH)"
-        os="${plat%/*}"; arch="${plat#*/}"; arm=""
-        case "$arch" in armv7) arch=arm; arm=7;; armv6) arch=arm; arm=6;; esac
+        os="${plat%/*}"; arch="${plat#*/}"
         mkdir -p bin
-        out="bin/corsarr-${os}-${arch}${arm:+v$arm}"
-        CGO_ENABLED=0 GOOS=$os GOARCH=$arch GOARM=$arm {{x}} go build -trimpath -ldflags "{{ldflags}}" -o "$out" ./cmd/corsarr
+        out="bin/corsarr-${os}-${arch}"
+        {{x}} scripts/gobuild.sh "$os" "$arch" "$out"
         ls -lh "$out" ;;
       all)
         just build ui; just build go {{platform}} ;;
       image)
-        docker buildx build --platform "${platform:-linux/amd64,linux/arm64}" --build-arg VERSION={{version}} -t corsarr:dev . ;;
-      *) echo "unknown target {{target}} (all|ui|go|storybook|image)"; exit 2 ;;
+        docker buildx build --platform "${platform:-linux/amd64,linux/arm64}" \
+          --build-arg VERSION --build-arg COMMIT --build-arg TAG --build-arg DIRTY --build-arg SOURCE_DATE_EPOCH -t corsarr:dev . ;;
+      release)
+        PLATFORMS="${platform:-linux/amd64,linux/arm64}" scripts/release.sh build dist ;;
+      *) echo "unknown target {{target}} (all|ui|go|storybook|image|release)"; exit 2 ;;
+    esac
+
+# ── verify ───────────────────────────────────────────────────────────────────
+# just verify release <tag>        rebuild a published release; identical / first difference per artifact
+# just verify rebuild [ref]        build twice from scratch and compare (default: this working tree)
+# just verify compare <dir> <dir>  compare two build outputs (archives/ and image/ in each)
+verify target ref="" other="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{target}}" in
+      release) [ -n "{{ref}}" ] || { echo "usage: just verify release <tag>"; exit 2; }; scripts/release.sh verify "{{ref}}" ;;
+      rebuild) scripts/release.sh twice "{{ref}}" ;;
+      compare) scripts/release.sh compare "{{ref}}" "{{other}}" ;;
+      *) echo "unknown target {{target}} (release|rebuild|compare)"; exit 2 ;;
     esac
 
 # ── run ──────────────────────────────────────────────────────────────────────
