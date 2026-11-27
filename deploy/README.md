@@ -26,6 +26,10 @@ systemd credentials.
 | Docker Swarm | [`swarm/`](swarm) | `docker stack deploy -c stack.yml corsarr` |
 | HashiCorp Nomad | [`nomad/`](nomad) | `nomad job run corsarr.nomad.hcl` |
 | Arch Linux (AUR) | [`aur/`](aur) | `makepkg -si` |
+| Proxmox VE (LXC) | [`proxmox/`](proxmox) | `bash corsarr-lxc.sh` on the host |
+| NixOS (flake) | [`nixos/`](nixos) | `services.corsarr.enable = true;` |
+| Ansible | [`ansible/`](ansible) | `ansible-playbook -i inventory.ini playbook.yml` |
+| Portainer, CasaOS, Umbrel | [`appstores/`](appstores) | add the template / app store, install corsarr |
 
 | Default | Container | Native |
 |---|---|---|
@@ -44,4 +48,5 @@ Downloads and the library belong on **one filesystem**, mounted at the **same pa
 corsarr and the download client, so imports are hardlinks.
 
 Check the samples: `just deploy validate all` (lint, render, dry-run; tools that are not
-installed are skipped) and `just deploy smoke <docker|compose|helm|kubernetes|podman|packages>`.
+installed are skipped) and `just deploy smoke <docker|compose|helm|kubernetes|podman|packages|proxmox>`.
+`just release pins <vX.Y.Z>` moves every sample, checksums included, to a published release.

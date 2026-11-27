@@ -15,8 +15,8 @@ cd "$root"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-validate_targets=(config docker compose helm kubernetes systemd podman packages homebrew windows launchd go-install unraid nas swarm nomad aur)
-smoke_targets=(docker compose helm kubernetes podman packages)
+validate_targets=(config docker compose helm kubernetes systemd podman packages homebrew windows launchd go-install unraid nas swarm nomad aur proxmox nixos ansible appstores)
+smoke_targets=(docker compose helm kubernetes podman packages proxmox)
 
 pass=() skip=() fail=()
 ok()    { pass+=("$1"); echo "  ok    $1"; }
@@ -144,7 +144,7 @@ nfpm_build() {
   mkdir -p "$stage/dist/package" "$3"
   ln -sfn "$dep" "$stage/deploy"; cp "$root/README.md" "$root/LICENSE" "$stage/"
   cp "$2" "$stage/dist/package/corsarr"
-  (cd "$stage" && VERSION=0.0.0 ARCH=amd64 nfpm package --config deploy/packages/nfpm.yaml --packager "$1" --target "$3/")
+  (cd "$stage" && VERSION=0.0.0 ARCH="${NFPM_ARCH:-amd64}" nfpm package --config deploy/packages/nfpm.yaml --packager "$1" --target "$3/")
 }
 
 v_packages() {
@@ -238,6 +238,112 @@ v_aur() {
   check "aur local-file hashes" aur_hashes
   need aur namcap || return 0
   check "aur namcap" namcap "$dep/aur/PKGBUILD"
+}
+
+pinned_version() { pinned_image | sed 's/.*:v//'; }
+
+v_proxmox() {
+  echo "proxmox"
+  local f
+  for f in corsarr-lxc.sh corsarr-install.sh; do
+    check "proxmox $f syntax" bash -n "$dep/proxmox/$f"
+    check "proxmox $f pins the release" grep -q "CORSARR_VERSION:-$(pinned_version)}" "$dep/proxmox/$f"
+  done
+  if has shellcheck; then check "proxmox shellcheck" shellcheck "$dep/proxmox/corsarr-lxc.sh" "$dep/proxmox/corsarr-install.sh"
+  else skipt "proxmox shellcheck" "shellcheck not installed"; fi
+}
+
+# hash_after <file> <archive>: the first 64-hex value after the line naming the archive
+hash_after() { sed -n "/\/$2/,\$p" "$1" | grep -o '[0-9a-f]\{64\}' | head -1; }
+
+pins_agree() { # the release checksums in the flake and the Ansible role match the formula
+  local a f h
+  for a in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+    h="$(hash_after "$dep/homebrew/corsarr.rb" "corsarr-$a.tar.gz")"
+    for f in nixos/flake.nix ansible/roles/corsarr/defaults/main.yml; do
+      case "$f$a" in *ansible*darwin*) continue ;; esac
+      [ "$(hash_after "$dep/$f" "corsarr-$a.tar.gz")" = "$h" ] || { echo "deploy/$f: corsarr-$a.tar.gz checksum differs from deploy/homebrew/corsarr.rb"; return 1; }
+    done
+  done
+}
+
+v_nixos() {
+  echo "nixos"
+  check "nixos flake pins the release" grep -q "version = \"$(pinned_version)\";" "$dep/nixos/flake.nix"
+  check "release checksums agree (nix, ansible, homebrew)" pins_agree
+  need nixos nix || return 0
+  check "nix flake check" nix --extra-experimental-features 'nix-command flakes' flake check -L "path:$dep/nixos"
+}
+
+# ansible-lint may run from its own environment: show it the collections ansible has
+ansible_collections() {
+  has ansible-galaxy || return 0
+  local p; p="$(ansible-galaxy collection list community.docker 2>/dev/null | sed -n 's/^# \(.*\)\/ansible_collections$/\1/p' | head -1)"
+  [ -n "$p" ] && echo "$p"
+}
+
+v_ansible() {
+  echo "ansible"
+  local role="$dep/ansible/roles/corsarr"
+  check "ansible unit matches deploy/systemd" cmp "$dep/systemd/corsarr.service" "$role/files/corsarr.service"
+  check "ansible role pins the release" grep -q "^corsarr_version: \"$(pinned_version)\"" "$role/defaults/main.yml"
+  need ansible ansible-lint || return 0
+  local cp; cp="$(ansible_collections)"
+  check "ansible-lint (production profile)" sh -c "cd '$dep/ansible' && ANSIBLE_COLLECTIONS_PATH='${cp:+$cp:}$HOME/.ansible/collections:/usr/share/ansible/collections' ansible-lint --offline --profile production"
+  if has molecule && has docker && [ "${MOLECULE:-0}" = 1 ]; then
+    check "molecule test" sh -c "cd '$role' && molecule test"
+  else skipt "molecule" "set MOLECULE=1 with molecule and its Docker driver installed (downloads the release)"; fi
+}
+
+appstores_yaml() { # required keys of the CasaOS and Umbrel manifests
+  python3 - "$dep/appstores" "$(pinned_image)" "$(pinned_version)" <<'EOF'
+import sys, yaml
+root, image, version = sys.argv[1:]
+def load(p):
+    with open(f"{root}/{p}") as f:
+        return yaml.safe_load(f)
+errors = []
+casa = load("casaos/corsarr/docker-compose.yml")
+x = casa.get("x-casaos", {})
+for k in ("architectures", "main", "category", "icon", "tagline", "title", "description", "port_map"):
+    if k not in x: errors.append(f"casaos: x-casaos.{k} missing")
+svc = casa["services"].get(x.get("main"), {})
+if svc.get("image") != image: errors.append(f"casaos: image {svc.get('image')} is not {image}")
+app = load("umbrel/jrand0m-corsarr/umbrel-app.yml")
+for k in ("manifestVersion", "id", "category", "name", "version", "tagline", "icon", "description",
+          "developer", "website", "port", "dependencies", "repo", "support", "gallery", "path", "submitter", "submission"):
+    if k not in app: errors.append(f"umbrel: {k} missing")
+if str(app.get("version")) != version: errors.append(f"umbrel: version {app.get('version')} is not {version}")
+store = load("umbrel/umbrel-app-store.yml")
+if not app.get("id", "").startswith(store["id"] + "-"): errors.append("umbrel: app id must start with the store id")
+uc = load("umbrel/jrand0m-corsarr/docker-compose.yml")
+if uc["services"]["server"].get("image") != image: errors.append("umbrel: server image is not the pinned image")
+if uc["services"]["app_proxy"]["environment"]["APP_HOST"] != f"{app['id']}_server_1": errors.append("umbrel: APP_HOST")
+for s in (svc, uc["services"]["server"]):
+    if not (s.get("read_only") and s.get("cap_drop") == ["ALL"] and s.get("user")): errors.append("hardening missing")
+print("\n".join(errors)); sys.exit(1 if errors else 0)
+EOF
+}
+
+portainer_template() {
+  local t="$dep/appstores/portainer/templates.json" stack v
+  jq -e '.version == "3" and (.templates | length > 0) and all(.templates[]; .type == 3 and .title and .repository.url and .repository.stackfile)' "$t" >/dev/null
+  stack="$root/$(jq -r '.templates[0].repository.stackfile' "$t")"
+  [ -f "$stack" ] || { echo "stackfile $stack missing"; return 1; }
+  for v in $(jq -r '.templates[0].env[].name' "$t"); do
+    grep -q "\${${v}[:}]" "$stack" || { echo "template variable $v is not used in $stack"; return 1; }
+  done
+}
+
+v_appstores() {
+  echo "app stores (portainer, casaos, umbrel)"
+  if has jq; then check "portainer template" portainer_template; else skipt "portainer template" "jq not installed"; fi
+  if has python3 && python3 -c 'import yaml' 2>/dev/null; then check "casaos and umbrel manifests" appstores_yaml
+  else skipt "casaos and umbrel manifests" "python3 with PyYAML not installed"; fi
+  if has xmllint; then check "app icon svg" xmllint --noout "$dep/appstores/icon.svg"; fi
+  if has docker && docker compose version >/dev/null 2>&1; then
+    check "casaos compose" compose_config "$dep/appstores/casaos/corsarr/docker-compose.yml"
+  else skipt "casaos compose" "docker compose not installed"; fi
 }
 
 # ── smoke ────────────────────────────────────────────────────────────────────
@@ -344,6 +450,20 @@ s_packages() {
   check "smoke deb (debian)" docker run --rm -v "$work/pkg:/pkg:ro" debian:stable-slim sh -c "apt-get install -y -q /pkg/*.deb >/dev/null && $probe"
   check "smoke rpm (fedora)" docker run --rm -v "$work/pkg:/pkg:ro" fedora:latest sh -c "dnf install -y -q /pkg/*.rpm >/dev/null && $probe"
   check "smoke apk (alpine)" docker run --rm -v "$work/pkg:/pkg:ro" alpine:latest sh -c "apk add -q --allow-untrusted /pkg/*.apk && $probe"
+}
+
+s_proxmox() { # the LXC installer against a locally built .deb, in a Debian container
+  need proxmox nfpm docker go || return 0
+  local arch; arch="$(docker info --format '{{.Architecture}}')"
+  case "$arch" in x86_64 | amd64) arch=amd64 ;; aarch64 | arm64) arch=arm64 ;; *) skipt proxmox "docker architecture $arch"; return 0 ;; esac
+  CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -o "$work/corsarr-linux" ./cmd/corsarr
+  NFPM_ARCH="$arch" nfpm_build deb "$work/corsarr-linux" "$work/px" >/dev/null
+  local deb; deb="$(cd "$work/px" && ls corsarr_*.deb)"
+  echo "$(sha256 "$work/px/$deb")  $deb" > "$work/px/SHA256SUMS"
+  local run=(docker run --rm -v "$work/px:/pkg:ro" -v "$dep/proxmox:/px:ro" debian:stable-slim bash -c)
+  check "smoke proxmox install" "${run[@]}" 'CORSARR_VERSION=0.0.0 CORSARR_BASE=file:///pkg bash /px/corsarr-install.sh && corsarr version && id corsarr && corsarr config validate --configFile=/etc/corsarr/corsarr.yml'
+  cp -R "$work/px" "$work/px-bad" && sed -i.bak 's/^./0/' "$work/px-bad/SHA256SUMS"
+  check "smoke proxmox refuses a bad checksum" sh -c "docker run --rm -v '$work/px-bad:/pkg:ro' -v '$dep/proxmox:/px:ro' debian:stable-slim bash -c 'CORSARR_VERSION=0.0.0 CORSARR_BASE=file:///pkg bash /px/corsarr-install.sh' 2>&1 | grep -q 'does not match SHA256SUMS'"
 }
 
 # ── main ─────────────────────────────────────────────────────────────────────

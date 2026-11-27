@@ -34,11 +34,13 @@ jobs:
           r go install "github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           r sudo apt-get update -q
-          r sudo apt-get install -y -q podman libxml2-utils yamllint jq shellcheck ruby
+          r sudo apt-get install -y -q podman libxml2-utils yamllint jq shellcheck ruby python3-yaml
+          r pipx install --include-deps ansible-lint
+          r ansible-galaxy collection install -r deploy/ansible/requirements.yml
       - name: Validate samples
         run: |
           set -euo pipefail
-          # tools with no Ubuntu package (namcap, nomad, plutil) are covered elsewhere or skipped
+          # tools with no Ubuntu package (namcap, nomad, plutil, nix, molecule) are covered elsewhere or skipped
           scripts/deploy-samples.sh validate all
 
   validate-arch:
@@ -50,6 +52,28 @@ jobs:
         run: |
           pacman -Syu --noconfirm --needed namcap
           scripts/deploy-samples.sh validate aur
+
+  validate-nix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: nix flake check
+        run: scripts/deploy-samples.sh validate nixos
+
+  validate-ansible:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: molecule (binary mode in a Debian container)
+        run: |
+          set -euo pipefail
+          r() { for i in 1 2 3 4 5; do "$@" && return 0; sleep $((i*5)); done; return 1; }
+          r pipx install --include-deps ansible-lint
+          r pipx install --include-deps molecule
+          r pipx inject molecule 'molecule-plugins[docker]'
+          r ansible-galaxy collection install -r deploy/ansible/requirements.yml
+          MOLECULE=1 STRICT=1 scripts/deploy-samples.sh validate ansible
 
   validate-macos:
     runs-on: macos-latest
@@ -126,7 +150,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [docker, compose, helm, kubernetes, podman, packages]
+        target: [docker, compose, helm, kubernetes, podman, packages, proxmox]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

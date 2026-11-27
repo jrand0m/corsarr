@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Moves every deployment sample in deploy/ to a release: image tags, chart
-# version and appVersion, kustomize newTag, download URLs, package names, and
-# the checksums Homebrew, Scoop, winget and the AUR PKGBUILD carry.
+# version and appVersion, kustomize newTag, download URLs, package names,
+# installer and app-store versions, and the checksums Homebrew, Scoop, winget,
+# the AUR PKGBUILD, the Nix flake and the Ansible role carry (a checksum is
+# matched to the archive named on one of the three lines before it).
 #
 #   scripts/pins.sh <vX.Y.Z> [SHA256SUMS]
 #
