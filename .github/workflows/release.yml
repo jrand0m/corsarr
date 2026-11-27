@@ -1,148 +1,298 @@
 name: release
 
-# A version tag (v1.2.3) builds every platform from that commit, publishes the
-# archives with SHA256SUMS and a build-provenance attestation per artifact, and
-# pushes a multi-arch container image (release tags also move :latest and
-# :stable). Nothing is built outside this workflow.
+# A version tag (v1.2.3) on master builds the release twice, on an amd64 and an
+# arm64 runner, inside the pinned builder (Dockerfile + scripts/release.sh).
+# The release fails unless both builds are byte-for-byte identical. Then the
+# first build is published: six archives and six Linux packages (.deb, .rpm,
+# .apk) with SHA256SUMS, an SBOM and a build-provenance attestation per file, and
+# the multi-arch image with a keyless cosign signature, provenance and SBOM
+# attestations (release tags also move :latest and :stable and publish the Helm
+# chart to ghcr.io/<owner>/charts). Build jobs have no secrets and read-only access;
+# publishing uses short-lived OIDC credentials. VERIFYING.md explains how
+# to check any of it.
 on:
   push:
     tags: ["v*"]
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  ui:
-    runs-on: ubuntu-latest
+  guard:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version-file: .tool-versions
-          cache: npm
-          cache-dependency-path: ui/package-lock.json
-      - working-directory: ui
-        run: |
-          npm ci --no-audit --no-fund
-          npm run build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ui-dist
-          path: internal/web/dist
-          include-hidden-files: true
-          retention-days: 1
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The tag must point at a commit on master
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/master
 
-  binaries:
-    needs: ui
-    runs-on: ubuntu-latest
+  build:
+    needs: guard
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the tag and its commit time are build inputs
+          persist-credentials: false
+      - name: Build archives and image in the pinned builder
+        env:
+          NO_CACHE: all
+        run: scripts/release.sh build "$RUNNER_TEMP/build"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-${{ matrix.runner }}
+          path: ${{ runner.temp }}/build
+          retention-days: 3
+
+  compare:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: build-*
+          path: builds
+      - name: Both builds must be identical
+        run: |
+          set -euo pipefail
+          diff builds/build-ubuntu-24.04/build.env builds/build-ubuntu-24.04-arm/build.env
+          go run ./scripts/repro compare builds/build-ubuntu-24.04 builds/build-ubuntu-24.04-arm
+
+  image:
+    needs: compare
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: build-ubuntu-24.04
+          path: build
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: push
+        name: Push the verified image without rebuilding it
+        run: |
+          set -euo pipefail
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          digest=$(sed -n 's/^IMAGE_DIGEST=//p' build/build.env)
+          tags=("$GITHUB_REF_NAME")
+          # release tags (no "-rc.N" suffix) are stable; prereleases only get their own tag
+          [[ "$GITHUB_REF_NAME" == *-* ]] || tags+=(latest stable)
+          for t in "${tags[@]}"; do
+            for i in 1 2 3; do
+              skopeo copy --all --preserve-digests --authfile "$HOME/.docker/config.json" \
+                oci:build/image "docker://$repo:$t" && break
+              sleep $((i * 10))
+            done
+          done
+          pushed="sha256:$(skopeo inspect --raw --authfile "$HOME/.docker/config.json" "docker://$repo:$GITHUB_REF_NAME" | sha256sum | cut -d' ' -f1)"
+          [ "$pushed" = "$digest" ] || { echo "registry digest $pushed differs from the built $digest"; exit 1; }
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
+      - name: Keyless signature
+        run: cosign sign --yes "${{ steps.push.outputs.repo }}@${{ steps.push.outputs.digest }}"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.push.outputs.repo }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - uses: anchore/sbom-action/download-syft@dfcb83b97731532d72be422cbc51ee64adb6fd56 # v0.24.4
+        id: syft
+      - name: SBOM per platform
+        run: |
+          set -euo pipefail
+          for p in amd64 arm64; do
+            "${{ steps.syft.outputs.cmd }}" scan "registry:${{ steps.push.outputs.repo }}@${{ steps.push.outputs.digest }}" \
+              --platform "linux/$p" -o "spdx-json=corsarr-image-linux-$p.spdx.json"
+          done
+      - uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ steps.push.outputs.repo }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: corsarr-image-linux-amd64.spdx.json
+          push-to-registry: true
+      - uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ steps.push.outputs.repo }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: corsarr-image-linux-arm64.spdx.json
+          push-to-registry: true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-image
+          path: corsarr-image-*.spdx.json
+          retention-days: 3
+
+  files:
+    # One SBOM per archive and package (the Go modules inside its binary), attested
+    # together with build provenance.
+    needs: compare
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
       attestations: write
     strategy:
       matrix:
-        include:
-          - { goos: linux, goarch: amd64 }
-          - { goos: linux, goarch: arm64 }
-          - { goos: darwin, goarch: amd64 }
-          - { goos: darwin, goarch: arm64 }
-          - { goos: windows, goarch: amd64 }
-          - { goos: windows, goarch: arm64 }
+        id: [linux-amd64, linux-arm64, darwin-amd64, darwin-arm64, windows-amd64, windows-arm64,
+             deb-amd64, deb-arm64, rpm-amd64, rpm-arm64, apk-amd64, apk-arm64]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          go-version-file: go.mod
-      - uses: actions/download-artifact@v4
-        with:
-          name: ui-dist
-          path: internal/web/dist
-      - name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+          name: build-ubuntu-24.04
+          path: build
+      - uses: anchore/sbom-action/download-syft@dfcb83b97731532d72be422cbc51ee64adb6fd56 # v0.24.4
+        id: syft
+      - name: SBOM for ${{ matrix.id }}
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "0"
+          ID: ${{ matrix.id }}
+          SYFT: ${{ steps.syft.outputs.cmd }}
         run: |
           set -euo pipefail
-          name="corsarr-${GOOS}-${GOARCH}"
-          ext=""; [ "$GOOS" = windows ] && ext=".exe"
-          mkdir -p "dist/$name"
-          go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o "dist/$name/corsarr$ext" ./cmd/corsarr
-          cp README.md LICENSE deploy/corsarr.example.yml "dist/$name/"
-          cd dist
-          if [ "$GOOS" = windows ]; then zip -qr "$name.zip" "$name"; else tar -czf "$name.tar.gz" "$name"; fi
-          rm -rf "$name"
-      - uses: actions/attest-build-provenance@v2
+          cd build/archives
+          kind="${ID%-*}" arch="${ID#*-}"
+          rarch=x86_64; [ "$arch" = arm64 ] && rarch=aarch64
+          case "$kind" in
+            windows) file="corsarr-$ID.zip" ;;
+            linux|darwin) file="corsarr-$ID.tar.gz" ;;
+            deb) file=$(ls corsarr_*_"$arch".deb) ;;
+            rpm) file=$(ls corsarr-*."$rarch".rpm) ;;
+            apk) file=$(ls corsarr_*_"$rarch".apk) ;;
+          esac
+          # a package carries the linux binary of its architecture
+          src="corsarr-$ID"; case "$kind" in deb|rpm|apk) src="corsarr-linux-$arch" ;; esac
+          mkdir -p ../x
+          case "$src" in
+            corsarr-windows-*) unzip -q "$src.zip" -d ../x ;;
+            *) tar -xzf "$src.tar.gz" -C ../x ;;
+          esac
+          "$SYFT" scan "dir:../x/$src" --source-name corsarr --source-version "$GITHUB_REF_NAME" \
+            -o "spdx-json=../$file.spdx.json"
+          echo "FILE=build/archives/$file" >> "$GITHUB_ENV"
+          echo "SBOM=build/$file.spdx.json" >> "$GITHUB_ENV"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: "dist/corsarr-*"
-      - uses: actions/upload-artifact@v4
+          subject-path: ${{ env.FILE }}
+      - uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
-          name: bin-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/corsarr-*
-          retention-days: 1
+          subject-path: ${{ env.FILE }}
+          sbom-path: ${{ env.SBOM }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ matrix.id }}
+          path: ${{ env.SBOM }}
+          retention-days: 3
 
-  image:
-    needs: ui
-    runs-on: ubuntu-latest
+  chart:
+    # The Helm chart as an OCI artifact, for releases only (no -rc.N); its version
+    # and appVersion are the release's.
+    needs: image
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        run: |
-          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
-          echo "repo=$repo" >> "$GITHUB_OUTPUT"
-          tags="$repo:${GITHUB_REF_NAME}"
-          # release tags (no "-rc.N" suffix) are stable; prereleases only get their own tag
-          [[ "$GITHUB_REF_NAME" == *-* ]] || tags="$tags,$repo:latest,$repo:stable"
-          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          persist-credentials: false
       - id: push
-        uses: docker/build-push-action@v6
+        name: Package and push the chart to ghcr.io/<owner>/charts/corsarr
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "$TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          helm package deploy/helm/corsarr --version "${GITHUB_REF_NAME#v}" --app-version "$GITHUB_REF_NAME" --destination chart
+          out=$(helm push chart/corsarr-*.tgz "oci://ghcr.io/$owner/charts" 2>&1) || { echo "$out"; exit 1; }
+          echo "$out"
+          echo "name=ghcr.io/$owner/charts/corsarr" >> "$GITHUB_OUTPUT"
+          echo "digest=$(echo "$out" | sed -n 's/^Digest: //p')" >> "$GITHUB_OUTPUT"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          build-args: VERSION=${{ github.ref_name }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.ref_name }}
-            org.opencontainers.image.licenses=AGPL-3.0-or-later
-          push: true
-      - uses: actions/attest-build-provenance@v2
-        with:
-          subject-name: ${{ steps.meta.outputs.repo }}
+          subject-name: ${{ steps.push.outputs.name }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
   publish:
-    needs: [binaries, image]
-    runs-on: ubuntu-latest
+    needs: [image, files]
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: bin-*
-          path: dist
+          name: build-ubuntu-24.04
+          path: build
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: sbom-*
+          path: sbom
           merge-multiple: true
-      - name: Checksums and GitHub release
+      - name: GitHub release with checksums, SBOMs and the builder identity
         env:
           GH_TOKEN: ${{ github.token }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
         run: |
           set -euo pipefail
-          cd dist
-          sha256sum corsarr-* > SHA256SUMS
-          gh release create "$GITHUB_REF_NAME" corsarr-* SHA256SUMS \
-            --repo "$GITHUB_REPOSITORY" --title "corsarr $GITHUB_REF_NAME" --generate-notes \
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          buildkit=$(sed -n 's/^BUILDKIT=//p' build/build.env)
+          {
+            echo "## Verify this release"
+            echo
+            echo "Rebuilt twice on independent runners (amd64 and arm64) with identical results."
+            echo
+            echo "- Image: \`$repo@$IMAGE_DIGEST\`"
+            echo "- Builder: \`$buildkit\`; base images are pinned by digest in the tagged Dockerfile"
+            echo "- Source date (SOURCE_DATE_EPOCH): \`$(sed -n 's/^SOURCE_DATE_EPOCH=//p' build/build.env)\`"
+            echo
+            echo '```'
+            echo "sha256sum -c SHA256SUMS --ignore-missing"
+            echo "gh attestation verify corsarr-linux-amd64.tar.gz --repo $GITHUB_REPOSITORY"
+            echo "cosign verify $repo@$IMAGE_DIGEST --certificate-identity-regexp '^https://github.com/$GITHUB_REPOSITORY/' --certificate-oidc-issuer https://token.actions.githubusercontent.com"
+            echo "just verify release $GITHUB_REF_NAME   # rebuild from source and compare"
+            echo '```'
+            echo
+            echo "Details: https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/VERIFYING.md"
+            echo
+          } > notes.md
+          cd build/archives
+          gh release create "$GITHUB_REF_NAME" corsarr[-_]* SHA256SUMS ../../sbom/*.spdx.json \
+            --repo "$GITHUB_REPOSITORY" --title "corsarr $GITHUB_REF_NAME" \
+            --notes-file ../../notes.md --generate-notes \
             $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)

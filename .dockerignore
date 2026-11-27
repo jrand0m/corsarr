@@ -1,0 +1,17 @@
+# Only sources enter the build: nothing generated or machine-specific may leak
+# into a release, or two builds of one commit would differ.
+.git
+.github
+**/node_modules
+**/.DS_Store
+bin
+dist
+data
+coverage.out
+*.db
+*.db-wal
+*.db-shm
+.env
+ui/storybook-static
+internal/web/dist/*
+!internal/web/dist/.keep

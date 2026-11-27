@@ -41,4 +41,4 @@ install -D bin/corsarr-linux-amd64 dist/package/corsarr
 VERSION=0.4.0 ARCH=amd64 nfpm package --config deploy/packages/nfpm.yaml --packager deb --target dist/
 ```
 
-[`release-step.yml`](release-step.yml) is the job that builds them in the release workflow.
+Releases build the packages in the same pinned builder as the archives (`just build release`), so they are reproducible and listed in `SHA256SUMS` with provenance and SBOM attestations.

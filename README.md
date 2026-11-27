@@ -53,13 +53,25 @@ Download the archive for your platform from the [releases](../../releases) page 
 ./corsarr --data.dir=./data          # then open http://localhost:8090
 ```
 
-Each release includes `SHA256SUMS` and a signed build-provenance attestation. To check
-that a binary was built by this repository's release workflow from the tagged commit:
+### Verifying a release
+
+Every release is reproducible: anyone can rebuild a tag and get the same bytes. Each
+release ships `SHA256SUMS`, an SBOM per archive and per image platform, and
+build-provenance attestations; the image also carries a keyless cosign signature.
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
 gh attestation verify corsarr-linux-arm64.tar.gz --repo jrand0m/corsarr
+gh attestation verify oci://ghcr.io/jrand0m/corsarr:v1.2.3 --repo jrand0m/corsarr
+cosign verify ghcr.io/jrand0m/corsarr:v1.2.3 \
+  --certificate-identity-regexp '^https://github.com/jrand0m/corsarr/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+just verify release v1.2.3       # rebuild from source and compare byte for byte
 ```
+
+[`VERIFYING.md`](VERIFYING.md) explains each step, including the rebuild with
+plain `docker` and no other tools. `corsarr version --json` and System › About show which
+commit a running binary was built from.
 
 ### Container
 
@@ -154,7 +166,9 @@ just run dev                     # serve on :8090 with ./data
 just run storybook               # the component library
 ```
 
-Builds are `CGO_ENABLED=0`, so cross-compiling needs no C toolchain.
+Builds are `CGO_ENABLED=0`, so cross-compiling needs no C toolchain. Release builds run in
+a pinned builder (Docker with BuildKit): `just build release` writes the archives, packages and
+the image to `dist/`, and `just verify rebuild` builds twice from scratch and compares.
 
 ## Project status
 

@@ -242,7 +242,8 @@ func TestKernelEndpoints(t *testing.T) {
 	h := []string{"X-Api-Key", e.key(t)}
 	code, m := e.do(t, "GET", "/api/v1/system/status", "", h...)
 	if code != 200 || m["version"] != "test" || m["uptimeSeconds"].(float64) < 59 || m["rssBytes"].(float64) <= 0 ||
-		m["goroutines"].(float64) < 1 || m["dbSizeBytes"].(float64) <= 0 || m["configSource"].(map[string]any)["kind"] != "env" {
+		m["goroutines"].(float64) < 1 || m["dbSizeBytes"].(float64) <= 0 || m["configSource"].(map[string]any)["kind"] != "env" ||
+		m["build"].(map[string]any)["version"] != "test" {
 		t.Fatalf("status: %v", m)
 	}
 	if kinds := m["enabledKinds"].([]any); len(kinds) != 4 || kinds[0] != "book" {

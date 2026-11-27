@@ -1,0 +1,22 @@
+# Keeps every pin current: action commits, base image digests, Go modules and UI packages.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
+  - package-ecosystem: docker
+    directory: /
+    schedule: { interval: weekly }
+  - package-ecosystem: gomod
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      go-modules: { patterns: ["*"] }
+  - package-ecosystem: npm
+    directory: /ui
+    schedule: { interval: weekly }
+    groups:
+      ui-dev: { dependency-type: development }
+      ui-prod: { dependency-type: production }

@@ -19,6 +19,7 @@ describe('resolve', () => {
     expect(resolve('/activity/blocklist')).toMatchObject({ area: 'activity', screen: 'blocklist' });
     expect(resolve('/system/health')).toMatchObject({ area: 'system', screen: 'health' });
     expect(resolve('/system/tasks')).toMatchObject({ area: 'system', screen: 'tasks' });
+    expect(resolve('/system/about')).toMatchObject({ area: 'system', screen: 'about' });
     expect(resolve('/settings/general')).toMatchObject({ area: 'settings', screen: 'general' });
     expect(resolve('/settings/plugins')).toMatchObject({ area: 'settings', screen: 'plugins' });
   });
@@ -60,7 +61,7 @@ describe('areaLoaders', () => {
   it('loads every area as a module with the screens the table names', async () => {
     const screens: Record<string, string[]> = {
       access: ['setup', 'login'], dashboard: ['dashboard'], library: ['movies', 'add', 'movie', 'series', 'addSeries', 'show'], wanted: ['missing', 'missingTv'],
-      activity: ['queue', 'history', 'blocklist'], system: ['health', 'tasks', 'migration'], settings: ['general', 'plugins'],
+      activity: ['queue', 'history', 'blocklist'], system: ['health', 'tasks', 'migration', 'about'], settings: ['general', 'plugins'],
     };
     for (const [area, names] of Object.entries(screens)) {
       const mod = await areaLoaders[area as keyof typeof areaLoaders]();

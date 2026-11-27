@@ -272,12 +272,22 @@ export interface JobState {
   intervalSeconds: number;
 }
 
+export interface BuildInfo {
+  version: string;
+  commit: string;
+  tag: string;
+  goVersion: string;
+  buildDate: string;
+  dirty: boolean;
+}
+
 export interface SystemStatus {
   version: string;
   uptimeSeconds: number;
   configSource: { kind: 'file' | 'args' | 'env' | 'defaults' | string; path?: string; ignored?: string[] };
   enabledKinds: MediaKind[];
   pluginCount: number;
+  build?: BuildInfo;
 }
 
 export interface PluginField {
