@@ -1,10 +1,14 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 )
+
+// ErrLocked says another corsarr process holds the data dir.
+var ErrLocked = errors.New("another corsarr process is using")
 
 // acquireLock takes an exclusive advisory lock on path; a second corsarr on
 // the same data dir is refused. The OS drops the lock if the process dies,
@@ -18,7 +22,7 @@ func acquireLock(path string) (*os.File, error) {
 	if busy || err != nil {
 		f.Close()
 		if busy {
-			return nil, fmt.Errorf("another corsarr process is using %s", path)
+			return nil, fmt.Errorf("%w %s", ErrLocked, path)
 		}
 		return nil, fmt.Errorf("lock %s: %w", path, err)
 	}

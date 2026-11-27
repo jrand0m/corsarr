@@ -114,6 +114,7 @@ func NewSchema(reg *plugin.Registry) *Schema {
 		legacyField(LegacyLidarr, "Lidarr-compatible read-only API at /legacy/lidarr/api/v1 (music)."),
 		legacyField(LegacyProwlarr, "Prowlarr-compatible read-only API at /legacy/prowlarr/api/v1 (indexers)."),
 	)})
+	fields = append(fields, Field{Name: "mcp", Live: true, Node: mcpNode()})
 	for _, k := range instanceSections {
 		fields = append(fields, Field{Name: k.Section(), Live: true, Node: &Node{
 			Kind: KindMap, Doc: fmt.Sprintf("Your %s connections, one entry per name you choose (lower-case letters and digits).", kindLabel(k)),
@@ -163,6 +164,28 @@ func kindLabel(k plugin.Kind) string {
 		return "notification"
 	}
 	return string(k)
+}
+
+// MCP scopes: read exposes only tools that change nothing; write exposes all.
+const (
+	MCPScopeRead  = "read"
+	MCPScopeWrite = "write"
+)
+
+func mcpNode() *Node {
+	return obj("Model Context Protocol endpoint at <base>/mcp for AI assistants; off until enabled.",
+		Field{Name: "enabled", Node: &Node{Kind: KindBool, Default: "false",
+			Doc: "Serve the MCP endpoint (authenticated with the corsarr API key or the read-only key)."}},
+		Field{Name: "scope", Node: enum(MCPScopeRead, "read: only tools that change nothing; write: also tools that add, search, monitor or remove.",
+			MCPScopeRead, MCPScopeWrite)},
+		Field{Name: "tools", Node: &Node{Kind: KindList, Doc: "Tool names to expose; empty exposes every tool the scope allows.",
+			Elem: &Node{Kind: KindString, Doc: "A tool to expose by name, e.g. find_media; leave the list empty to expose every tool the scope allows."}}},
+		Field{Name: "rateLimit", Node: &Node{Kind: KindInt, Default: "60", Check: nonNegative,
+			Doc: "Most MCP calls per minute per API key; 0 means no limit."}},
+		Field{Name: "allowedOrigins", Node: &Node{Kind: KindList,
+			Doc:  "Browser origins allowed besides the server's own, e.g. http://localhost:6274; clients that send no Origin are always allowed.",
+			Elem: &Node{Kind: KindString, Doc: "A browser origin allowed to call the endpoint besides the server's own, as scheme://host[:port], e.g. http://localhost:6274."}}},
+	)
 }
 
 func kindNames() []string {

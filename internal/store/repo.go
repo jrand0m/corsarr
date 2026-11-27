@@ -172,3 +172,33 @@ func (r Auth) SetAPIKey(ctx context.Context, key string) error {
 		return err
 	})
 }
+
+// ReadOnlyAPIKey returns the decrypted read-only key and whether one exists.
+func (r Auth) ReadOnlyAPIKey(ctx context.Context) (string, bool, error) {
+	var sealed string
+	ok, err := found(r.s.R().QueryRowContext(ctx, "SELECT key_sealed FROM api_key_readonly WHERE id = 1").Scan(&sealed))
+	if !ok {
+		return "", false, err
+	}
+	key, err := r.s.Decrypt(sealed)
+	return key, err == nil, err
+}
+
+// SetReadOnlyAPIKey stores (or rotates) the read-only key; "" revokes it.
+func (r Auth) SetReadOnlyAPIKey(ctx context.Context, key string) error {
+	if key == "" {
+		return r.s.Write(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, "DELETE FROM api_key_readonly")
+			return err
+		})
+	}
+	sealed, err := r.s.Encrypt(key)
+	if err != nil {
+		return err
+	}
+	return r.s.Write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO api_key_readonly (id, key_sealed, created_at) VALUES (1, ?, ?)
+			ON CONFLICT (id) DO UPDATE SET key_sealed = excluded.key_sealed, created_at = excluded.created_at`, sealed, ms(time.Now()))
+		return err
+	})
+}

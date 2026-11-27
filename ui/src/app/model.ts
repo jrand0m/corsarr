@@ -102,6 +102,7 @@ const eventViews: Record<string, EventView> = {
   'mediakind.mode_changed': { label: 'Kind mode changed', family: 'kindMode', value: 'active' },
   'refresh.abandoned': { label: 'Library refresh gave up', family: 'health', value: 'failing' },
   'migration.run_completed': { label: 'Migration applied', family: 'check', value: 'pass' },
+  'mcp.called': { label: 'Assistant call', family: 'check', value: 'pass' },
 };
 
 /** Label and badge for a History event; health changes take the new health state. */
