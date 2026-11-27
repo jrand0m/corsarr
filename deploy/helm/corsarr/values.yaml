@@ -1,0 +1,169 @@
+# Default values for corsarr. Everything runs under the "restricted" Pod Security Standard.
+
+image:
+  repository: ghcr.io/jrand0m/corsarr
+  # Defaults to the chart appVersion.
+  tag: ""
+  # Optional digest (sha256:…); when set the image is pulled by digest.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# corsarr keeps its state in one SQLite file: run exactly one replica and replace it
+# (never two pods on the same volume).
+strategy:
+  type: Recreate
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+# Soft Go heap limit; keep it at about 75% of the memory limit. Empty disables it.
+goMemLimit: 192MiB
+
+# corsarr configuration, rendered into a ConfigMap and mounted at
+# /etc/corsarr/corsarr.yml. Generated from `corsarr config defaults --format=yaml`.
+# A config file is the only source when present (CORSARR_* variables are ignored), so
+# secrets go in as references: ${env:NAME} with NAME from envFromSecrets, or
+# ${file:/path} for a Secret mounted through extraVolumes/extraVolumeMounts.
+config:
+  version: 1
+  server:
+    address: ":8090"
+  data:
+    dir: /data
+  log:
+    level: info
+  auth:
+    mode: password
+  mediaKinds:
+    tv: { mode: active }
+    movie: { mode: active }
+    music: { mode: active }
+    book: { mode: disabled }
+
+# Use an existing ConfigMap (key corsarr.yml) instead of `config`.
+existingConfigMap: ""
+
+# Secrets whose keys become environment variables, for ${env:NAME} references:
+#   kubectl create secret generic corsarr-secrets --from-literal=TMDB_API_KEY=…
+envFromSecrets: []
+#  - corsarr-secrets
+
+extraEnv: []
+#  - name: TZ
+#    value: Europe/Berlin
+
+persistence:
+  enabled: true
+  # Use an existing PersistentVolumeClaim for /data.
+  existingClaim: ""
+  storageClass: ""
+  accessModes: [ReadWriteOnce]
+  size: 1Gi
+  annotations: {}
+
+# Media volumes. Downloads and the library should be one volume (one filesystem) mounted
+# at the same path the download client uses, so imports are hardlinks.
+media: []
+#  - name: media
+#    mountPath: /media
+#    readOnly: false            # true for shadow mode
+#    volume:                    # any Kubernetes volume source
+#      persistentVolumeClaim:
+#        claimName: media
+#  - name: nas
+#    mountPath: /media
+#    volume:
+#      nfs: { server: nas.example.com, path: /export/media }
+
+# Size of the in-memory /tmp.
+tmpSizeLimit: 64Mi
+
+service:
+  type: ClusterIP
+  port: 8090
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: corsarr.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: corsarr-tls
+  #    hosts: [corsarr.example.com]
+
+# Gateway API HTTPRoute (gateway.networking.k8s.io/v1).
+httpRoute:
+  enabled: false
+  annotations: {}
+  parentRefs: []
+  #  - name: gateway
+  #    namespace: gateway-system
+  hostnames: []
+  #  - corsarr.example.com
+
+probes:
+  startup:
+    httpGet: { path: /api/v1/health, port: http }
+    periodSeconds: 2
+    failureThreshold: 60
+  liveness:
+    httpGet: { path: /api/v1/health, port: http }
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    httpGet: { path: /api/v1/health, port: http }
+    periodSeconds: 10
+    timeoutSeconds: 5
+
+# Prometheus Operator ServiceMonitor; enable it when your build serves metrics at `path`.
+serviceMonitor:
+  enabled: false
+  path: /metrics
+  interval: 60s
+  scrapeTimeout: 10s
+  labels: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+extraVolumes: []
+extraVolumeMounts: []

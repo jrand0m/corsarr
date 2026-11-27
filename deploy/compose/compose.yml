@@ -1,0 +1,46 @@
+# corsarr with Docker Compose.
+#   cp -r deploy/compose ~/corsarr && cd ~/corsarr && docker compose up -d
+#   then open http://localhost:8090 and create the admin account.
+#
+# Downloads and the library must live on ONE filesystem, mounted at the SAME path the
+# download client uses, so imports are hardlinks instead of copies.
+name: corsarr
+services:
+  corsarr:
+    image: ghcr.io/jrand0m/corsarr:v0.4.0   # pin a release; :latest follows releases
+    restart: unless-stopped
+    user: "65532:65532"                      # /data and the media dir must be writable by it
+    read_only: true                          # only /data and /tmp are written
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["--configFile=/etc/corsarr/corsarr.yml"]
+    environment:
+      GOMEMLIMIT: 96MiB                      # soft heap limit; keep below the memory limit
+      # Secrets referenced from corsarr.yml as ${env:NAME}, values kept in .env:
+      # TMDB_API_KEY: ${TMDB_API_KEY:?set it in .env}
+    # secrets: [indexer_api_key]             # referenced as ${file:/run/secrets/indexer_api_key}
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./corsarr.yml:/etc/corsarr/corsarr.yml:ro
+      - corsarr-data:/data                   # database, keys, logs: back this up
+      - ${MEDIA_DIR:-/srv/media}:/media      # downloads + library on one filesystem
+      # Shadow mode (corsarr never writes media):
+      # - ${MEDIA_DIR:-/srv/media}:/media:ro
+    healthcheck:
+      test: ["CMD", "/corsarr", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    mem_limit: 256m
+    pids_limit: 256
+
+# secrets:
+#   indexer_api_key:
+#     file: ./secrets/indexer_api_key.txt
+
+volumes:
+  corsarr-data: {}
