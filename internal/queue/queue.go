@@ -41,6 +41,9 @@ type Repo interface {
 	Download(ctx context.Context, id int64) (store.StoredDownload, bool, error)
 	Downloads(ctx context.Context, states ...domain.DownloadState) ([]store.StoredDownload, error)
 	List(ctx context.Context, cursor int64, limit int) ([]store.StoredDownload, int64, error)
+	ListFiltered(ctx context.Context, f store.QueueFilter, cursor int64, limit int) ([]store.StoredDownload, int64, error)
+	AddTransition(ctx context.Context, downloadID int64, t store.Transition) error
+	Transitions(ctx context.Context, downloadID int64) ([]store.Transition, error)
 	Save(ctx context.Context, d store.StoredDownload) error
 	PayloadChecked(ctx context.Context, id int64) (bool, error)
 	SetPayloadChecked(ctx context.Context, id int64) error
@@ -83,6 +86,12 @@ type Deps struct {
 	ItemTitles func(ctx context.Context, refs []domain.ItemRef) []domain.EventItem
 	Payload    decide.PayloadPolicy
 	Modes      domain.Modes // media-kind modes; nil = all active
+	// Clients lists every configured downloader with its health, usable or
+	// not; nil = the usable ones from Plugins.
+	Clients func() []ClientInfo
+	// TestClient self-tests one downloader and records its health; nil = the
+	// plugin's own Test.
+	TestClient func(ctx context.Context, key domain.ObjectKey) error
 	FastPoll   time.Duration
 	SlowPoll   time.Duration
 	Now        func() time.Time

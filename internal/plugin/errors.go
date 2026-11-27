@@ -27,6 +27,10 @@ const (
 // a normal outcome, not a health failure.
 var ErrNotFound = errors.New("not found")
 
+// ErrUnsupported is returned (wrapped) when a client cannot perform an
+// operation at all; it is a normal outcome, not a health failure.
+var ErrUnsupported = errors.New("not supported by this client")
+
 // Error is a plugin failure carrying the class health reporting needs.
 type Error struct {
 	Class FailureClass

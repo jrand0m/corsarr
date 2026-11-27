@@ -207,7 +207,7 @@ func TestDefaultsWhenNoSource(t *testing.T) {
 	if c.MediaKinds[domain.KindBook] != domain.ModeDisabled || c.MediaKinds[domain.KindMovie] != domain.ModeActive {
 		t.Fatalf("kinds: %v", c.MediaKinds)
 	}
-	if got := string(c.ExportYAML(ExportOptions{})); got != "# Schema version of this file.\nversion: 1\n" {
+	if got := string(c.ExportYAML(ExportOptions{})); got != "# Format version of the configuration; leave it at 1.\nversion: 1\n" {
 		t.Fatalf("empty export: %q", got)
 	}
 }

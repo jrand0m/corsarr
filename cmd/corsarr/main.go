@@ -1,10 +1,11 @@
 // Command corsarr is the single-binary media automation server.
 //
-//	corsarr [serve]                         run the server (default)
+//	corsarr [serve] [--allow-root]          run the server (default); root is refused without --allow-root
 //	corsarr healthcheck                     exit 0 when the running server is ready
 //	corsarr config validate [--plan]        validate the active config source
 //	corsarr config export [--format=yaml|env] [--full]
 //	corsarr config schema                   print the JSON Schema
+//	corsarr config defaults [--format=table|markdown|yaml|env]   every setting, its default and meaning
 //	corsarr migrate plan|run --from=… --url=… --api-key-file=…   import an existing installation
 //	corsarr admin reset-password [--username=…]   new admin password from stdin
 //	corsarr version
@@ -47,7 +48,7 @@ type cli struct {
 }
 
 // commandFlags are subcommand flags, kept out of the config args.
-var commandFlags = map[string]bool{"plan": true, "format": true, "full": true, "username": true}
+var commandFlags = map[string]bool{"plan": true, "format": true, "full": true, "username": true, "allow-root": true}
 
 func init() {
 	for _, f := range migrateFlags {
@@ -82,6 +83,7 @@ var commands = map[string]func(c cli, ctx context.Context) int{
 	"config validate":      func(c cli, _ context.Context) int { return c.validate() },
 	"config export":        func(c cli, _ context.Context) int { return c.export() },
 	"config schema":        func(c cli, _ context.Context) int { return c.schema() },
+	"config defaults":      func(c cli, _ context.Context) int { return c.defaults() },
 	"migrate plan":         func(c cli, ctx context.Context) int { return c.migrate(ctx, "plan") },
 	"migrate run":          func(c cli, ctx context.Context) int { return c.migrate(ctx, "run") },
 	"admin reset-password": func(c cli, ctx context.Context) int { return c.resetPassword(ctx) },
@@ -94,7 +96,7 @@ func run(ctx context.Context, args, environ []string, stdout, stderr io.Writer) 
 	if h, ok := commands[name]; ok {
 		return h(c, ctx)
 	}
-	fmt.Fprintf(stderr, "unknown command %q (serve | healthcheck | config validate|export|schema | migrate plan|run | admin reset-password | version)\n", name)
+	fmt.Fprintf(stderr, "unknown command %q (serve | healthcheck | config validate|export|schema|defaults | migrate plan|run | admin reset-password | version)\n", name)
 	return 2
 }
 

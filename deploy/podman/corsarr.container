@@ -1,0 +1,55 @@
+# corsarr as a rootless Podman Quadlet (podman 4.9+).
+#   mkdir -p ~/.config/containers/systemd ~/.config/corsarr
+#   cp corsarr.container corsarr-data.volume ~/.config/containers/systemd/
+#   cp corsarr.yml ~/.config/corsarr/
+#   systemctl --user daemon-reload && systemctl --user start corsarr
+[Unit]
+Description=corsarr media automation server
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=corsarr
+Image=ghcr.io/jrand0m/corsarr:v0.4.0
+Exec=--configFile=/etc/corsarr/corsarr.yml
+PublishPort=8090:8090
+
+# Run as uid/gid 65532 inside, mapped to your own user outside: files you own (media,
+# config) are writable by corsarr without chown.
+User=65532
+Group=65532
+UserNS=keep-id:uid=65532,gid=65532
+
+# No root, no capabilities, read-only root filesystem (/tmp is a tmpfs).
+ReadOnly=true
+DropCapability=all
+NoNewPrivileges=true
+
+Environment=GOMEMLIMIT=96MiB
+PodmanArgs=--memory=256m --pids-limit=256
+
+Volume=corsarr-data.volume:/data
+Volume=%h/.config/corsarr/corsarr.yml:/etc/corsarr/corsarr.yml:ro
+# Downloads and library on one filesystem; add :ro for shadow mode. On SELinux hosts label
+# the media tree container_file_t once rather than relabelling it with :Z.
+Volume=%h/media:/media
+
+# Secrets: `podman secret create tmdb_api_key -`, then reference ${env:TMDB_API_KEY}.
+# Secret=tmdb_api_key,type=env,target=TMDB_API_KEY
+
+# JSON form runs the binary directly: the image has no shell.
+HealthCmd=["/corsarr","healthcheck"]
+HealthInterval=30s
+HealthTimeout=5s
+HealthStartPeriod=15s
+HealthRetries=3
+
+# `podman auto-update` pulls a newer image published under the same tag.
+# AutoUpdate=registry
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

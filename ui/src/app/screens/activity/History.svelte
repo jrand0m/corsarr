@@ -61,14 +61,14 @@
     ];
     return () => { clearTimeout(t); offs.forEach((off) => off()); };
   });
-  const persisted = new Set(['item.added', 'item.deleted', 'grab.sent', 'grab.failed', 'decision.shadowed', 'download.failed', 'download.removed', 'import.completed', 'import.blocked',
+  const persisted = new Set(['item.added', 'item.deleted', 'grab.sent', 'grab.failed', 'decision.shadowed', 'downloader.shadowed', 'download.failed', 'download.removed', 'import.completed', 'import.blocked',
     'import.failed', 'payload.rejected', 'file.renamed', 'file.deleted', 'blocklist.added', 'blocklist.removed', 'rule.acted', 'rule.undone', 'health.changed',
     'config.applied', 'config.apply_failed', 'config.drifted', 'mediakind.mode_changed']);
 
   let filter = $state<FilterState>(emptyFilter());
   const typeGroups: Record<string, string[]> = {
     grabs: ['grab.sent', 'grab.failed', 'decision.shadowed'], imports: ['import.completed', 'import.blocked', 'import.failed', 'file.renamed', 'file.deleted'],
-    downloads: ['download.failed', 'download.removed', 'payload.rejected'], library: ['item.added', 'item.deleted'],
+    downloads: ['download.failed', 'download.removed', 'payload.rejected', 'downloader.shadowed'], library: ['item.added', 'item.deleted'],
     blocklist: ['blocklist.added', 'blocklist.removed'], rules: ['rule.acted', 'rule.undone'], health: ['health.changed'],
     config: ['config.applied', 'config.apply_failed', 'config.drifted', 'mediakind.mode_changed'],
   };

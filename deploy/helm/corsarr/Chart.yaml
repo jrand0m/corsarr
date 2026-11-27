@@ -1,0 +1,12 @@
+apiVersion: v2
+name: corsarr
+description: Media automation server in one static binary (movies, series, music, books).
+type: application
+# The chart version follows the application release: chart 0.4.0 runs corsarr v0.4.0.
+version: 0.4.0
+appVersion: "v0.4.0"
+kubeVersion: ">=1.25.0-0"
+home: https://github.com/jrand0m/corsarr
+sources:
+  - https://github.com/jrand0m/corsarr
+keywords: [media, automation, pvr, usenet, torrent]

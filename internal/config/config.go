@@ -64,10 +64,14 @@ type Instance struct {
 // the full tree is kept for export and live-change detection.
 type Config struct {
 	Server struct {
-		Address  string
-		BasePath string
+		Address     string
+		BasePath    string
+		EgressAllow []string
 	}
-	Data        struct{ Dir string }
+	Data struct {
+		Dir   string
+		Umask int
+	}
 	Log         struct{ Level string }
 	Auth        struct{ Mode string }
 	MediaKinds  map[domain.MediaKind]domain.KindMode
@@ -238,6 +242,10 @@ func build(s *Schema, t tree) *Config {
 	c.Server.Address = str(t, "server", "address")
 	c.Server.BasePath = str(t, "server", "basePath")
 	c.Data.Dir = str(t, "data", "dir")
+	c.Data.Umask, _ = ParseUmask(str(t, "data", "umask")) // validated by the schema
+	for _, h := range t["server"].(tree)["egressAllow"].([]any) {
+		c.Server.EgressAllow = append(c.Server.EgressAllow, h.(string))
+	}
 	c.Log.Level = str(t, "log", "level")
 	c.Auth.Mode = str(t, "auth", "mode")
 	for k, v := range t["mediaKinds"].(tree) {

@@ -145,6 +145,13 @@ func TestAppWiresModulesJobsAndAdapters(t *testing.T) {
 		reg.Fail(domain.IntegrationRef{Type: "downloader", Key: "a"}, health.ClassAuth, "bad password")
 		return len(p.Downloaders()) == 0
 	})
+	// the downloader overview still lists it, with its health
+	if cl := a.downloadClients(); len(cl) != 1 || cl[0].Health == nil || cl[0].Type != "xdownloader" {
+		t.Fatalf("download clients %+v", cl)
+	}
+	if err := a.testDownloader(ctx, "a"); err != nil {
+		t.Fatal(err)
+	}
 	m, _, err := st.Movies().Add(ctx, domain.Movie{TMDBID: 1, Title: "Film", MinAvailability: domain.AvailReleased, ProfileKey: "any", RootFolder: "/m", Path: "/m/f"})
 	if err != nil {
 		t.Fatal(err)

@@ -72,7 +72,7 @@ docker run -d --name corsarr -p 8090:8090 \
 The image is `scratch` plus the binary, CA roots and a non-root user (uid 65532), about
 20 MB, for `linux/amd64` and `linux/arm64`. Mount downloads and library on **one
 filesystem** at the same path your download client sees, so imports are hardlinks
-instead of copies. See [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
+instead of copies. See [`deploy/`](deploy) for Compose, Kubernetes, systemd and more.
 
 When the download client sees the same folders under other paths (another host, or a
 container with different mounts), give it a `pathMap`: one `remote=local` entry per
@@ -90,12 +90,18 @@ Configuration has exactly one source per start, chosen in this order:
 
 The three forms map one to one, and `corsarr config export --format=yaml|env` converts
 between them. Secrets are never written in plain text: use `${env:NAME}` or
-`${file:/run/secrets/name}` references. A full example is in
-[`deploy/corsarr.example.yml`](deploy/corsarr.example.yml).
+`${file:/run/secrets/name}` references.
+
+Every setting, with its default, its argument and variable forms and a short explanation, is
+listed in [`docs/configuration.md`](docs/configuration.md).
+[`deploy/corsarr.example.yml`](deploy/corsarr.example.yml) is a commented file holding every
+default, ready to copy and edit.
 
 ```bash
+corsarr config defaults          # every setting, its default and what it does
+corsarr config defaults --format=yaml > corsarr.yml   # the same as a commented config file
 corsarr config validate --plan   # check a config and print what it would change
-corsarr config schema            # every key, its type and default
+corsarr config schema            # every key, its type and default as JSON Schema
 corsarr healthcheck              # exit status for container health checks
 ```
 

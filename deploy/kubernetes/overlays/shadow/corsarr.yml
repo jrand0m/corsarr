@@ -1,0 +1,15 @@
+# Generated from `corsarr config defaults --format=yaml`, with every media kind in shadow mode.
+version: 1
+server:
+  address: ":8090"
+data:
+  dir: /data
+log:
+  level: info
+auth:
+  mode: password
+mediaKinds:
+  tv: { mode: shadow }
+  movie: { mode: shadow }
+  music: { mode: shadow }
+  book: { mode: disabled }

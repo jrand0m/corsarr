@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  corsarr as a macOS LaunchAgent for the plain release binary, running as your user.
+  __HOME__ is replaced by your home directory on install (see README.md).
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.github.jrand0m.corsarr</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__HOME__/.local/bin/corsarr</string>
+    <string>--configFile=__HOME__/.config/corsarr/corsarr.yml</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__HOME__/Library/Application Support/corsarr</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>GOMEMLIMIT</key>
+    <string>96MiB</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Umask</key>
+  <integer>2</integer>
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/corsarr.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/corsarr.log</string>
+</dict>
+</plist>

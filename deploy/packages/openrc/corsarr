@@ -1,0 +1,23 @@
+#!/sbin/openrc-run
+# corsarr on OpenRC (Alpine). Runs as the corsarr system user.
+
+name="corsarr"
+description="corsarr media automation server"
+command="/usr/bin/corsarr"
+command_args="--configFile=/etc/corsarr/corsarr.yml"
+command_user="corsarr:corsarr"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+umask="002"
+output_log="/var/log/corsarr/corsarr.log"
+error_log="/var/log/corsarr/corsarr.log"
+export GOMEMLIMIT="96MiB"
+
+depend() {
+  need net
+  after firewall
+}
+
+start_pre() {
+  checkpath --directory --owner corsarr:corsarr --mode 0750 /var/lib/corsarr /var/log/corsarr
+}
