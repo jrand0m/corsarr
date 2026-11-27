@@ -59,7 +59,7 @@ func (s *Service) downloaderTools() []Tool {
 			Input: object(map[string]schema{"id": integer("Download id from get_queue.")}, "id"), Run: bind(s.getDownload)},
 		{Name: "set_download_priority", Title: "Set download priority", Write: true, Idempotent: true,
 			Description: "Move a download in its client's queue.",
-			Input:       object(map[string]schema{"id": integer("Download id."), "priority": enum("Where to move it.", "top", "up", "down", "bottom")}, "id", "priority"),
+			Input:       object(map[string]schema{"id": integer("Download id."), "priority": enum("Queue move (top, up, down, bottom) or priority level (low, normal, high, force; force starts it regardless of queue limits).", "top", "up", "down", "bottom", "low", "normal", "high", "force")}, "id", "priority"),
 			Run:         bind(s.setPriority)},
 		{Name: "set_download_category", Title: "Set download category", Write: true, Idempotent: true,
 			Description: "Change a download's category in its client.",
@@ -229,11 +229,10 @@ type priorityArgs struct {
 }
 
 func (s *Service) setPriority(ctx context.Context, in priorityArgs) (Result, error) {
-	switch p := plugin.Priority(in.Priority); p {
-	case plugin.PrioTop, plugin.PrioUp, plugin.PrioDown, plugin.PrioBottom:
+	if p := plugin.Priority(in.Priority); p.IsMove() || p.IsLevel() {
 		return actionResult("set_download_priority", s.d.Downloaders.SetPriority(ctx, in.ID, p))
 	}
-	return Result{}, invalidArg("priority", "must be top, up, down or bottom")
+	return Result{}, invalidArg("priority", "must be top, up, down, bottom, low, normal, high or force")
 }
 
 type categoryArgs struct {
