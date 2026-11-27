@@ -1,0 +1,127 @@
+---
+- name: Map the CPU architecture to a release archive
+  ansible.builtin.set_fact:
+    corsarr_arch: "{{ {'x86_64': 'amd64', 'amd64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}[ansible_facts['architecture']] | default('') }}"
+
+- name: Check the architecture
+  ansible.builtin.assert:
+    that: corsarr_arch in corsarr_archive_sha256
+    fail_msg: "no corsarr release archive for {{ ansible_facts['architecture'] }}"
+    quiet: true
+
+- name: Create the corsarr group
+  ansible.builtin.group:
+    name: "{{ corsarr_group }}"
+    system: true
+
+- name: Create the corsarr user
+  ansible.builtin.user:
+    name: "{{ corsarr_user }}"
+    group: "{{ corsarr_group }}"
+    system: true
+    home: /var/lib/corsarr
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Create the download cache
+  ansible.builtin.file:
+    path: "/var/cache/corsarr/{{ corsarr_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download the release archive (checksum verified)
+  ansible.builtin.get_url:
+    url: "{{ corsarr_release_url }}/corsarr-linux-{{ corsarr_arch }}.tar.gz"
+    dest: "/var/cache/corsarr/corsarr-{{ corsarr_version }}-linux-{{ corsarr_arch }}.tar.gz"
+    checksum: "sha256:{{ corsarr_archive_sha256[corsarr_arch] }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: corsarr_download
+  until: corsarr_download is succeeded
+  retries: 5
+  delay: 5
+
+- name: Unpack the release archive
+  ansible.builtin.unarchive:
+    src: "/var/cache/corsarr/corsarr-{{ corsarr_version }}-linux-{{ corsarr_arch }}.tar.gz"
+    dest: "/var/cache/corsarr/{{ corsarr_version }}"
+    remote_src: true
+    creates: "/var/cache/corsarr/{{ corsarr_version }}/corsarr-linux-{{ corsarr_arch }}/corsarr"
+
+- name: Install the binary
+  ansible.builtin.copy:
+    src: "/var/cache/corsarr/{{ corsarr_version }}/corsarr-linux-{{ corsarr_arch }}/corsarr"
+    dest: "{{ corsarr_bin }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart corsarr
+
+- name: Create the config directory
+  ansible.builtin.file:
+    path: /etc/corsarr
+    state: directory
+    owner: root
+    group: "{{ corsarr_group }}"
+    mode: "0750"
+
+- name: Write the environment file for ${env:NAME} references
+  ansible.builtin.template:
+    src: corsarr.env.j2
+    dest: /etc/corsarr/corsarr.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart corsarr
+
+- name: Write corsarr.yml (validated by corsarr)
+  ansible.builtin.template:
+    src: corsarr.yml.j2
+    dest: /etc/corsarr/corsarr.yml
+    owner: root
+    group: "{{ corsarr_group }}"
+    mode: "0640"
+    validate: "env {{ corsarr_env.keys() | map('regex_replace', '$', '=placeholder') | join(' ') }} {{ corsarr_bin }} config validate --configFile=%s"
+  vars:
+    corsarr_data_dir: /var/lib/corsarr
+    corsarr_listen_port: "{{ corsarr_port }}"
+  notify: Restart corsarr
+
+- name: Install the systemd unit
+  ansible.builtin.copy:
+    src: corsarr.service
+    dest: /etc/systemd/system/corsarr.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart corsarr
+
+- name: Create the unit drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/corsarr.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Point the unit at this install
+  ansible.builtin.template:
+    src: override.conf.j2
+    dest: /etc/systemd/system/corsarr.service.d/ansible.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart corsarr
+
+- name: Enable and start corsarr
+  ansible.builtin.systemd_service:
+    name: corsarr
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: corsarr_service_manage | bool

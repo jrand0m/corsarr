@@ -1,0 +1,7 @@
+---
+- name: Converge
+  hosts: all
+  tasks:
+    - name: Install corsarr
+      ansible.builtin.include_role:
+        name: corsarr

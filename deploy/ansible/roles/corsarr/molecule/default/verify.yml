@@ -1,0 +1,28 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: The binary runs
+      ansible.builtin.command: /usr/local/bin/corsarr version
+      register: corsarr_version_out
+      changed_when: false
+
+    - name: The config is valid
+      ansible.builtin.command: /usr/local/bin/corsarr config validate --configFile=/etc/corsarr/corsarr.yml
+      changed_when: false
+
+    - name: The user exists
+      ansible.builtin.command: id corsarr
+      changed_when: false
+
+    - name: Read the unit drop-in
+      ansible.builtin.slurp:
+        src: /etc/systemd/system/corsarr.service.d/ansible.conf
+      register: corsarr_dropin
+
+    - name: Check what was installed
+      ansible.builtin.assert:
+        that:
+          - corsarr_version_out.stdout is search('^corsarr v')
+          - (corsarr_dropin.content | b64decode) is search('ExecStart=/usr/local/bin/corsarr --configFile=/etc/corsarr/corsarr.yml')

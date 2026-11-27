@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  role_name: corsarr
+  namespace: jrand0m
+  author: corsarr
+  description: corsarr media automation server, as the release binary under systemd or as a container
+  license: AGPL-3.0-or-later
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Debian
+      versions: [bookworm, trixie]
+    - name: Ubuntu
+      versions: [jammy, noble]
+    - name: EL
+      versions: ["9"]
+  galaxy_tags: [media, automation, selfhosted]
+dependencies: []

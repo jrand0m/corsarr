@@ -1,0 +1,5 @@
+---
+# only container mode needs it: ansible-galaxy collection install -r requirements.yml
+collections:
+  - name: community.docker
+    version: ">=3.10.0"

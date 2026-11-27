@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Service]
+ExecStart=
+ExecStart={{ corsarr_bin }} --configFile=/etc/corsarr/corsarr.yml
+User={{ corsarr_user }}
+Group={{ corsarr_group }}
+EnvironmentFile=-/etc/corsarr/corsarr.env
+{% if corsarr_media_readonly | bool %}
+ReadOnlyPaths=-{{ corsarr_media_dir }}
+{% else %}
+ReadWritePaths=-{{ corsarr_media_dir }}
+{% endif %}

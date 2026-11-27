@@ -1,0 +1,40 @@
+---
+# binary: the release archive, a corsarr user and the hardened systemd unit
+# container: the image under Docker, unprivileged and read-only (needs community.docker)
+corsarr_install_mode: binary
+
+corsarr_version: "0.4.0"
+corsarr_release_url: "https://github.com/jrand0m/corsarr/releases/download/v{{ corsarr_version }}"
+# Checksums of the release archives, from the release's SHA256SUMS:
+corsarr_archive_sha256:
+  # https://github.com/jrand0m/corsarr/releases/download/v0.4.0/corsarr-linux-amd64.tar.gz
+  amd64: e8063b0ed93fcec330a220ff5bb0e60963a4af419a3be0098d262b3c4b14169a
+  # https://github.com/jrand0m/corsarr/releases/download/v0.4.0/corsarr-linux-arm64.tar.gz
+  arm64: 83a5bd2545a401408293a7e4865f7f4a114911c2329ab6f38b8e0ede3fafb5c1
+corsarr_image: "ghcr.io/jrand0m/corsarr:v{{ corsarr_version }}"
+
+corsarr_port: 8090
+# Downloads and the library, on one filesystem; /media inside the container.
+corsarr_media_dir: /srv/media
+# Shadow mode: corsarr only reads the media.
+corsarr_media_readonly: false
+
+# Settings merged over the defaults below and written to /etc/corsarr/corsarr.yml.
+# Secrets only as references: "${env:NAME}" with the value in corsarr_env.
+corsarr_config: {}
+#   metadata:
+#     tmdb: { type: tmdb, apiKey: "${env:TMDB_API_KEY}" }
+# Values for ${env:NAME} references, kept in /etc/corsarr/corsarr.env (mode 0600).
+corsarr_env: {}
+
+# binary mode
+corsarr_user: corsarr
+corsarr_group: corsarr
+corsarr_bin: /usr/local/bin/corsarr
+# false installs everything but leaves the service alone (images without systemd)
+corsarr_service_manage: true
+
+# container mode
+corsarr_container_name: corsarr
+corsarr_container_volume: corsarr-data
+corsarr_container_user: "65532:65532"
