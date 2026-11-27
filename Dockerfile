@@ -21,6 +21,8 @@ FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine@sha256:70bd7ddea8b6cbe5d6943
 ENV CGO_ENABLED=0 GOTOOLCHAIN=local GOFLAGS=-mod=readonly
 WORKDIR /src
 COPY go.mod go.sum ./
+# Optional module mirror; go.sum pins every module, so the source cannot change the result.
+ARG GOPROXY
 RUN ok=; for i in 1 2 3 4 5; do go mod download && ok=1 && break; sleep $((i*10)); done; [ -n "$ok" ]
 
 # UI bundle (platform independent)
