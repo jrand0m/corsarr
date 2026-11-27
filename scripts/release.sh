@@ -62,12 +62,20 @@ build() (
   args=()
   while IFS= read -r line; do args+=(--build-arg "$line"); done < <(provenance "$src")
   builder
+  # NO_CACHE: rebuild everything except the downloaded dependencies (pinned by
+  # lockfile and go.sum); NO_CACHE=all drops those too.
+  nc=()
+  case "${NO_CACHE:-}" in
+    "") ;;
+    all) nc=(--no-cache) ;;
+    *) nc=(--no-cache-filter ui,gosrc,bin,pack,archives,rootfs) ;;
+  esac
   rm -rf "$out/archives" "$out/image"
   echo "building archives from $src" >&2
-  docker buildx build --builder "$BUILDER" ${NO_CACHE:+--no-cache} "${args[@]}" \
+  docker buildx build --builder "$BUILDER" ${nc[@]+"${nc[@]}"} "${args[@]}" \
     --target archives --output "type=local,dest=$out/archives" "$src"
   echo "building image for $PLATFORMS" >&2
-  docker buildx build --builder "$BUILDER" ${NO_CACHE:+--no-cache} "${args[@]}" \
+  docker buildx build --builder "$BUILDER" ${nc[@]+"${nc[@]}"} "${args[@]}" \
     --platform "$PLATFORMS" --provenance=false --sbom=false \
     --output "type=oci,dest=$out/image,tar=false,oci-mediatypes=true,rewrite-timestamp=true,compression=gzip,force-compression=true" \
     "$src"

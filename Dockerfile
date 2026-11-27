@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1@sha256:572cebbc2b15e6f84c077742952674889cb63cd5e9b80abdffcbe587b6f19183
+# check=skip=FromPlatformFlagConstDisallowed
 # Reproducible build of corsarr: the release archives (target "archives") and
 # the multi-arch runtime image (default target). Every input is pinned: base
 # images by digest, Node and Go by version, dependencies by lockfile and go.sum.
@@ -13,20 +14,25 @@
 ARG NODE_IMAGE=node:22.23.5-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a
 ARG GO_IMAGE=golang:1.27.4-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280
 
-# UI bundle (platform independent)
-FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS ui
+# Dependencies, fixed by the lockfile and go.sum (the stages a rebuild may reuse)
+FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS uideps
 WORKDIR /src/ui
 COPY ui/package.json ui/package-lock.json ./
-RUN for i in 1 2 3; do npm ci --no-audit --no-fund && break; sleep $((i*10)); done
+RUN ok=; for i in 1 2 3 4 5; do npm ci --no-audit --no-fund && ok=1 && break; sleep $((i*10)); done; [ -n "$ok" ]
+
+FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS godeps
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local GOFLAGS=-mod=readonly
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN ok=; for i in 1 2 3 4 5; do go mod download && ok=1 && break; sleep $((i*10)); done; [ -n "$ok" ]
+
+# UI bundle (platform independent)
+FROM uideps AS ui
 COPY ui/ ./
 RUN npm run build
 
 # Go sources with the UI embedded, ready to cross-compile
-FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS gosrc
-ENV CGO_ENABLED=0 GOTOOLCHAIN=local GOFLAGS=-mod=readonly
-WORKDIR /src
-COPY go.mod go.sum ./
-RUN for i in 1 2 3; do go mod download && break; sleep $((i*10)); done
+FROM godeps AS gosrc
 COPY scripts/gobuild.sh scripts/
 COPY scripts/repro/ scripts/repro/
 COPY cmd/ cmd/
