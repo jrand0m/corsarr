@@ -1,0 +1,14 @@
+corsarr {{ .Chart.AppVersion }} is starting.
+{{ if .Values.ingress.enabled }}
+Open http{{ if .Values.ingress.tls }}s{{ end }}://{{ (first .Values.ingress.hosts).host }} and create the admin account.
+{{- else if .Values.httpRoute.enabled }}
+Open the hostname routed by your Gateway and create the admin account.
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "corsarr.fullname" . }} 8090:{{ .Values.service.port }}
+then open http://localhost:8090 and create the admin account.
+{{- end }}
+{{ if .Values.persistence.enabled }}
+Data lives on the PVC {{ include "corsarr.claimName" . }} (kept on uninstall).
+{{- else }}
+Persistence is disabled: data is lost with the pod.
+{{- end }}

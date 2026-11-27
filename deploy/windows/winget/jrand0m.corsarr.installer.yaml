@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: jrand0m.corsarr
+PackageVersion: 0.4.0
+InstallerType: zip
+NestedInstallerType: portable
+Commands:
+  - corsarr
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/jrand0m/corsarr/releases/download/v0.4.0/corsarr-windows-amd64.zip
+    InstallerSha256: 96E9570210041C7DB5D36FBC5D0CD24FC7E7D32D8ADA78D1771BA3139C55D4A5
+    NestedInstallerFiles:
+      - RelativeFilePath: corsarr-windows-amd64\corsarr.exe
+        PortableCommandAlias: corsarr
+  - Architecture: arm64
+    InstallerUrl: https://github.com/jrand0m/corsarr/releases/download/v0.4.0/corsarr-windows-arm64.zip
+    InstallerSha256: 44D3F7DFD0A2F0F28E1A8FCF3B52253BCA2AB982AE524D53FE1C0C33E69C888F
+    NestedInstallerFiles:
+      - RelativeFilePath: corsarr-windows-arm64\corsarr.exe
+        PortableCommandAlias: corsarr
+ManifestType: installer
+ManifestVersion: 1.6.0

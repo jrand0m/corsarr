@@ -1,0 +1,66 @@
+# Linux packages (.deb, .rpm, .apk) built with nfpm from a release binary.
+# Run from the repository root with the linux binary for ARCH at dist/package/corsarr:
+#   install -D bin/corsarr-linux-amd64 dist/package/corsarr
+#   VERSION=0.4.0 ARCH=amd64 nfpm package --config deploy/packages/nfpm.yaml --packager deb --target dist/
+# ARCH uses Go names (amd64, arm64); nfpm maps them per packager.
+name: corsarr
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+release: 1
+section: net
+priority: optional
+maintainer: corsarr maintainers <corsarr@users.noreply.github.com>
+description: |
+  Media automation server in one static binary.
+  Searches indexers, sends releases to the download client and files the result into the
+  library. Runs as the dedicated corsarr system user.
+vendor: corsarr
+homepage: https://github.com/jrand0m/corsarr
+license: AGPL-3.0-or-later
+
+contents:
+  - src: dist/package/corsarr
+    dst: /usr/bin/corsarr
+    file_info: { mode: 0755 }
+
+  # Default config: kept on upgrade when edited (config|noreplace).
+  - src: deploy/systemd/corsarr.yml
+    dst: /etc/corsarr/corsarr.yml
+    type: config|noreplace
+    file_info: { mode: 0640, owner: root, group: corsarr }
+  - dst: /etc/corsarr/secrets
+    type: dir
+    file_info: { mode: 0750, owner: root, group: root }
+
+  # systemd (deb, rpm)
+  - src: deploy/systemd/corsarr.service
+    dst: /usr/lib/systemd/system/corsarr.service
+    packager: deb
+  - src: deploy/systemd/corsarr.service
+    dst: /usr/lib/systemd/system/corsarr.service
+    packager: rpm
+  - src: deploy/systemd/corsarr.sysusers
+    dst: /usr/lib/sysusers.d/corsarr.conf
+    packager: deb
+  - src: deploy/systemd/corsarr.sysusers
+    dst: /usr/lib/sysusers.d/corsarr.conf
+    packager: rpm
+
+  # OpenRC (apk: Alpine has no systemd)
+  - src: deploy/packages/openrc/corsarr
+    dst: /etc/init.d/corsarr
+    file_info: { mode: 0755 }
+    packager: apk
+
+  - src: README.md
+    dst: /usr/share/doc/corsarr/README.md
+  - src: LICENSE
+    dst: /usr/share/doc/corsarr/LICENSE
+
+scripts:
+  preinstall: deploy/packages/scripts/preinstall.sh
+  postinstall: deploy/packages/scripts/postinstall.sh
+  preremove: deploy/packages/scripts/preremove.sh
+  postremove: deploy/packages/scripts/postremove.sh

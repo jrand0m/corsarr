@@ -1,0 +1,22 @@
+# corsarr configuration for the container samples.
+# Generated from `corsarr config defaults --format=yaml`; regenerate rather than hand-edit
+# defaults. A config file is the only source when present: CORSARR_* variables are then
+# ignored, so secrets go in as references — ${env:NAME} or ${file:/run/secrets/name} — and
+# never as values. See deploy/corsarr.example.yml for indexers, download clients and the rest.
+version: 1
+server:
+  address: ":8090"
+data:
+  dir: /data
+log:
+  level: info
+auth:
+  mode: password
+mediaKinds:
+  tv: { mode: active }
+  movie: { mode: active }
+  music: { mode: active }
+  book: { mode: disabled }
+  # Shadow mode: decide and record, never grab or touch files. Pair it with a read-only
+  # media mount.
+  # movie: { mode: shadow }

@@ -113,3 +113,8 @@ lint target="all":
       all)     just lint go; just lint ui; just lint docs ;;
       *) echo "unknown target {{target}} (all|go|ui|docs|quality)"; exit 2 ;;
     esac
+
+# ── deploy ───────────────────────────────────────────────────────────────────
+# just deploy [validate|smoke] [all|<target>]   e.g. just deploy validate helm, just deploy smoke compose
+deploy action="validate" target="all":
+    {{x}} scripts/deploy-samples.sh {{action}} {{target}}

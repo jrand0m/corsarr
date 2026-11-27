@@ -1,0 +1,18 @@
+# corsarr configuration for the macOS LaunchAgent (~/.config/corsarr/corsarr.yml).
+# Generated from `corsarr config defaults --format=yaml`, with the data directory under
+# Application Support. __HOME__ is replaced on install. Secrets go in as references
+# (${env:NAME} or ${file:/path}), never as values.
+version: 1
+server:
+  address: ":8090"
+data:
+  dir: __HOME__/Library/Application Support/corsarr
+log:
+  level: info
+auth:
+  mode: password
+mediaKinds:
+  tv: { mode: active }
+  movie: { mode: active }
+  music: { mode: active }
+  book: { mode: disabled }

@@ -1,0 +1,71 @@
+# corsarr + qBittorrent on one host.
+#   cp .env.example .env                       # media path and API keys
+#   echo 'qbittorrent-password' > secrets/qbit_password.txt
+#   docker compose -f compose.qbittorrent.yml up -d
+# corsarr.yml already points at http://qbittorrent:8080.
+#
+# Both containers mount the media filesystem at /media, so a download finished at
+# /media/downloads/x is hardlinked into /media/movies/x without a copy or a pathMap.
+name: corsarr
+services:
+  corsarr:
+    image: ghcr.io/jrand0m/corsarr:v0.4.0
+    restart: unless-stopped
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["--configFile=/etc/corsarr/corsarr.yml"]
+    environment:
+      GOMEMLIMIT: 96MiB
+      TMDB_API_KEY: ${TMDB_API_KEY:?set TMDB_API_KEY in .env}
+      INDEXER_API_KEY: ${INDEXER_API_KEY:?set INDEXER_API_KEY in .env}
+    secrets: [qbit_password]
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./corsarr.yml:/etc/corsarr/corsarr.yml:ro
+      - corsarr-data:/data
+      - ${MEDIA_DIR:-/srv/media}:/media
+    healthcheck:
+      test: ["CMD", "/corsarr", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    mem_limit: 256m
+    pids_limit: 256
+    depends_on:
+      qbittorrent:
+        condition: service_started
+
+  qbittorrent:
+    # Any qBittorrent image works; this one supports running as a non-root user with a
+    # read-only root filesystem. Pin a version tag for repeatable upgrades.
+    image: lscr.io/linuxserver/qbittorrent:latest
+    restart: unless-stopped
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run:exec
+    environment:
+      TZ: ${TZ:-Etc/UTC}
+      WEBUI_PORT: "8080"
+    ports:
+      - "8080:8080"                  # web UI; drop this if only corsarr talks to it
+      - "6881:6881"
+      - "6881:6881/udp"
+    volumes:
+      - qbittorrent-config:/config
+      - ${MEDIA_DIR:-/srv/media}:/media  # set the save path to /media/downloads in its UI
+
+secrets:
+  qbit_password:
+    file: ./secrets/qbit_password.txt
+
+volumes:
+  corsarr-data: {}
+  qbittorrent-config: {}

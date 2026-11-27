@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>corsarr</Name>
+  <Repository>ghcr.io/jrand0m/corsarr:v0.4.0</Repository>
+  <Registry>https://github.com/jrand0m/corsarr/pkgs/container/corsarr</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/jrand0m/corsarr/issues</Support>
+  <Project>https://github.com/jrand0m/corsarr</Project>
+  <Overview>Media automation server in one static binary: searches your indexers, sends releases to your download client and files them into your library. Runs as nobody:users (99:100) with a read-only root filesystem and no capabilities. Before the first start: mkdir -p /mnt/user/appdata/corsarr &amp;&amp; chown 99:100 /mnt/user/appdata/corsarr</Overview>
+  <Category>Downloaders: MediaApp:Video MediaApp:Music MediaApp:Books</Category>
+  <WebUI>http://[IP]:[PORT:8090]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/jrand0m/corsarr/master/deploy/unraid/corsarr.xml</TemplateURL>
+  <Icon/>
+  <ExtraParams>--user 99:100 --read-only --tmpfs /tmp:rw,size=64m,mode=1777 --cap-drop ALL --security-opt no-new-privileges --memory 256m --pids-limit 256</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>The data share must be writable by nobody:users (99:100), as Unraid shares are by default.</Requires>
+  <Config Name="Web UI port" Target="8090" Default="8090" Mode="tcp" Description="Web UI and API." Type="Port" Display="always" Required="true" Mask="false">8090</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/corsarr" Mode="rw" Description="Database and key file. Back this up." Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/corsarr</Config>
+  <Config Name="Media" Target="/media" Default="/mnt/user/data/media" Mode="rw" Description="Downloads and library on one share, mounted at the same path in your download client so imports are hardlinks. Use ro for shadow mode." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/data/media</Config>
+  <Config Name="GOMEMLIMIT" Target="GOMEMLIMIT" Default="96MiB" Mode="" Description="Soft Go heap limit; keep it below the memory limit." Type="Variable" Display="advanced" Required="false" Mask="false">96MiB</Config>
+</Container>
