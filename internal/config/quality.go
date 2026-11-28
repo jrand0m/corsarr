@@ -44,7 +44,7 @@ func intField(name, def, doc string) Field {
 func customFormatsNode() *Node {
 	cond := obj("",
 		Field{Name: "kind", Node: &Node{Kind: KindEnum, Required: true, Enum: conditionKindNames(),
-			Doc: "What the condition looks at: title, group or edition (a pattern); source, resolution, modifier, codec, audio, channels, hdr, language, flag or releasetype (values); size in GB or year (min and max)."}},
+			Doc: "What the condition looks at: title, group or edition (a pattern); source, resolution, modifier, codec, audio, channels, hdr, language, flag, releasetype, container, bitdepth or dvfallback (values); size in GB or year (min and max)."}},
 		Field{Name: "pattern", Node: &Node{Kind: KindString,
 			Doc: "Regular expression for title, group and edition conditions, matched without regard to case, for example \\bDTS\\b."}},
 		Field{Name: "values", Node: &Node{Kind: KindList, Doc: "Values for list conditions; the condition holds when the release has any of them, for example [aac, ac3, eac3].",

@@ -30,6 +30,9 @@ const (
 	CondSize        ConditionKind = "size"
 	CondReleaseType ConditionKind = "releasetype"
 	CondYear        ConditionKind = "year"
+	CondContainer   ConditionKind = "container"
+	CondBitDepth    ConditionKind = "bitdepth"
+	CondDVFallback  ConditionKind = "dvfallback"
 )
 
 // ConditionInput is how a condition kind takes its value.
@@ -100,6 +103,11 @@ var conditionKinds = []KindInfo{
 	{Kind: CondReleaseType, Label: "Release type", Input: InputValues, Values: choices("episode", "Single episode",
 		"multiepisode", "Multiple episodes", "seasonpack", "Season pack")},
 	{Kind: CondYear, Label: "Year", Input: InputRange},
+	{Kind: CondContainer, Label: "Container", Input: InputValues, Values: choices("mkv", "MKV", "mp4", "MP4", "m4v", "M4V",
+		"avi", "AVI", "ts", "MPEG-TS", "m2ts", "M2TS", "wmv", "WMV", "iso", "ISO image")},
+	{Kind: CondBitDepth, Label: "Video bit depth", Input: InputValues, Values: choices("8", "8-bit", "10", "10-bit", "12", "12-bit")},
+	{Kind: CondDVFallback, Label: "Dolby Vision fallback", Input: InputValues, Values: choices("none", "Dolby Vision without HDR10 fallback (profile 5)",
+		"hdr10", "Dolby Vision with an HDR10 base (profile 7 or 8)")},
 }
 
 // ConditionKinds lists every condition kind in editor order.
@@ -133,13 +141,19 @@ type Subject struct {
 	Size        int64 // bytes
 	ReleaseType string
 	Year        int
+	Container   string // from the largest listed file, else a title marker
+	BitDepth    int    // from a title marker (10bit, Hi10P, …)
+	// DVFallback is "none" for Dolby Vision without an HDR10 base (profile 5),
+	// "hdr10" with one (profiles 7 and 8, or DV plus HDR10 named together).
+	DVFallback string
 }
 
 // SubjectOf reads the condition facts of a release once.
 func SubjectOf(r domain.Release, p parse.ParsedRelease) Subject {
 	s := Subject{Title: r.Title, Group: p.Group.Value, Edition: p.Edition.Value, Codec: string(p.Codec.Value),
 		Audio: string(p.Audio.Value), Channels: p.Channels.Value, Flags: r.Flags, Size: r.Size, Year: p.Year.Value,
-		Languages: p.Languages, ReleaseType: releaseType(p.Episode)}
+		Languages: p.Languages, ReleaseType: releaseType(p.Episode), Container: containerOf(r), BitDepth: bitDepthOf(r.Title),
+		DVFallback: dvFallbackOf(p)}
 	if p.Resolution.Known {
 		s.Resolution = int(p.Resolution.Value)
 	}
@@ -171,6 +185,59 @@ func SubjectOf(r domain.Release, p parse.ParsedRelease) Subject {
 // TitleSubject is the subject of a bare title (no size or indexer flags).
 func TitleSubject(title string) Subject {
 	return SubjectOf(domain.Release{Title: title}, parse.ParseRelease(title))
+}
+
+var (
+	containerMarker = regexp.MustCompile(`(?i)[. \[(-](mkv|mp4|m4v|avi|m2ts|ts|wmv|iso)(?:$|[\]). -])`)
+	bitDepthMarker  = regexp.MustCompile(`(?i)\b(?:(8|10|12)[ ._-]?bits?|hi(10)p)\b`)
+	videoFiles      = map[string]bool{"mkv": true, "mp4": true, "m4v": true, "avi": true, "ts": true, "m2ts": true, "wmv": true, "iso": true}
+)
+
+// containerOf reads the container from the indexer's file list (the first
+// video file), else from a marker in the title; "" when neither says.
+func containerOf(r domain.Release) string {
+	for _, f := range r.FileList {
+		if i := strings.LastIndex(f, "."); i >= 0 {
+			if ext := strings.ToLower(f[i+1:]); videoFiles[ext] {
+				return ext
+			}
+		}
+	}
+	if m := containerMarker.FindStringSubmatch(r.Title); m != nil {
+		return strings.ToLower(m[1])
+	}
+	return ""
+}
+
+// bitDepthOf reads a video bit-depth marker; 0 when the title has none.
+func bitDepthOf(title string) int {
+	m := bitDepthMarker.FindStringSubmatch(title)
+	switch {
+	case m == nil:
+		return 0
+	case m[2] != "":
+		return 10
+	}
+	n := 0
+	_, _ = fmt.Sscan(m[1], &n)
+	return n
+}
+
+// dvFallbackOf tells Dolby Vision with an HDR10 base from DV alone; "" when
+// the release has no DV or does not say which.
+func dvFallbackOf(p parse.ParsedRelease) string {
+	if !slices.Contains(p.HDR, parse.HDRDV) {
+		return ""
+	}
+	switch {
+	case p.DVProfile.Known && p.DVProfile.Value == 5:
+		return "none"
+	case p.DVProfile.Known && (p.DVProfile.Value == 7 || p.DVProfile.Value == 8):
+		return "hdr10"
+	case slices.Contains(p.HDR, parse.HDR10) || slices.Contains(p.HDR, parse.HDR10Plus):
+		return "hdr10"
+	}
+	return ""
 }
 
 func releaseType(e parse.Episode) string {
@@ -263,6 +330,15 @@ func (c Condition) subjectValues(s Subject) []string {
 		return s.HDR
 	case CondFlag:
 		return s.Flags
+	case CondContainer:
+		return nonEmpty(s.Container)
+	case CondBitDepth:
+		if s.BitDepth == 0 {
+			return nil
+		}
+		return []string{fmt.Sprint(s.BitDepth)}
+	case CondDVFallback:
+		return nonEmpty(s.DVFallback)
 	case CondReleaseType:
 		return nonEmpty(s.ReleaseType)
 	}

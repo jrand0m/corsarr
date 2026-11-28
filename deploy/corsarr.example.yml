@@ -113,9 +113,10 @@ mediaKinds:
 #     conditions:
 #       -
 #         # What the condition looks at: title, group or edition (a pattern); source, resolution,
-#         # modifier, codec, audio, channels, hdr, language, flag or releasetype (values); size in GB or
-#         # year (min and max). One of: title, group, edition, source, resolution, modifier, codec,
-#         # audio, channels, hdr, language, flag, size, releasetype, year.
+#         # modifier, codec, audio, channels, hdr, language, flag, releasetype, container, bitdepth or
+#         # dvfallback (values); size in GB or year (min and max). One of: title, group, edition,
+#         # source, resolution, modifier, codec, audio, channels, hdr, language, flag, size,
+#         # releasetype, year, container, bitdepth, dvfallback.
 #         kind:
 #         # Regular expression for title, group and edition conditions, matched without regard to case,
 #         # for example \bDTS\b.

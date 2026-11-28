@@ -118,3 +118,39 @@ func TestKeyOf(t *testing.T) {
 		}
 	}
 }
+
+func TestCondition_ContainerBitDepthAndDolbyVisionFallback(t *testing.T) {
+	withFiles := SubjectOf(domain.Release{Title: "Movie.2020.1080p.WEB-DL.H.264-GRP", FileList: []string{"Movie/sample.txt", "Movie/movie.MP4"}},
+		parse.ParseRelease("Movie.2020.1080p.WEB-DL.H.264-GRP"))
+	cases := []struct {
+		name string
+		c    ConditionDoc
+		s    Subject
+		want bool
+	}{
+		{"container from files", ConditionDoc{Kind: CondContainer, Values: []string{"mp4"}}, withFiles, true},
+		{"container from title", ConditionDoc{Kind: CondContainer, Values: []string{"avi"}}, subject("Movie.2004.DVDRip.XviD.avi", 0), true},
+		{"container unknown", ConditionDoc{Kind: CondContainer, Values: []string{"mkv"}}, subject("Movie.2020.1080p.WEB-DL-GRP", 0), false},
+		{"container unknown negated", ConditionDoc{Kind: CondContainer, Values: []string{"mkv"}, Negate: true}, subject("Movie.2020.1080p.WEB-DL-GRP", 0), true},
+		{"10bit", ConditionDoc{Kind: CondBitDepth, Values: []string{"10"}}, subject("Show.S01E01.1080p.WEB.H.264.10bit-GRP", 0), true},
+		{"hi10p", ConditionDoc{Kind: CondBitDepth, Values: []string{"10"}}, subject("[Grp] Show - 01 [1080p Hi10P]", 0), true},
+		{"bit depth unknown", ConditionDoc{Kind: CondBitDepth, Values: []string{"8"}}, subject("Show.S01E01.1080p.WEB.H.264-GRP", 0), false},
+		{"dv with hdr10", ConditionDoc{Kind: CondDVFallback, Values: []string{"hdr10"}}, subject("Movie.2020.2160p.WEB-DL.DV.HDR10.H.265-GRP", 0), true},
+		{"dv alone unknown", ConditionDoc{Kind: CondDVFallback, Values: []string{"none", "hdr10"}}, subject("Movie.2020.2160p.WEB-DL.DV.H.265-GRP", 0), false},
+		{"no dv", ConditionDoc{Kind: CondDVFallback, Values: []string{"none"}}, subject("Movie.2020.2160p.WEB-DL.HDR10.H.265-GRP", 0), false},
+	}
+	for _, c := range cases {
+		if got := compileFormat(t, c.c).conditions[0].Matches(c.s); got != c.want {
+			t.Errorf("%s: got %v", c.name, got)
+		}
+	}
+	p5 := parse.ParseRelease("Movie.2020.2160p.WEB-DL.DV.H.265-GRP")
+	p5.DVProfile = parse.Field[int]{Value: 5, Known: true}
+	if dvFallbackOf(p5) != "none" {
+		t.Fatal("profile 5 has no fallback")
+	}
+	p5.DVProfile.Value = 8
+	if dvFallbackOf(p5) != "hdr10" {
+		t.Fatal("profile 8 has an HDR10 base")
+	}
+}
