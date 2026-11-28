@@ -15,6 +15,10 @@ Short notes per release. Each release's assets, checksums and how to verify them
 - Go SDK for modules (`sdk/go`) with a test harness and an example download client.
 - New `plugins` settings: plugins folder, built-ins to switch off, and memory, time, concurrency and size limits for modules.
 - Plugin settings forms are typed data checked on the server: a closed set of field types, plain text with a small emoji set, per-field errors.
+- Plugin catalogue: install, update, roll back and uninstall plugin modules from the signed index your release publishes, without a restart; downloads are checked against the index's SHA-256 and the index against its signature.
+- `plugins.uiInstall: false` locks module changes in the web UI and the API (the Kubernetes, Helm and systemd samples ship locked); `plugins.install` installs modules from the catalogue at start; `plugins.autoUpdate` takes patch or minor updates that ask for no new permissions.
+- Module installs, updates, rollbacks and uninstalls are recorded in History with version and hash; the assistant tool `list_plugins` lists plugins and modules read-only.
+- Uninstalling a module keeps its instances in the config; they report the module as not installed and run again after a reinstall.
 
 ## v0.5.4 — 2026-11-28
 
