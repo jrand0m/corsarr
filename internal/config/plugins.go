@@ -1,7 +1,10 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"net/url"
+	"regexp"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -18,6 +21,23 @@ type Plugins struct {
 	CallTimeout      time.Duration
 	Concurrency      int
 	MaxModuleMiB     int
+	// UIInstall allows installing, updating and removing modules from the
+	// web UI and the API.
+	UIInstall bool
+	// CatalogueURL is the plugin index address; "" = the official index of
+	// this release.
+	CatalogueURL string
+	// Install lists modules to install from the catalogue at start.
+	Install []PluginInstall
+	// AutoUpdate is off, patch or minor.
+	AutoUpdate string
+}
+
+// PluginInstall is one plugins.install entry; Version "" means the version
+// the catalogue offers.
+type PluginInstall struct {
+	ID      string
+	Version string
 }
 
 // ModulesDir is the plugins folder, defaulting to <data.dir>/plugins.
@@ -44,7 +64,51 @@ func pluginsNode() *Node {
 			Doc: "Most calls one plugin instance runs at the same time; each runs in its own module instance."}},
 		Field{Name: "maxModuleMiB", Node: &Node{Kind: KindInt, Default: "32", Check: atLeast(1),
 			Doc: "Largest module file accepted, in MiB."}},
+		Field{Name: "uiInstall", Node: &Node{Kind: KindBool, Default: "true",
+			Doc: "Allow installing, updating, rolling back and removing plugin modules from the web UI and the API; set false to manage modules only through this config and the plugins folder."}},
+		Field{Name: "catalogue", Node: obj("Where plugin modules are offered.",
+			Field{Name: "url", Node: &Node{Kind: KindString, Check: checkCatalogueURL,
+				Doc: "Address of the signed plugin index; leave empty for the official index of this release. With server.egressAllow set, allow this host and the host its downloads redirect to."}},
+		)},
+		Field{Name: "install", Node: &Node{Kind: KindList, Doc: "Plugin modules to install from the catalogue when corsarr starts; leave empty to install nothing this way.",
+			Elem: obj("",
+				Field{Name: "id", Node: &Node{Kind: KindString, Required: true, Check: checkModuleID,
+					Doc: "Id of the plugin in the catalogue, for example transmission."}},
+				Field{Name: "version", Node: &Node{Kind: KindString, Check: checkModuleVersion,
+					Doc: "Version to install, for example 1.2.0; leave empty for the version the catalogue offers."}},
+			)}},
+		Field{Name: "autoUpdate", Node: enum("off", "Install newer catalogue versions of installed modules once a day: patch takes 1.2.x updates, minor takes 1.x updates, off never updates on its own. Versions that ask for new permissions always wait for you.", "off", "patch", "minor")},
 	)
+}
+
+var (
+	moduleIDRe      = regexp.MustCompile(`^[a-z][a-z0-9]{1,31}$`)
+	moduleVersionRe = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]{1,32})?$`)
+)
+
+func checkModuleID(s string) error {
+	if !moduleIDRe.MatchString(s) {
+		return errors.New("must be a plugin id: 2 to 32 lower-case letters and digits, starting with a letter")
+	}
+	return nil
+}
+
+func checkModuleVersion(s string) error {
+	if s != "" && !moduleVersionRe.MatchString(s) {
+		return errors.New("must be a version such as 1.2.0")
+	}
+	return nil
+}
+
+func checkCatalogueURL(s string) error {
+	if s == "" {
+		return nil
+	}
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return errors.New("must be an http:// or https:// address")
+	}
+	return nil
 }
 
 func checkAbsPathOrEmpty(s string) error {
@@ -80,6 +144,19 @@ func pluginsOf(t tree) Plugins {
 	out.Concurrency = intOf(p["concurrency"])
 	out.MaxModuleMiB = intOf(p["maxModuleMiB"])
 	out.CallTimeout, _ = p["callTimeout"].(time.Duration)
+	out.UIInstall, _ = p["uiInstall"].(bool)
+	out.AutoUpdate, _ = p["autoUpdate"].(string)
+	if c, ok := p["catalogue"].(tree); ok {
+		out.CatalogueURL, _ = c["url"].(string)
+	}
+	list, _ := p["install"].([]any)
+	for _, v := range list {
+		f, _ := v.(tree)
+		in := PluginInstall{}
+		in.ID, _ = f["id"].(string)
+		in.Version, _ = f["version"].(string)
+		out.Install = append(out.Install, in)
+	}
 	return out
 }
 
@@ -94,6 +171,9 @@ func intOf(v any) int {
 type Bootstrap struct {
 	DataDir string
 	Plugins Plugins
+	// EgressAllow is server.egressAllow, for the catalogue fetches made
+	// before the full configuration is read.
+	EgressAllow []string
 }
 
 // ModulesDir is the plugins folder.
@@ -110,7 +190,7 @@ func Peek(in Inputs) (Bootstrap, error) {
 		return Bootstrap{}, err
 	}
 	part := newRaw(r.loc)
-	for _, k := range []string{"data", "plugins"} {
+	for _, k := range []string{"server", "data", "plugins"} {
 		if kid, ok := r.kids[k]; ok {
 			part.kids[k] = kid
 		}
@@ -118,7 +198,7 @@ func Peek(in Inputs) (Bootstrap, error) {
 	full := NewSchema(plugin.NewRegistry())
 	s := &Schema{Root: &Node{Kind: KindObject}, Plugins: full.Plugins}
 	for _, f := range full.Root.Fields {
-		if f.Name == "data" || f.Name == "plugins" {
+		if f.Name == "server" || f.Name == "data" || f.Name == "plugins" {
 			s.Root.Fields = append(s.Root.Fields, f)
 		}
 	}
@@ -126,5 +206,6 @@ func Peek(in Inputs) (Bootstrap, error) {
 	if err != nil {
 		return Bootstrap{}, err
 	}
-	return Bootstrap{DataDir: str(t, "data", "dir"), Plugins: pluginsOf(t)}, nil
+	server, _ := t["server"].(tree)
+	return Bootstrap{DataDir: str(t, "data", "dir"), Plugins: pluginsOf(t), EgressAllow: stringList(server["egressAllow"])}, nil
 }
