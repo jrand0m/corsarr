@@ -12,7 +12,7 @@
   import type { Column, SortState } from '../../../lib/components/organisms/DataTable/DataTable.svelte';
   import { emptyFilter, type FilterFacet, type FilterState } from '../../../lib/filters/url';
   import type { ListView } from '../../../lib/route/hash';
-  import { app, profileName } from '../../context.svelte';
+  import { app, profileName, profilesFor } from '../../context.svelte';
   import { Resource } from '../../resource.svelte';
   import { refetchOn } from '../../live.svelte';
   import { toApiError } from '../../api/client';
@@ -47,7 +47,7 @@
   const facets = $derived<FilterFacet[]>([
     { id: 'status', label: 'Status', options: (['continuing', 'ended', 'upcoming'] as const).map((v) => ({ value: v, label: seriesStatusLabel[v], count: counts[v] ?? 0 })) },
     { id: 'monitored', label: 'Monitoring', multiple: false, options: [{ value: 'yes', label: 'Monitored' }, { value: 'no', label: 'Unmonitored' }] },
-    { id: 'profile', label: 'Profile', options: (profiles.data ?? []).map((p) => ({ value: p.key, label: p.name })) },
+    { id: 'profile', label: 'Profile', options: profilesFor(profiles.data, 'tv').map((p) => ({ value: p.key, label: p.name })) },
   ]);
   const ratio = (s: SeriesSummary) => (s.stats?.episodeCount ? s.stats.episodeFileCount / s.stats.episodeCount : 1);
   const airing = (s: SeriesSummary) => (s.stats?.nextAiring ? Date.parse(s.stats.nextAiring) : Infinity);

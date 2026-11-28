@@ -11,7 +11,7 @@
   import type { Column, SortState } from '../../../lib/components/organisms/DataTable/DataTable.svelte';
   import { emptyFilter, type FilterFacet, type FilterState } from '../../../lib/filters/url';
   import type { ListView } from '../../../lib/route/hash';
-  import { app, profileName } from '../../context.svelte';
+  import { app, profileName, profilesFor } from '../../context.svelte';
   import { Resource } from '../../resource.svelte';
   import { refetchOn } from '../../live.svelte';
   import { toApiError } from '../../api/client';
@@ -50,7 +50,7 @@
   const facets = $derived<FilterFacet[]>([
     { id: 'status', label: 'Status', options: (Object.keys(statusLabels) as ItemStatus[]).map((v) => ({ value: v, label: statusLabels[v], count: counts[v] ?? 0 })) },
     { id: 'monitored', label: 'Monitoring', multiple: false, options: [{ value: 'yes', label: 'Monitored' }, { value: 'no', label: 'Unmonitored' }] },
-    { id: 'profile', label: 'Profile', options: (profiles.data ?? []).map((p) => ({ value: p.key, label: p.name })) },
+    { id: 'profile', label: 'Profile', options: profilesFor(profiles.data, 'movie').map((p) => ({ value: p.key, label: p.name })) },
   ]);
   const rows = $derived(applyList(movies.rows, filter, sort, {
     text: (m) => `${m.title} ${m.originalTitle ?? ''} ${m.year}`,

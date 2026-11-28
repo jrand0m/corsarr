@@ -1,6 +1,7 @@
 // App-wide state handed to screens through Svelte context: the API client, the SSE store, the toast
 // queue, navigation and the shared movie index (titles for queue, history and palette rows).
 import { getContext, setContext } from 'svelte';
+import type { MediaKind } from '../lib/tokens';
 import type { Client } from './api/client';
 import type { Movie, QualityProfile, SystemStatus } from './api/types';
 import type { LiveEvents } from './live.svelte';
@@ -72,4 +73,15 @@ export function navigateTo(path: string, params?: URLSearchParams): void {
 /** Profile key → name ("hd1080p" → "HD-1080p"). */
 export function profileName(profiles: QualityProfile[] | undefined, key: string): string {
   return profiles?.find((p) => p.key === key)?.name ?? key;
+}
+
+/** The profiles items of a kind may use, in list order (built-ins first). */
+export function profilesFor(profiles: QualityProfile[] | undefined, kind: MediaKind): QualityProfile[] {
+  return (profiles ?? []).filter((p) => !p.kinds || p.kinds.includes(kind));
+}
+
+/** The profile a new item of a kind gets: the kind's default, else the first one. */
+export function defaultProfile(profiles: QualityProfile[] | undefined, kind: MediaKind): QualityProfile | undefined {
+  const list = profilesFor(profiles, kind);
+  return list.find((p) => p.default?.includes(kind) || p.isDefault) ?? list[0];
 }

@@ -30,7 +30,7 @@
   import type { TimelineEntry } from '../../../lib/components/organisms/Timeline/Timeline.svelte';
   import { formatAbsolute } from '../../../lib/format/time';
   import { formatBytes } from '../../../lib/format/quantity';
-  import { app, profileName } from '../../context.svelte';
+  import { app, profileName, profilesFor } from '../../context.svelte';
   import { Resource } from '../../resource.svelte';
   import { refetchOn } from '../../live.svelte';
   import { ApiError, toApiError } from '../../api/client';
@@ -496,7 +496,7 @@
   <Drawer bind:open={editOpen} title="Edit {show?.title ?? 'series'}" size="md">
     <div class="edit">
       <BoolField label="Monitored" help="Off: corsarr leaves the whole series alone." bind:checked={edit.monitored} />
-      <EnumField label="Quality profile" bind:value={edit.profileKey} options={(profiles.data ?? []).map((p) => ({ value: p.key, label: p.name }))} />
+      <EnumField label="Quality profile" bind:value={edit.profileKey} options={profilesFor(profiles.data, 'tv').map((p) => ({ value: p.key, label: p.name }))} />
       <EnumField label="Apply a monitoring mode" bind:value={edit.monitor} placeholder="Keep the current episode choices" options={monitorModes}
         help={edit.monitor ? `${monitorModes.find((o) => o.value === edit.monitor)?.description} Applied once, to the episodes that exist now.` : 'Pick a mode to reset which episodes are monitored.'} />
       <EnumField label="New seasons" bind:value={edit.monitorNew} options={[{ value: 'all', label: 'Monitor them as they appear' }, { value: 'none', label: 'Leave them unmonitored' }]} />
