@@ -137,7 +137,10 @@ func TestServerModules(t *testing.T) {
 
 type busLog struct{ evs []domain.Event }
 
-func (b *busLog) Publish(ev domain.Event) (domain.Event, error) { b.evs = append(b.evs, ev); return ev, nil }
+func (b *busLog) Publish(ev domain.Event) (domain.Event, error) {
+	b.evs = append(b.evs, ev)
+	return ev, nil
+}
 
 func TestProvisionInstallsFromTheCatalogue(t *testing.T) {
 	mod := wasmtest.Example(t)
