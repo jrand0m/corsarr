@@ -24,6 +24,7 @@ type Target interface {
 	AppendHistory(ctx context.Context, ev domain.Event) error
 	Record(ctx context.Context, p store.Provenance) error
 	SetOverride(ctx context.Context, o store.ModeOverride) error
+	SaveQuality(ctx context.Context, t store.QualityTable, o store.QualityObject, now time.Time) error
 }
 
 // op is what applying one entry does; it returns the target it wrote.

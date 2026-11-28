@@ -80,6 +80,9 @@ func (a *App) ReloadOverrides(ctx context.Context) error {
 // afterMigration applies the new overrides and reloads the wanted indexes
 // so adopted items are known without a restart.
 func (a *App) afterMigration(ctx context.Context) {
+	if err := a.Profiles.Load(ctx); err != nil {
+		a.d.Log.Warn("reload custom formats and profiles", "err", err)
+	}
 	if err := a.ReloadOverrides(ctx); err != nil {
 		a.d.Log.Warn("reload mode overrides", "err", err)
 	}

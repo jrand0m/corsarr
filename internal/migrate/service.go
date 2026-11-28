@@ -247,7 +247,7 @@ func (s *Service) state(ctx context.Context, snaps []Snapshot, o Options) (State
 	if st.Index, err = s.d.Store.Migration().Index(ctx); err != nil {
 		return st, err
 	}
-	for _, step := range []func(context.Context, *State, []Snapshot) error{s.provenance, s.overrides, s.live, s.clients} {
+	for _, step := range []func(context.Context, *State, []Snapshot) error{s.provenance, s.overrides, s.live, s.clients, s.quality} {
 		if err := step(ctx, &st, snaps); err != nil {
 			return st, err
 		}
@@ -392,6 +392,10 @@ func kindModeKey(k domain.MediaKind) string { return "mediaKinds." + string(k) +
 // ── store target ─────────────────────────────────────────────────────────────
 
 type storeTarget struct{ st *store.Store }
+
+func (t storeTarget) SaveQuality(ctx context.Context, tbl store.QualityTable, o store.QualityObject, now time.Time) error {
+	return t.st.Quality().Save(ctx, tbl, o, now)
+}
 
 func (t storeTarget) AdoptSeries(ctx context.Context, s domain.Series, seasons []domain.Season, eps []domain.Episode,
 	files []store.EpisodeFile, p store.Provenance) (int64, error) {

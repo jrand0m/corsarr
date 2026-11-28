@@ -1,0 +1,210 @@
+package migrate
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/jrand0m/corsarr/internal/decide"
+	"github.com/jrand0m/corsarr/internal/domain"
+)
+
+func spec(impl string, values map[string]string, options map[string]string) SrcSpec {
+	if options == nil {
+		options = map[string]string{}
+	}
+	return SrcSpec{Name: impl, Impl: impl + "Specification", Values: values, Options: options}
+}
+
+func TestMapCondition_EveryKind(t *testing.T) {
+	cases := []struct {
+		app  App
+		sp   SrcSpec
+		want string // kind:values|pattern|min-max, "" = dropped
+		note bool
+	}{
+		{Sonarr, spec("ReleaseTitle", map[string]string{"value": `\bDTS\b`}, nil), `title:\bDTS\b`, false},
+		{Radarr, spec("ReleaseGroup", map[string]string{"value": `^FLUX$`}, nil), `group:^FLUX$`, false},
+		{Radarr, spec("Edition", map[string]string{"value": `director`}, nil), `edition:director`, false},
+		{Sonarr, spec("Source", map[string]string{"value": "7"}, nil), "source:remux,disc", false},
+		{Sonarr, spec("Source", map[string]string{"value": "3"}, map[string]string{"value": "Web"}), "source:webdl", false},
+		{Sonarr, spec("Source", map[string]string{"value": "2"}, nil), "source:hdtv", true},
+		{Radarr, spec("Source", map[string]string{"value": "9"}, nil), "source:bluray,remux,disc", false},
+		{Radarr, spec("Source", map[string]string{"value": "4"}, nil), "", true},
+		{Sonarr, spec("Resolution", map[string]string{"value": "2160"}, map[string]string{"value": "R2160p"}), "resolution:2160", false},
+		{Sonarr, spec("Resolution", map[string]string{"value": "540"}, nil), "resolution:576", true},
+		{Radarr, spec("QualityModifier", map[string]string{"value": "4"}, nil), "modifier:disc", false},
+		{Radarr, spec("Language", map[string]string{"value": "2"}, map[string]string{"value": "French"}), "language:fr", false},
+		{Radarr, spec("Language", map[string]string{"value": "1", "exceptLanguage": "true"}, nil), "language!:en", false},
+		{Radarr, spec("Language", map[string]string{"value": "-1"}, nil), "language!:und", false},
+		{Radarr, spec("Language", map[string]string{"value": "-2"}, nil), "", true},
+		{Sonarr, spec("IndexerFlag", map[string]string{"value": "1"}, nil), "flag:freeleech", false},
+		{Radarr, spec("IndexerFlag", map[string]string{"value": "8"}, map[string]string{"value": "PTP_Golden"}), "", true},
+		{Radarr, spec("IndexerFlag", map[string]string{"value": "2048"}, nil), "flag:nuked", true},
+		{Sonarr, spec("Size", map[string]string{"min": "1", "max": "10"}, nil), "size:1-10", false},
+		{Radarr, spec("Year", map[string]string{"min": "1990", "max": "1999"}, nil), "year:1990-1999", false},
+		{Sonarr, spec("ReleaseType", map[string]string{"value": "3"}, nil), "releasetype:seasonpack", false},
+		{Sonarr, spec("Mystery", nil, nil), "", true},
+	}
+	for _, c := range cases {
+		m := mapCondition(c.app, c.sp)
+		got := ""
+		if m.ok {
+			got = describe(m.doc)
+		}
+		if got != c.want || (len(m.notes) > 0) != c.note {
+			t.Errorf("%s %s: got %q notes %v", c.app, c.sp.Impl, got, m.notes)
+		}
+	}
+}
+
+func describe(d decide.ConditionDoc) string {
+	k := string(d.Kind)
+	if d.Except {
+		k += "!"
+	}
+	switch {
+	case d.Pattern != "":
+		return k + ":" + d.Pattern
+	case len(d.Values) > 0:
+		return k + ":" + strings.Join(d.Values, ",")
+	}
+	return fmt.Sprintf("%s:%g-%g", k, d.Min, d.Max)
+}
+
+func TestMapFormat_DropsUnsupportedRegexWithNote(t *testing.T) {
+	f := SrcFormat{ID: 1, Name: "Not DTS", Specs: []SrcSpec{
+		spec("ReleaseTitle", map[string]string{"value": `^(?!.*DTS).*$`}, nil),
+		spec("Resolution", map[string]string{"value": "1080"}, nil)}}
+	doc, notes, ok := mapFormat(Sonarr, f)
+	doc, notes = keepCompilable(doc, notes)
+	if !ok || len(doc.Conditions) != 1 || len(notes) != 1 || !strings.Contains(notes[0], "title condition was left out") {
+		t.Fatalf("doc %+v notes %v", doc, notes)
+	}
+}
+
+func f64p(v float64) *float64 { return &v }
+
+// ownerShaped builds n identical device formats and m tiered profiles, as
+// the owner's Sonarr and Radarr hold them.
+func ownerShaped(app App, n, m int) Snapshot {
+	s := Snapshot{Source: SourceInfo{App: app}, Profiles: map[int]SrcProfile{},
+		Sizes: map[string]SrcSize{"WEBDL-1080p": {Min: f64p(5), Preferred: f64p(20), Max: f64p(40)}, "WEBDL-2160p": {Min: f64p(10), Max: nil}}}
+	for i := 1; i <= n; i++ {
+		s.CustomFormats = append(s.CustomFormats, SrcFormat{ID: 100 + i, Name: fmt.Sprintf("Device - %d Compatible", i), Specs: []SrcSpec{
+			spec("ReleaseTitle", map[string]string{"value": fmt.Sprintf(`\bcodec%d\b`, i)}, nil),
+			{Name: "Not 2160", Impl: "ResolutionSpecification", Negate: true, Required: true, Values: map[string]string{"value": "2160"}}}})
+	}
+	for i := 1; i <= m; i++ {
+		s.Profiles[i] = SrcProfile{ID: i, Name: fmt.Sprintf("Tier %d - PS5", i), Upgrades: true, CutoffID: 1001, Cutoff: "WEB 1080p",
+			MinScore: -100, CutoffScore: 200, StepScore: 10,
+			Items: []SrcQualityItem{
+				{ID: 1, Name: "Unknown", Members: []string{"Unknown"}},
+				{ID: 5, Name: "WEBDL-720p", Allowed: true, Members: []string{"WEBDL-720p"}},
+				{ID: 1001, Name: "WEB 1080p", Group: true, Allowed: true, Members: []string{"WEBRip-1080p", "WEBDL-1080p"}},
+				{ID: 18, Name: "WEBDL-2160p", Allowed: i%2 == 0, Members: []string{"WEBDL-2160p"}},
+			},
+			Scores: []SrcScore{{Format: 100 + (i % n) + 1, Name: "Device", Score: 100 + i}, {Format: 999, Name: "Gone", Score: 5}, {Format: 101, Score: 0}}}
+	}
+	return s
+}
+
+func TestPlan_OwnerShapedProfilesAndFormatsDeduplicate(t *testing.T) {
+	tv, movies := ownerShaped(Sonarr, 20, 30), ownerShaped(Radarr, 20, 30)
+	tv.Series = []SrcSeries{{ID: 1, TMDB: 11, Title: "Show", ProfileID: 7, Path: "/tv/show", Root: "/tv"}}
+	rep := BuildPlan([]Snapshot{tv, movies}, State{Quality: QualityState{Formats: map[string]string{}, Profiles: map[string]string{}}}, Options{})
+	targets := map[string]map[App]Outcome{}
+	for _, e := range rep.Entries {
+		if e.Category != CatProfiles {
+			continue
+		}
+		if targets[e.Target] == nil {
+			targets[e.Target] = map[App]Outcome{}
+		}
+		targets[e.Target][e.Source] = e.Outcome
+	}
+	formats, profiles := 0, 0
+	for target, outs := range targets {
+		switch {
+		case strings.HasPrefix(target, "customformat:"):
+			formats++
+		case strings.HasPrefix(target, "profile:"):
+			profiles++
+		}
+		if len(outs) != 2 || outs[Radarr] != OutUnchanged {
+			t.Errorf("%s: %v", target, outs)
+		}
+	}
+	if formats != 20 || profiles != 30 {
+		t.Fatalf("formats %d profiles %d", formats, profiles)
+	}
+	e := entry(t, rep, "sonarr:profile:2")
+	if e.Outcome != OutApproximate || !strings.Contains(e.Reason, `"Gone"`) || !strings.Contains(e.Reason, "webdl-2160p had no size limit") {
+		t.Fatalf("profile 2: %s %s", e.Outcome, e.Reason)
+	}
+	op := e.op.(qualityOp)
+	p := op.profile
+	if p.Key != "tier2ps5" || len(p.Kinds) != 2 || p.Cutoff != "webrip-1080p" || len(p.Groups) != 3 || p.Groups[1].Name != "WEB 1080p" ||
+		p.MinFormatScore != -100 || p.CutoffFormatScore != 200 || p.MinUpgradeFormatScore != 10 || len(p.Formats) != 1 || p.Formats[0].Score != 102 {
+		t.Fatalf("profile doc %+v", p)
+	}
+	if len(op.formats) != 1 || op.formats[0].Key != p.Formats[0].Format {
+		t.Fatalf("the profile write carries its formats: %+v", op.formats)
+	}
+	sizes := map[decide.QualityID]decide.SizeDoc{}
+	for _, s := range p.Sizes {
+		sizes[s.Quality] = s
+	}
+	if s := sizes["webdl-1080p"]; s.Min != 5 || s.Preferred != 20 || s.Max != 40 {
+		t.Fatalf("sizes %+v", p.Sizes)
+	}
+	if s := sizes["webdl-2160p"]; s.Min != 10 || s.Max != 250 {
+		t.Fatalf("unlimited max keeps the default: %+v", p.Sizes)
+	}
+	if _, errs := decide.CompileProfile(*p, map[string]decide.CustomFormat{}); len(errs) == 0 {
+		t.Fatal("without its formats the profile must not compile")
+	}
+}
+
+func TestPlan_ItemsGetTheMappedProfileKey(t *testing.T) {
+	tv := ownerShaped(Sonarr, 2, 3)
+	snaps := []Snapshot{tv}
+	b := newBuilder(snaps, State{}, Options{})
+	b.planQuality(snaps)
+	if k := profileKey(snaps[0], 3, domain.KindTV); k != "tier3ps5" {
+		t.Fatalf("key %q", k)
+	}
+	if k := profileKey(snaps[0], 99, domain.KindTV); k != "hd1080p" {
+		t.Fatalf("unknown id falls back: %q", k)
+	}
+}
+
+func TestPlan_SameNameDifferentContentIsDisambiguated(t *testing.T) {
+	tv, movies := ownerShaped(Sonarr, 1, 1), ownerShaped(Radarr, 1, 1)
+	movies.CustomFormats[0].Specs[0].Values["value"] = `\bother\b`
+	p := movies.Profiles[1]
+	p.Upgrades = false
+	movies.Profiles[1] = p
+	rep := BuildPlan([]Snapshot{tv, movies}, State{}, Options{})
+	f := entry(t, rep, "radarr:customformat:101")
+	if f.Target != "customformat:device1compatibleradarr" || f.Outcome != OutApproximate {
+		t.Fatalf("format %s %s %s", f.Target, f.Outcome, f.Reason)
+	}
+	if pe := entry(t, rep, "radarr:profile:1"); pe.Target != "profile:tier1ps5radarr" {
+		t.Fatalf("profile %s", pe.Target)
+	}
+}
+
+func TestQualityOutcome(t *testing.T) {
+	stored := map[string]string{"same": "h1", "diff": "h1"}
+	cases := map[string]Outcome{"same": OutUnchanged, "diff": OutUpdate, "new": OutCreate, "cfg": OutManaged}
+	for key, want := range cases {
+		fp := "h1"
+		if key == "diff" {
+			fp = "h2"
+		}
+		if got, _ := qualityOutcome(stored, map[string]bool{"cfg": true}, key, fp, "profile"); got != want {
+			t.Errorf("%s: %s", key, got)
+		}
+	}
+}

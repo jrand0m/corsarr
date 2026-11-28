@@ -71,6 +71,7 @@ func readSteps(a App, o ReadOptions) []readStep {
 		{[]App{Sonarr, Radarr, Lidarr}, CatProfiles, readStep{"profiles", readProfiles}},
 		{[]App{Lidarr}, CatProfiles, readStep{"metadata profiles", readMetaProfiles}},
 		{[]App{Sonarr, Radarr, Lidarr}, CatProfiles, readStep{"custom formats", readFormats}},
+		{[]App{Sonarr, Radarr}, CatProfiles, readStep{"quality definitions", readDefinitions}},
 		{[]App{Sonarr, Radarr, Lidarr}, CatRootFolders, readStep{"root folders", readRoots}},
 		{[]App{Sonarr, Radarr, Lidarr}, CatNaming, readStep{"naming", readNaming}},
 		{[]App{Sonarr, Radarr, Lidarr, Prowlarr}, CatClients, readStep{"download clients", readClients}},
@@ -118,7 +119,8 @@ func readProfiles(ctx context.Context, c *Client, s *Snapshot, _ ReadOptions) er
 	}
 	for _, p := range list {
 		s.Profiles[p.ID] = SrcProfile{ID: p.ID, Name: p.Name, Cutoff: cutoffName(p.Items, p.Cutoff), Upgrades: p.UpgradeAllowed,
-			Scored: scored(p.FormatItems), Allowed: allowedNames(p.Items, false)}
+			Scored: scored(p.FormatItems), Allowed: allowedNames(p.Items, false), CutoffID: p.Cutoff, Items: srcItems(p.Items),
+			Scores: srcScores(p.FormatItems), MinScore: p.MinFormatScore, CutoffScore: p.CutoffFormatScore, StepScore: p.MinUpgradeFormatScore}
 	}
 	return nil
 }
@@ -153,7 +155,7 @@ func allowedNames(items []wProfileItem, inherited bool) []string {
 	return out
 }
 
-func scored(items []wFormatItem) int {
+func scored(items []wFormatScore) int {
 	n := 0
 	for _, f := range items {
 		if f.Score != 0 {
@@ -161,17 +163,6 @@ func scored(items []wFormatItem) int {
 		}
 	}
 	return n
-}
-
-func readFormats(ctx context.Context, c *Client, s *Snapshot, _ ReadOptions) error {
-	var list []wNamed
-	if err := c.get(ctx, "/customformat", nil, &list); err != nil {
-		return err
-	}
-	for _, f := range list {
-		s.CustomFormats = append(s.CustomFormats, f.Name)
-	}
-	return nil
 }
 
 func readRoots(ctx context.Context, c *Client, s *Snapshot, _ ReadOptions) error {

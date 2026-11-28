@@ -187,7 +187,7 @@ func TestProfileMapping(t *testing.T) {
 	if m := mapProfile(SrcProfile{Name: "Low", Cutoff: "HDTV-720p"}, domain.KindMovie); m.Exact || m.Key != "hd1080p" {
 		t.Fatal(m)
 	}
-	if k := profileKey(nil, 9, domain.KindTV); k != "hd1080p" {
+	if k := profileKey(Snapshot{}, 9, domain.KindTV); k != "hd1080p" {
 		t.Fatal(k)
 	}
 }
