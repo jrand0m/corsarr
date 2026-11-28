@@ -96,10 +96,17 @@ func (e env) Now() time.Time        { return time.Now() }
 // health stay); changed or new ones are built; removed or disabled ones are
 // closed when they can be. Instances that fail to build report a config
 // health failure and are left out. The new set is swapped in atomically.
-func (m *Manager) Apply(cfg *config.Config) {
+func (m *Manager) Apply(cfg *config.Config) { m.apply(cfg, "") }
+
+// Reload is Apply that also rebuilds every instance of pluginID, after that
+// plugin was installed, replaced or removed at run time.
+func (m *Manager) Reload(cfg *config.Config, pluginID string) { m.apply(cfg, pluginID) }
+
+func (m *Manager) apply(cfg *config.Config, rebuild string) {
 	m.applyMu.Lock()
 	defer m.applyMu.Unlock()
-	prev := *m.cur.Load()
+	old := *m.cur.Load()
+	prev := without(old, rebuild)
 	next := set{}
 	kept := map[any]bool{}
 	for section, insts := range cfg.Instances {
@@ -121,7 +128,23 @@ func (m *Manager) Apply(cfg *config.Config) {
 		sort.Slice(list, func(i, j int) bool { return list[i].Key < list[j].Key })
 	}
 	m.cur.Store(&next)
-	m.closeDropped(prev, kept)
+	m.closeDropped(old, kept)
+}
+
+// without is s minus the instances of pluginID ("" keeps all).
+func without(s set, pluginID string) set {
+	if pluginID == "" {
+		return s
+	}
+	out := set{}
+	for k, list := range s {
+		for _, r := range list {
+			if r.PluginID != pluginID {
+				out[k] = append(out[k], r)
+			}
+		}
+	}
+	return out
 }
 
 // running finds the previous instance when its config is unchanged.

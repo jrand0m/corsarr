@@ -85,4 +85,10 @@ describe('SchemaForm', () => {
     await waitFor(() => expect(getAllByText('Connected').length).toBe(2));
     expect(getAllByText('Set').length).toBeGreaterThan(0);
   });
+  it('reports the current values in their saved shape', async () => {
+    const onvalues = vi.fn();
+    const { getByLabelText } = render(SchemaForm, { ...base, onvalues });
+    await fireEvent.input(getByLabelText('Address'), { target: { value: 'http://box:9091' } });
+    await waitFor(() => expect(onvalues).toHaveBeenLastCalledWith(expect.objectContaining({ url: 'http://box:9091' })));
+  });
 });

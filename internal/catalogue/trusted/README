@@ -1,0 +1,12 @@
+Public keys that may sign the plugin catalogue index, one file per key:
+<keyId>.pub, one line with the standard base64 of the 32 raw Ed25519 key bytes.
+<keyId> is the first 16 hex characters of the SHA-256 of those bytes.
+
+Every file here is compiled into the binary. With no key, corsarr refuses
+every catalogue. To rotate, add the new key one release before the index is
+signed with it, then remove the old one.
+
+    go run ./scripts/pluginindex keygen -o index-key.pem   # prints the key id and the .pub line
+
+The release signs the index with the matching private key and refuses to
+publish when it does not verify against a key in this folder.

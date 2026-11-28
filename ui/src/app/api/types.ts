@@ -536,6 +536,102 @@ export interface AlbumDetail { album: AlbumView; artist: { id: number; name: str
 export interface MusicProfileOption { key: string; name: string }
 export interface MusicProfiles { quality: (MusicProfileOption & { cutoff: string; isDefault: boolean })[]; metadata: MusicProfileOption[] }
 
+// ── plugin modules and the catalogue ────────────────────────────────────────
+
+export type {
+  ActionOutcome, ActionResult, InstanceRef, ModuleAction, ModuleField, ModuleFieldType, ModuleGroup, ModulePattern,
+  ModulePermissions, ModuleSchema, ModuleTextRule, PermissionDiff, Problem,
+} from '../../lib/forms/plugin-types';
+import type { InstanceRef, ModulePermissions, ModuleSchema, PermissionDiff, Problem } from '../../lib/forms/plugin-types';
+
+export interface ModuleManifest {
+  id: string;
+  name: string;
+  version: string;
+  kind: string;
+  abiVersion: number;
+  description?: string;
+  author?: string;
+  license?: string;
+  homepage?: string;
+  permissions: ModulePermissions;
+  limits: { memoryMiB?: number; callTimeoutMs?: number; concurrency?: number };
+  settings: ModuleSchema;
+}
+
+
+export type ModuleStatus = 'active' | 'failed' | 'unloaded' | 'uninstalled';
+
+export interface ModuleInfo {
+  id: string;
+  version: string;
+  previous?: string;
+  sha256: string;
+  kind: string;
+  status: ModuleStatus;
+  error?: string;
+  /** Running module instances. */
+  instances: number;
+  ops?: string[];
+  manifest: ModuleManifest;
+  usedBy: InstanceRef[] | null;
+  source: 'catalogue' | 'file';
+  /** Config section that holds instances of this module's kind. */
+  configSection?: string;
+}
+
+export interface PluginPolicy {
+  uiInstall: boolean;
+  autoUpdate: 'off' | 'patch' | 'minor';
+  catalogueUrl: string;
+  lockKey: 'plugins.uiInstall' | string;
+}
+
+export interface ModuleList { items: ModuleInfo[] | null; policy: PluginPolicy }
+
+export interface CatalogueEntry {
+  id: string;
+  name: string;
+  version: string;
+  kind: string;
+  abiVersion: number;
+  description?: string;
+  author?: string;
+  license?: string;
+  homepage?: string;
+  permissions: ModulePermissions;
+  minCorsarr?: string;
+  size: number;
+  sha256: string;
+  url: string;
+  attestation?: unknown;
+}
+
+
+export type OfferState = 'available' | 'installed' | 'update' | 'update_needs_approval' | 'older' | 'incompatible';
+
+export interface CatalogueOffer {
+  entry: CatalogueEntry;
+  state: OfferState;
+  /** "needs corsarr ≥ 1.5.0" */
+  reason?: string;
+  installed?: string;
+  diff?: PermissionDiff;
+}
+
+export interface CatalogueView {
+  source: { url: string; release?: string; generated?: string; fetchedAt?: string; stale: boolean; error?: string };
+  offers: CatalogueOffer[] | null;
+  policy: PluginPolicy;
+}
+
+export interface ActionRequest { instance?: string; values: Record<string, unknown> }
+
+export interface ProblemList { problems: Problem[] | null }
+
+/** DELETE answer: the configured instances that now report "module not installed". */
+export interface UninstallResult { usedBy?: InstanceRef[] | null; instances?: InstanceRef[] | null }
+
 // ── custom formats and quality profiles ─────────────────────────────────────
 
 export type ConditionKind =

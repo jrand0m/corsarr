@@ -80,6 +80,31 @@ func CheckManifest(m abi.Manifest) schema.Problems {
 	return c.ps
 }
 
+// CheckIdentity returns the problems of a manifest's identity and text
+// fields alone (id, version, name, description, author, licence, homepage),
+// for descriptions of a module that come without its settings.
+func CheckIdentity(m abi.Manifest) schema.Problems {
+	c := &mcheck{}
+	checkIdentity(c, m)
+	return c.ps
+}
+
+// CheckHostPattern reports what is wrong with one http.hosts entry when the
+// settings it may refer to are not known ("" when it is well formed).
+func CheckHostPattern(h string) string {
+	if key, ok := strings.CutPrefix(h, abi.SettingHostPrefix); ok {
+		if !schema.IsIdentifier(key) {
+			return "must name a setting key after " + abi.SettingHostPrefix
+		}
+		return ""
+	}
+	host, wild := strings.CutPrefix(h, "*.")
+	if schema.CheckPattern(abi.PatternHostname, host) != nil || (wild && !strings.Contains(host, ".")) {
+		return "must be a host name, *.domain or $setting:<key>"
+	}
+	return ""
+}
+
 func checkIdentity(c *mcheck, m abi.Manifest) {
 	if !idRe.MatchString(m.ID) {
 		c.add("id", "must be 2 to 32 lower-case letters and digits, starting with a letter")

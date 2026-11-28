@@ -18,14 +18,20 @@ describe('placeNear', () => {
 
 describe('focus helpers', () => {
   function setup() {
-    document.body.innerHTML = `
-      <div id="root">
-        <button data-overlay-close>Close</button>
-        <div hidden><button>Hidden</button></div>
-        <div popover><button>In closed popover</button></div>
-        <input id="field" />
-        <button id="last">Save</button>
-      </div>`;
+    const el = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, ...kids: (Node | string)[]) => {
+      const n = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+      n.append(...kids);
+      return n;
+    };
+    document.body.replaceChildren(
+      el('div', { id: 'root' },
+        el('button', { 'data-overlay-close': '' }, 'Close'),
+        el('div', { hidden: '' }, el('button', {}, 'Hidden')),
+        el('div', { popover: '' }, el('button', {}, 'In closed popover')),
+        el('input', { id: 'field' }),
+        el('button', { id: 'last' }, 'Save')),
+    );
     return document.getElementById('root')!;
   }
 

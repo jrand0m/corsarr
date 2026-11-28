@@ -109,6 +109,10 @@
   </SettingsPage>
 {:else}
   <SettingsPage sections={settingsSections(instances.length)} current="plugins" title="Plugins & integrations" description="What corsarr talks to: configured instances and the plugins this build ships.">
+    {#snippet actions()}
+      <Button icon="plug" href="#/settings/plugins/modules">Installed modules</Button>
+      <Button icon="download" href="#/settings/plugins/catalogue">Catalogue</Button>
+    {/snippet}
     {#snippet banner()}<ManagedBanner kind={src?.kind} path={src?.path} exportHref="#/settings/plugins" />{/snippet}
 
     <section class="block" aria-labelledby="sp-inst">

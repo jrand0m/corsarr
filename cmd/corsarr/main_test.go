@@ -215,7 +215,7 @@ func TestOnConfigChange(t *testing.T) {
 	c := parse([]string{"--data.dir=" + dir}, nil, &bytes.Buffer{}, &bytes.Buffer{})
 	cfg, _ := c.load()
 	var logs bytes.Buffer
-	k, err := startKernel(context.Background(), cfg, newLogger(cli{stderr: &logs}, "info"))
+	k, err := startKernel(context.Background(), cfg, newLogger(cli{stderr: &logs}, "info"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestOnConfigChange(t *testing.T) {
 	if h, _ := k.health.Get(configRef); h.Status != domain.HealthOK || !strings.Contains(logs.String(), "restart corsarr") {
 		t.Fatalf("ok: %+v %s", h, logs.String())
 	}
-	if len(k.jobs.List()) != 15 { // 2 kernel housekeeping + 8 movie pipeline + 2 TV + 2 music jobs + artwork cache
+	if len(k.jobs.List()) != 16 { // 2 kernel housekeeping + 8 movie pipeline + 2 TV + 2 music jobs + artwork cache + plugin auto-update
 		t.Fatalf("kernel jobs: %d", len(k.jobs.List()))
 	}
 	if err := k.ready(context.Background()); err != nil {

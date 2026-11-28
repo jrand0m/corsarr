@@ -43,6 +43,15 @@ build it yourself with `just build plugins <id>`.
   installs it, printing the hosts it may contact and the secrets it may read.
   A running server picks it up within seconds.
 
+- **Catalogue**: Settings › Plugins & integrations › Catalogue lists the
+  modules your release offers. Install shows the hosts a module may contact
+  and the secrets it may read and asks you to confirm; corsarr downloads,
+  verifies and loads it without a restart. Update, roll back and uninstall
+  work the same way. An update that asks for new permissions shows what grew.
+- **Config**: `plugins.install` lists modules (`id`, optional `version`) that
+  corsarr installs from the catalogue when it starts, before the rest of the
+  configuration is read.
+
 Installing verifies the manifest, the imports and exports, starts the module
 once and checks its capabilities against the manifest. The module's SHA-256
 is recorded and checked again every time it is loaded.
@@ -76,6 +85,50 @@ downloadClients:
     url: http://10.0.0.10:8080
     apiKey: ${env:BOX_API_KEY}
 ```
+
+## The catalogue
+
+Each release publishes `plugins-index.json`, its signature
+`plugins-index.json.sig` and one `<id>-<version>.wasm` per module (with the
+manifest embedded). corsarr reads the index of its own release unless
+`plugins.catalogue.url` names another one.
+
+Nothing from an index is used until its signature verifies: Ed25519 over the
+bytes `corsarr-plugin-index-v1`, a newline, then the index exactly as
+published, checked against the public keys compiled into corsarr
+(`internal/catalogue/trusted/<keyId>.pub`). A missing or wrong signature, or a
+key the build does not trust, refuses the whole catalogue. Each download must
+then have the size and SHA-256 the index lists and an embedded manifest whose
+identity and permissions equal its entry; anything else is refused and nothing
+is installed. The last verified index is kept in the plugins folder, so the
+catalogue stays browsable offline.
+
+`go run ./scripts/pluginindex` builds, signs and verifies an index the same
+way the release does (see [Building and publishing](#building-and-publishing)): `keygen -o index-key.pem`
+prints the key id and the public key line for `<keyId>.pub`;
+`sign -key index-key.pem plugins-index.json`;
+`verify -pub <keyId>.pub plugins-index.json plugins-index.json.sig`.
+
+With `server.egressAllow` set, allow the catalogue host and the host its
+downloads redirect to (for GitHub releases, `github.com` and
+`release-assets.githubusercontent.com`).
+
+### Locking it down
+
+`plugins.uiInstall: false` turns off every install, update, rollback and
+uninstall from the web UI and the API (they answer 403); the catalogue stays
+browsable and the lock is shown on the page. Modules then come only from
+`plugins.install` and the plugins folder. The Kubernetes, Helm and systemd
+samples ship with the lock on.
+
+`plugins.autoUpdate` (`off`, `patch` or `minor`) installs newer catalogue
+versions of modules installed from the catalogue once a day; a version that
+asks for new permissions always waits for you.
+
+Every install, update, rollback and uninstall is recorded in History with the
+version and SHA-256. Uninstalling keeps the module's settings schema: the
+instances that use it stay in the config, report "module not installed" and
+run again once it is installed.
 
 ## Limits
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/jrand0m/corsarr/internal/api"
 	"github.com/jrand0m/corsarr/internal/automation"
+	"github.com/jrand0m/corsarr/internal/catalogue"
 	"github.com/jrand0m/corsarr/internal/config"
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
@@ -67,6 +68,13 @@ type Deps struct {
 	UIClients func() int
 	Log       *slog.Logger
 	Options   Options
+	// Modules is the plugin module store; nil when modules are off.
+	Modules Modules
+	// CatalogueKeys verify the plugin catalogue (the build's trusted keys
+	// when nil).
+	CatalogueKeys []catalogue.Key
+	// Version is the running corsarr version.
+	Version string
 }
 
 // App is the running pipeline.
@@ -95,7 +103,9 @@ type App struct {
 	// decision catalog.
 	Profiles *profiles.Service
 	// Images is the artwork cache.
-	Images  *imagecache.Cache
+	Images *imagecache.Cache
+	// Plugins installs and manages plugin modules from the catalogue.
+	Plugins *PluginAdmin
 	wg      sync.WaitGroup
 	cancel  context.CancelFunc
 	ctx     context.Context // the running pipeline's context (set by Start)
@@ -153,6 +163,7 @@ func (a *App) build() {
 	a.Migrate = a.newMigrate()
 	a.MusicAuto = a.newMusicAuto()
 	a.Legacy = a.newLegacy()
+	a.Plugins = a.newPluginAdmin()
 	a.MCP = a.newMCP()
 	a.Notify = notify.New(notify.Deps{Outbox: st.Outbox(), Refreshes: st.Refreshes(), Connections: a.connections, Health: d.Health, Pub: d.Bus,
 		MediaServers: a.mediaServers, MergeWindow: d.Options.MergeWindow, Modes: modes, Log: d.Log})
@@ -204,6 +215,7 @@ func (a *App) registerJobs(ctx context.Context) error {
 		{Name: TestJob, Interval: a.d.Options.TestInterval, Run: a.Instances.TestAll},
 		{Name: rootfolders.CheckJob, Interval: rootfolders.CheckInterval, Run: a.Roots.Check},
 		{Name: imagecache.DegradeJob, Interval: imagecache.DegradeInterval, Heavy: true, Run: a.Images.Degrade},
+		{Name: AutoUpdateJob, Interval: 24 * time.Hour, Run: a.Plugins.AutoUpdate},
 		{Name: PurgeJob, Interval: 24 * time.Hour, Run: func(ctx context.Context) error {
 			_, err := a.Rules.Run(ctx, importer.RuleRecyclePurge)
 			return err
@@ -241,6 +253,7 @@ func (a *App) Start(ctx context.Context) error {
 	a.goRun(func() { a.Notify.Run(ctx) })
 	a.goRun(func() { a.MCP.Run(ctx) })
 	a.goRun(func() { _ = a.Instances.TestAll(ctx) })
+	a.goRun(func() { a.autoUpdateSoon(ctx) })
 	a.Queue.Adjust(ctx)
 	return a.d.Jobs.RunNow(queue.SweepJob) // reconciliation at start
 }
@@ -324,7 +337,7 @@ func (a *App) importWaiting(ctx context.Context, k domain.MediaKind) {
 func (a *App) Mounts() []func(api.Mounter) {
 	return []func(api.Mounter){a.Movies.Mount, a.Queue.Mount, a.Automation.Mount, a.Rules.Mount,
 		a.Roots.Mount, a.Notify.Mount, a.TV.Mount, a.TVAuto.Mount, a.IndexerAdmin.Mount, a.Migrate.Mount,
-		a.Music.Mount, a.MusicAuto.Mount, a.Legacy.Mount, a.MCP.Mount, a.Images.Mount, a.Profiles.Mount}
+		a.Music.Mount, a.MusicAuto.Mount, a.Legacy.Mount, a.MCP.Mount, a.Images.Mount, a.Profiles.Mount, a.Plugins.Mount}
 }
 
 func typeIn(types ...domain.EventType) func(domain.EventType) bool {

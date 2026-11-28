@@ -35,6 +35,13 @@ Short notes per release. Each release's assets, checksums and how to verify them
 - Go SDK for modules (`sdk/go`) with a test harness and an example download client.
 - New `plugins` settings: plugins folder, built-ins to switch off, and memory, time, concurrency and size limits for modules.
 - Plugin settings forms are typed data checked on the server: a closed set of field types, plain text with a small emoji set, per-field errors.
+- Plugin catalogue: install, update, roll back and uninstall plugin modules from the signed index your release publishes, without a restart; downloads are checked against the index's SHA-256 and the index against its signature.
+- `plugins.uiInstall: false` locks module changes in the web UI and the API (the Kubernetes, Helm and systemd samples ship locked); `plugins.install` installs modules from the catalogue at start; `plugins.autoUpdate` takes patch or minor updates that ask for no new permissions.
+- Module installs, updates, rollbacks and uninstalls are recorded in History with version and hash; the assistant tool `list_plugins` lists plugins and modules read-only.
+- Uninstalling a module keeps its instances in the config; they report the module as not installed and run again after a reinstall.
+- Settings › Plugins & integrations › Installed modules: each module's status, version, kind, what it may reach and the instances using it, with rollback and uninstall.
+- Module pages show the module's details, permissions and the instances using it with their settings and action buttons (for example Test connection); a new-instance form is checked by the server and turns into ready-to-paste YAML, secrets as environment references.
+- Settings › Catalogue: install or update modules from the signed catalogue after reviewing their permissions; updates that ask for more wait for approval; a stale or unreachable catalogue says so. `plugins.uiInstall: false` locks these changes and the pages show where the lock is set.
 - Transmission (3.x, 4.x) and rTorrent (0.9.8, 0.10, XML-RPC over HTTP) download clients as installable plugin modules, with every optional capability; see `plugins/transmission` and `plugins/rtorrent`.
 - `just build plugins [id|all]` builds plugin modules reproducibly; the SDK gains a request adapter for protocol clients.
 - Releases include the plugin modules (`<id>-<version>.wasm`) and `plugins-index.json` with its Ed25519 signature; modules are rebuilt on both release runners and compared, listed in `SHA256SUMS`, and attested with provenance and an SBOM.

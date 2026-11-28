@@ -326,3 +326,48 @@ func TestStoreEdges(t *testing.T) {
 		t.Errorf("versions after prune: %v", vs)
 	}
 }
+
+func TestUninstallKeepsARecordUntilReinstalled(t *testing.T) {
+	dir, reg := t.TempDir(), plugin.NewRegistry()
+	m := newManager(t, dir, reg)
+	ctx := context.Background()
+	if _, err := m.Install(ctx, wasmtest.Example(t), nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	info, err := m.Uninstall("exampledl")
+	if err != nil || info.Status != StatusUninstalled || info.Version == "" {
+		t.Fatalf("uninstall: %+v %v", info, err)
+	}
+	r, ok := reg.Get("exampledl")
+	if !ok || len(r.Manifest.Settings) == 0 {
+		t.Fatal("placeholder with settings not registered")
+	}
+	if _, err := r.New(plugin.Instance{Key: "dl", PluginID: "exampledl", Settings: plugin.Settings{"url": "http://x"}, Env: env{}}); !errors.Is(err, ErrUninstalled) {
+		t.Fatalf("placeholder instance: %v", err)
+	}
+	if _, err := m.Uninstall("exampledl"); !errors.Is(err, ErrNotInstalled) {
+		t.Fatalf("second uninstall: %v", err)
+	}
+
+	// a restart registers the placeholder again
+	reg2 := plugin.NewRegistry()
+	m2 := newManager(t, dir, reg2)
+	m2.Register()
+	if _, ok := reg2.Get("exampledl"); !ok {
+		t.Fatal("placeholder not registered after restart")
+	}
+	if got, _ := m2.Get("exampledl"); got.Status != StatusUninstalled {
+		t.Fatalf("status after restart: %+v", got)
+	}
+
+	// reinstalling replaces the placeholder and drops the record
+	if _, err := m2.Install(ctx, wasmtest.Example(t), nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m2.Store().Record("exampledl"); ok {
+		t.Fatal("record kept after reinstall")
+	}
+	if got, _ := m2.Get("exampledl"); got.Status != StatusActive {
+		t.Fatalf("status after reinstall: %+v", got)
+	}
+}

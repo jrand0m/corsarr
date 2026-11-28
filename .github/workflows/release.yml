@@ -324,8 +324,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: CHANGELOG.md
+          # the changelog for the notes; the index tool and the trusted keys to sign with
+          sparse-checkout: |
+            CHANGELOG.md
+            go.mod
+            go.sum
+            internal/
+            scripts/pluginindex/
+            sdk/
           sparse-checkout-cone-mode: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-ubuntu-24.04
@@ -344,18 +355,18 @@ jobs:
             echo "::warning::PLUGIN_INDEX_SIGNING_KEY is not set: the plugin index is published unsigned and corsarr will refuse it"
             exit 0
           fi
+          go build -mod=readonly -o "$RUNNER_TEMP/pluginindex" ./scripts/pluginindex
           umask 077
           key="$RUNNER_TEMP/index-key.pem"
-          trap 'rm -f "$key" "$RUNNER_TEMP/index-pub.pem" "$RUNNER_TEMP/msg" "$RUNNER_TEMP/sig.bin"' EXIT
+          trap 'rm -f "$key"' EXIT
           printf '%s\n' "$KEY" > "$key"
-          cd build/archives
-          keyid=$(openssl pkey -in "$key" -pubout -outform DER | tail -c 32 | sha256sum | cut -c1-16)
-          { printf 'corsarr-plugin-index-v1\n'; cat plugins-index.json; } > "$RUNNER_TEMP/msg"
-          openssl pkeyutl -sign -rawin -inkey "$key" -in "$RUNNER_TEMP/msg" -out "$RUNNER_TEMP/sig.bin"
-          openssl pkey -in "$key" -pubout -out "$RUNNER_TEMP/index-pub.pem"
-          openssl pkeyutl -verify -rawin -pubin -inkey "$RUNNER_TEMP/index-pub.pem" -in "$RUNNER_TEMP/msg" -sigfile "$RUNNER_TEMP/sig.bin"
-          printf '{"schema":1,"alg":"ed25519","keyId":"%s","signature":"%s"}\n' "$keyid" "$(base64 -w0 "$RUNNER_TEMP/sig.bin")" > plugins-index.json.sig
-          echo "plugin index signed with key $keyid"
+          "$RUNNER_TEMP/pluginindex" sign -key "$key" -o build/archives/plugins-index.json.sig build/archives/plugins-index.json
+          # corsarr trusts only the keys compiled in from internal/catalogue/trusted; an index
+          # signed with any other key would be refused, so the release stops here instead
+          pubs=(internal/catalogue/trusted/*.pub)
+          [ -e "${pubs[0]}" ] || { echo "::error::no trusted key in internal/catalogue/trusted: commit the public key of PLUGIN_INDEX_SIGNING_KEY"; exit 1; }
+          args=(); for p in "${pubs[@]}"; do args+=(-pub "$p"); done
+          "$RUNNER_TEMP/pluginindex" verify "${args[@]}" build/archives/plugins-index.json build/archives/plugins-index.json.sig
       - name: GitHub release with checksums, SBOMs and the builder identity
         env:
           GH_TOKEN: ${{ github.token }}

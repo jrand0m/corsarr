@@ -1,7 +1,6 @@
 package release
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"crypto/x509"
@@ -16,25 +15,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jrand0m/corsarr/internal/catalogue"
 	"github.com/jrand0m/corsarr/internal/wasm"
-	"github.com/jrand0m/corsarr/sdk/go/abi"
 )
 
 // The plugin index: plugins-index.json lists the plugin modules a release
-// publishes, and plugins-index.json.sig signs its exact bytes. corsarr reads
-// both strictly, so the shape below changes only with a new schema number.
+// publishes, and plugins-index.json.sig signs its exact bytes. The shapes,
+// the signed message and the checks are the catalogue reader's own
+// (internal/catalogue), so what a release writes is what corsarr accepts.
 
 // IndexSchema is the plugin index format version.
-const IndexSchema = 1
+const IndexSchema = catalogue.SchemaVersion
 
 // MaxIndexPlugins bounds the entries of one index.
-const MaxIndexPlugins = 200
+const MaxIndexPlugins = catalogue.MaxEntries
 
 // SignaturePrefix is prepended (with a newline) to the index bytes to form
 // the signed message.
-const SignaturePrefix = "corsarr-plugin-index-v1"
+var SignaturePrefix = strings.TrimSuffix(catalogue.MessagePrefix, "\n")
 
-// PluginIndex is plugins-index.json.
+// PluginIndex is plugins-index.json as written (generated as RFC 3339 text).
 type PluginIndex struct {
 	Schema    int           `json:"schema"`
 	Release   string        `json:"release"`
@@ -43,23 +43,7 @@ type PluginIndex struct {
 }
 
 // PluginEntry is one plugin module of an index.
-type PluginEntry struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Version     string          `json:"version"`
-	Kind        string          `json:"kind"`
-	ABIVersion  int             `json:"abiVersion"`
-	Description string          `json:"description,omitempty"`
-	Author      string          `json:"author,omitempty"`
-	License     string          `json:"license,omitempty"`
-	Homepage    string          `json:"homepage,omitempty"`
-	Permissions abi.Permissions `json:"permissions"`
-	MinCorsarr  string          `json:"minCorsarr,omitempty"`
-	Size        int64           `json:"size"`
-	SHA256      string          `json:"sha256"`
-	URL         string          `json:"url"`
-	Attestation string          `json:"attestation,omitempty"`
-}
+type PluginEntry = catalogue.Entry
 
 // ModuleFile is one module file given to BuildIndex.
 type ModuleFile struct {
@@ -97,7 +81,14 @@ func BuildIndex(release, minCorsarr string, generated time.Time, files []ModuleF
 	}
 	sort.Slice(idx.Plugins, func(i, j int) bool { return idx.Plugins[i].ID < idx.Plugins[j].ID })
 	b, err := json.MarshalIndent(idx, "", "  ")
-	return append(b, '\n'), err
+	if err != nil {
+		return nil, err
+	}
+	b = append(b, '\n')
+	if _, err := catalogue.Decode(b, 0); err != nil {
+		return nil, fmt.Errorf("corsarr would refuse this index: %w", err)
+	}
+	return b, nil
 }
 
 func indexEntry(f ModuleFile) (PluginEntry, error) {
@@ -122,60 +113,28 @@ func indexEntry(f ModuleFile) (PluginEntry, error) {
 }
 
 // Signature is plugins-index.json.sig.
-type Signature struct {
-	Schema    int    `json:"schema"`
-	Alg       string `json:"alg"`
-	KeyID     string `json:"keyId"`
-	Signature string `json:"signature"`
-}
+type Signature = catalogue.Signature
 
 // KeyID names a public key: the first 16 hex characters of SHA-256 over its
 // 32 raw bytes.
-func KeyID(pub ed25519.PublicKey) string {
-	sum := sha256.Sum256(pub)
-	return hex.EncodeToString(sum[:])[:16]
-}
-
-func signedMessage(index []byte) []byte {
-	return append([]byte(SignaturePrefix+"\n"), index...)
-}
+func KeyID(pub ed25519.PublicKey) string { return catalogue.KeyID(pub) }
 
 // SignIndex signs the exact index bytes and returns the signature file.
 func SignIndex(index []byte, key ed25519.PrivateKey) ([]byte, error) {
 	if len(key) != ed25519.PrivateKeySize {
 		return nil, errors.New("not an Ed25519 private key")
 	}
-	pub := key.Public().(ed25519.PublicKey) //nolint:forcetypeassert // always a PublicKey
-	sig := Signature{Schema: IndexSchema, Alg: "ed25519", KeyID: KeyID(pub),
-		Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(key, signedMessage(index)))}
-	b, err := json.Marshal(sig)
-	return append(b, '\n'), err
+	return catalogue.Sign(index, key), nil
 }
 
 // VerifyIndex checks a signature file against the index bytes and a set of
-// trusted keys by key id.
+// trusted keys by key id, as corsarr does.
 func VerifyIndex(index, sigFile []byte, keys map[string]ed25519.PublicKey) error {
-	var sig Signature
-	dec := json.NewDecoder(bytes.NewReader(sigFile))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&sig); err != nil {
-		return fmt.Errorf("signature file: %w", err)
+	list := make([]catalogue.Key, 0, len(keys))
+	for id, pub := range keys {
+		list = append(list, catalogue.Key{ID: id, Public: pub})
 	}
-	if sig.Schema != IndexSchema || sig.Alg != "ed25519" {
-		return fmt.Errorf("signature schema %d with %q is not supported", sig.Schema, sig.Alg)
-	}
-	pub, ok := keys[sig.KeyID]
-	if !ok {
-		return fmt.Errorf("signed with unknown key %s", sig.KeyID)
-	}
-	raw, err := base64.StdEncoding.DecodeString(sig.Signature)
-	if err != nil || len(raw) != ed25519.SignatureSize {
-		return errors.New("signature is not 64 bytes of base64")
-	}
-	if !ed25519.Verify(pub, signedMessage(index), raw) {
-		return errors.New("signature does not match the index")
-	}
-	return nil
+	return catalogue.Verify(index, sigFile, list)
 }
 
 // ParsePrivateKey reads an Ed25519 private key in PKCS#8 PEM, as OpenSSL
@@ -213,9 +172,6 @@ func PublicKeyLine(pub ed25519.PublicKey) string {
 
 // ParsePublicKey reads a trusted-key file.
 func ParsePublicKey(line []byte) (ed25519.PublicKey, error) {
-	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(line)))
-	if err != nil || len(raw) != ed25519.PublicKeySize {
-		return nil, errors.New("a public key is 32 bytes of standard base64")
-	}
-	return ed25519.PublicKey(raw), nil
+	k, err := catalogue.ParseKey(string(line))
+	return k.Public, err
 }

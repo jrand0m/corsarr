@@ -140,6 +140,7 @@ func toolOutputs() map[string]schema {
 		"list_downloaders": outputOf[DownloadersOut](), "get_queue": outputOf[page[store.StoredDownload]](),
 		"get_download": outputOf[queue.Detail](), "test_downloader": outputOf[TestOut](),
 		"grab_release": outputOf[GrabOut](), "add_download_url": outputOf[AddURLOut](),
+		"list_plugins": outputOf[PluginsOut](),
 	}
 	for _, name := range []string{"set_download_priority", "set_download_category", "remove_download", "set_speed_limits",
 		"toggle_alt_speed", "pause_download", "resume_download", "recheck_download", "reannounce_download", "retry_import",

@@ -12,6 +12,10 @@ log:
   level: info
 auth:
   mode: password
+plugins:
+  # Plugin modules come from plugins.install below or the plugins folder; the web UI only
+  # browses the catalogue.
+  uiInstall: false
 mediaKinds:
   tv: { mode: active }
   movie: { mode: active }

@@ -38,8 +38,9 @@ describe('PlanDiff', () => {
     const rows = within(table).getAllByRole('row').slice(1);
     expect(rows[0].textContent!.replace(/\s+/g, '')).toBe('priority2510');
     expect(rows[1].textContent).toContain('differs');
-    expect(container.innerHTML).not.toContain(SECRET);
-    expect(container.innerHTML).not.toContain('sk-other');
+    const markup = new XMLSerializer().serializeToString(container);
+    expect(markup).not.toContain(SECRET);
+    expect(markup).not.toContain('sk-other');
   });
 
   it('explains skipped prunes with what still uses them', () => {

@@ -109,6 +109,27 @@ plugins:
   concurrency: 4
   # Largest module file accepted, in MiB.
   maxModuleMiB: 32
+  # Allow installing, updating, rolling back and removing plugin modules from the web UI and the
+  # API; set false to manage modules only through this config and the plugins folder. true or
+  # false.
+  uiInstall: true
+  # Where plugin modules are offered.
+  # catalogue:
+  #   # Address of the signed plugin index; leave empty for the official index of this release. With
+  #   # server.egressAllow set, allow this host and the host its downloads redirect to.
+  #   url:
+  # Plugin modules to install from the catalogue when corsarr starts; leave empty to install
+  # nothing this way.
+  # install:
+  #   -
+  #     # Id of the plugin in the catalogue, for example transmission.
+  #     id:
+  #     # Version to install, for example 1.2.0; leave empty for the version the catalogue offers.
+  #     version:
+  # Install newer catalogue versions of installed modules once a day: patch takes 1.2.x updates,
+  # minor takes 1.x updates, off never updates on its own. Versions that ask for new permissions
+  # always wait for you. One of: off, patch, minor.
+  autoUpdate: "off"
 
 # What corsarr does for each kind of media.
 mediaKinds:

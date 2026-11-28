@@ -100,7 +100,7 @@ func TestAppWiresModulesJobsAndAdapters(t *testing.T) {
 	if err := a.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(jobs.List()) != 13 || len(a.Mounts()) != 16 { // movie, TV and music pipelines, indexer settings, migration, compatibility API, MCP, artwork cache, profiles
+	if len(jobs.List()) != 14 || len(a.Mounts()) != 17 { // movie, TV and music pipelines, indexer settings, migration, compatibility API, MCP, artwork cache, profiles, plugin modules
 		t.Fatalf("jobs %d mounts %d", len(jobs.List()), len(a.Mounts()))
 	}
 	if lib, err := a.libraryArtwork(ctx); err != nil || len(lib) != 0 {

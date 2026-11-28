@@ -35,6 +35,9 @@ describe('resolve', () => {
     expect(resolve('/library/music/3')).toEqual({ area: 'library', screen: 'artist', params: { id: '3' } });
     expect(resolve('/library/music/albums/9')).toEqual({ area: 'library', screen: 'album', params: { id: '9' } });
     expect(resolve('/settings/plugins/indexers.knaben')).toEqual({ area: 'settings', screen: 'plugins', params: { id: 'indexers.knaben' } });
+    expect(resolve('/settings/plugins/modules')).toEqual({ area: 'settings', screen: 'modules', params: {} });
+    expect(resolve('/settings/plugins/modules/harbourdl')).toEqual({ area: 'settings', screen: 'module', params: { id: 'harbourdl' } });
+    expect(resolve('/settings/plugins/catalogue')).toEqual({ area: 'settings', screen: 'catalogue', params: {} });
   });
 
   it('redirects area roots to their first screen', () => {

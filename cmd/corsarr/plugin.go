@@ -13,7 +13,11 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/jrand0m/corsarr/internal/app"
+	"github.com/jrand0m/corsarr/internal/catalogue"
 	"github.com/jrand0m/corsarr/internal/config"
+	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/httpx"
 	"github.com/jrand0m/corsarr/internal/modules"
 	"github.com/jrand0m/corsarr/internal/plugin"
 	"github.com/jrand0m/corsarr/internal/plugin/conformance"
@@ -43,6 +47,9 @@ type moduleState struct {
 	eng *wasm.Engine
 	mgr *modules.Manager
 	dir string
+	// provisioned are the plugins.install changes made at start, recorded
+	// in History once it is open.
+	provisioned []app.PluginChange
 }
 
 // registerModules registers installed modules before the configuration is
@@ -72,7 +79,57 @@ func (c cli) openModules(b config.Bootstrap) error {
 	c.mods.eng, c.mods.dir = eng, dir
 	c.mods.mgr = modules.New(modules.Options{Dir: dir, Engine: eng, Registry: plugin.Default, DisabledBuiltins: b.Plugins.DisabledBuiltins})
 	c.mods.mgr.Register()
+	c.provision(b)
 	return nil
+}
+
+// catalogueKeys are the keys a catalogue must be signed with.
+var catalogueKeys = catalogue.Trusted
+
+// provisionTimeout bounds the catalogue installs made at start.
+const provisionTimeout = 60 * time.Second
+
+// provision installs the plugins.install entries from the catalogue before
+// the configuration is validated, so instances of those modules validate
+// in the same start. Failures are logged; the start goes on.
+func (c cli) provision(b config.Bootstrap) {
+	if len(b.Plugins.Install) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), provisionTimeout)
+	defer cancel()
+	cfg := &config.Config{Plugins: b.Plugins}
+	cfg.Data.Dir = b.DataDir
+	client := httpx.New(httpx.Options{Version: version, Allow: b.EgressAllow, Transport: wasm.GuardedTransport()})
+	admin := app.NewPluginAdmin(app.PluginAdminDeps{Modules: c.mods.mgr, Config: func() *config.Config { return cfg },
+		HTTP: client, Keys: catalogueKeys(), Version: version})
+	changes, errs := admin.Provision(ctx, b.Plugins.Install)
+	c.mods.provisioned = changes
+	for _, err := range errs {
+		fmt.Fprintln(c.stderr, "corsarr: plugin module not installed:", err)
+	}
+}
+
+// recordProvisioned writes the start's plugins.install changes to History.
+func (c cli) recordProvisioned(bus interface {
+	Publish(domain.Event) (domain.Event, error)
+}) {
+	if c.mods == nil {
+		return
+	}
+	for _, ch := range c.mods.provisioned {
+		_, _ = bus.Publish(domain.Event{Type: domain.EvPluginChanged, Actor: "system", Data: ch})
+	}
+	c.mods.provisioned = nil
+}
+
+// moduleStore is the module manager for the plugin admin; nil when modules
+// are off.
+func (c cli) moduleStore() app.Modules {
+	if c.mods == nil || c.mods.mgr == nil {
+		return nil
+	}
+	return c.mods.mgr
 }
 
 func limitsOf(p config.Plugins) wasm.Limits {

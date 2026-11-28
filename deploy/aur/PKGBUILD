@@ -17,7 +17,7 @@ source_x86_64=("corsarr-${pkgver}-x86_64.tar.gz::${url}/releases/download/v${pkg
 source_aarch64=("corsarr-${pkgver}-aarch64.tar.gz::${url}/releases/download/v${pkgver}/corsarr-linux-arm64.tar.gz")
 sha256sums=('b7bfabc003270b0375e807fed2b13404b609b9ccf5c344b1be3ed3978a0692db'
             '6f61cba5d63fb6ffef4a1df566903dd1d1d8aac5568c58f2e9ca92a6cbd2a81d'
-            'a2e6ec70463a6fac9156b3db99d7854cefe298447bdab5f3c5481b164feb6653')
+            '2b524a44acbb0b7941f95bc7e2204dacfb1d39d22ffae18878debb7b546da730')
 sha256sums_x86_64=('e8063b0ed93fcec330a220ff5bb0e60963a4af419a3be0098d262b3c4b14169a')
 sha256sums_aarch64=('83a5bd2545a401408293a7e4865f7f4a114911c2329ab6f38b8e0ede3fafb5c1')
 

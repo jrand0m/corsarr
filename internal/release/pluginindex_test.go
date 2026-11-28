@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jrand0m/corsarr/internal/catalogue"
 	"github.com/jrand0m/corsarr/internal/wasm/wasmtest"
 	"github.com/jrand0m/corsarr/sdk/go/abi"
 )
@@ -135,5 +136,24 @@ func TestKeyParsing(t *testing.T) {
 	}
 	if _, err := SignIndex(nil, ed25519.PrivateKey(make([]byte, 10))); err == nil {
 		t.Error("short private key")
+	}
+}
+
+func TestReleaseIndexIsWhatCorsarrReads(t *testing.T) {
+	pub, key, _ := ed25519.GenerateKey(rand.Reader)
+	b, err := BuildIndex("v1.4.0", "1.4.0", sourceDate, []ModuleFile{moduleFile(t, "alpha", "1.0.0")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig, _ := SignIndex(b, key)
+	if err := catalogue.Verify(b, sig, []catalogue.Key{{ID: KeyID(pub), Public: pub}}); err != nil {
+		t.Fatal(err)
+	}
+	ix, err := catalogue.Decode(b, 32<<20)
+	if err != nil || ix.Plugins[0].ID != "alpha" || ix.Generated.Unix() != sourceDate.Unix() {
+		t.Fatalf("%+v %v", ix, err)
+	}
+	if SignaturePrefix+"\n" != catalogue.MessagePrefix {
+		t.Fatal("signed message prefix")
 	}
 }

@@ -39,6 +39,7 @@ const (
 	EvConfigDrifted     EventType = "config.drifted"
 	EvMediaKindMode     EventType = "mediakind.mode_changed"
 	EvPluginLoaded      EventType = "plugin.loaded"
+	EvPluginChanged     EventType = "plugin.changed" // a module was installed, updated, rolled back or uninstalled (audit)
 	EvJobUpdated        EventType = "job.updated"
 	EvCommandUpdated    EventType = "command.updated"
 	EvMigrationProgress EventType = "migration.progress"
@@ -59,7 +60,7 @@ var eventFlags = map[EventType]struct{ History, Stream bool }{
 	EvBlocklistAdded: {true, true}, EvBlocklistRemoved: {true, true},
 	EvRuleActed: {true, true}, EvRuleRunCompleted: {false, true}, EvRuleUndone: {true, true},
 	EvHealthChanged: {true, true}, EvRefreshAbandoned: {true, true}, EvConfigApplied: {true, true}, EvConfigApplyFailed: {true, true},
-	EvConfigDrifted: {true, true}, EvMediaKindMode: {true, true}, EvPluginLoaded: {false, true},
+	EvConfigDrifted: {true, true}, EvMediaKindMode: {true, true}, EvPluginLoaded: {false, true}, EvPluginChanged: {true, true},
 	EvJobUpdated: {false, true}, EvCommandUpdated: {false, true},
 	EvMigrationProgress: {false, true}, EvMigrationComplete: {true, true},
 	EvMCPCalled: {true, false}, EvQualityChanged: {true, true},
