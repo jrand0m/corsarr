@@ -26,11 +26,11 @@ export function ladderItems(groups: GroupDoc[], ladder: QualityChoice[]): Ordere
   const used = new Set(groups.flatMap((g) => g.qualities));
   const rows: OrderedItem[] = [...groups].reverse().map((g, i) => {
     if (g.qualities.length === 1 && !g.name) {
-      return { id: qualityId(g.qualities[0]), label: names.get(g.qualities[0]) ?? g.qualities[0], enabled: true };
+      return { id: qualityId(g.qualities[0]), label: names.get(g.qualities[0]) || g.qualities[0], enabled: true };
     }
     return {
-      id: `g:${i}:${g.name ?? ''}`, label: g.name || g.qualities.map((q) => names.get(q) ?? q).join(' + '), enabled: true,
-      children: g.qualities.map((q) => ({ id: qualityId(q), label: names.get(q) ?? q, enabled: true })),
+      id: `g:${i}:${g.name ?? ''}`, label: g.name || g.qualities.map((q) => names.get(q) || q).join(' + '), enabled: true,
+      children: g.qualities.map((q) => ({ id: qualityId(q), label: names.get(q) || q, enabled: true })),
     };
   });
   const rest = [...ladder].reverse().filter((q) => !used.has(q.id)).map((q): OrderedItem => ({
@@ -61,7 +61,7 @@ export function groupsFromItems(items: OrderedItem[]): GroupDoc[] {
 export function cutoffOptions(groups: GroupDoc[], ladder: QualityChoice[]): { value: string; label: string }[] {
   const names = new Map(ladder.map((q) => [q.id, q.name]));
   return [...groups].reverse().flatMap((g) => g.qualities.map((q) => ({
-    value: q, label: g.name && g.qualities.length > 1 ? `${names.get(q) ?? q} (${g.name})` : names.get(q) ?? q,
+    value: q, label: g.name && g.qualities.length > 1 ? `${names.get(q) || q} (${g.name})` : names.get(q) || q,
   })));
 }
 
@@ -79,7 +79,7 @@ function rangeText(c: ConditionDoc, unit: string | undefined): string {
 
 /** The chosen values by their offered names; values the kind does not offer stay as they are. */
 const valueNames = (c: ConditionDoc, info: ConditionKindInfo | undefined): string[] =>
-  (c.values ?? []).map((v) => info?.values?.find((o) => o.value === v)?.label ?? v);
+  (c.values ?? []).map((v) => info?.values?.find((o) => o.value === v)?.label || v);
 
 /** "AAC", "AAC or AC3", "AAC, DTS or AC3". */
 const orList = (names: string[]): string =>
@@ -94,7 +94,7 @@ function valuesSummary(label: string, not: string, c: ConditionDoc, info: Condit
 /** "Audio codec is AAC or AC3", "Release title does not match \bDTS\b", "Size 1–10 GB". */
 export function conditionSummary(c: ConditionDoc, kinds: ConditionKindInfo[]): string {
   const info = kinds.find((k) => k.kind === c.kind);
-  const label = info?.label ?? c.kind;
+  const label = info?.label || c.kind;
   const not = c.negate ? ' not' : '';
   switch (info?.input) {
     case 'pattern': return `${label} does${not} match ${c.pattern ?? ''}`;

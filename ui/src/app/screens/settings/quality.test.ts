@@ -158,3 +158,21 @@ describe('refusal routing', () => {
     expect(r.conditions).toEqual([]);
   });
 });
+
+describe('empty names', () => {
+  const unnamed: QualityChoice[] = [{ id: 'webdl-720p', name: '' }, { id: 'webdl-1080p', name: '' }];
+  it('label a quality without a name by its id, like an unknown one', () => {
+    const single = ladderItems([{ qualities: ['webdl-720p'] }], unnamed)[0];
+    expect(single.label).toBe('webdl-720p');
+    const group = ladderItems([{ qualities: ['webdl-720p', 'webdl-1080p'] }], unnamed)[0];
+    expect(group.label).toBe('webdl-720p + webdl-1080p');
+    expect(group.children?.map((c) => c.label)).toEqual(['webdl-720p', 'webdl-1080p']);
+    expect(cutoffOptions([{ name: 'HD', qualities: ['webdl-720p', 'webdl-1080p'] }], unnamed).map((o) => o.label))
+      .toEqual(['webdl-720p (HD)', 'webdl-1080p (HD)']);
+    expect(cutoffOptions([{ qualities: ['webdl-720p'] }], unnamed)[0].label).toBe('webdl-720p');
+  });
+  it('word a condition whose kind or value has an empty label by its id', () => {
+    const blank: ConditionKindInfo[] = [{ kind: 'audio', label: '', input: 'values', values: [{ value: 'aac', label: '' }] }];
+    expect(conditionSummary({ kind: 'audio', values: ['aac'] }, blank)).toBe('audio is aac');
+  });
+});
