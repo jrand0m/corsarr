@@ -43,7 +43,8 @@ func TestOfficialModulesConformance(t *testing.T) {
 				defer srv.Close()
 				b, _ := json.Marshal(f.settings(srv.URL))
 				settings := writeModule(t, "s.json", b)
-				code, out, errs := cliRun(t, nil, "plugin", "test", mod, "--settings="+settings)
+				// A generous start budget: the race detector and parallel tests slow instantiation.
+				code, out, errs := cliRun(t, nil, "plugin", "test", mod, "--settings="+settings, "--start-budget=5s")
 				if !strings.Contains(out, "PASS  downloader conformance") || !(code == 0 || raceEnabled) {
 					t.Fatalf("%d\n%s\n%s", code, out, errs)
 				}
