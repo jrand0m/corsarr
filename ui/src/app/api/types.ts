@@ -215,11 +215,13 @@ export type ReleaseLine =
 
 export interface SearchSummary { searches?: number; indexers: number; failed: number; releases: number; accepted: number; grabbed?: string; shadowed?: string }
 
+export interface ReasonCount { ruleId: string; category: string; message: string; count: number }
+
 export interface SearchState {
   lastSearched?: string;
   nextEligible?: string;
   misses: number;
-  lastResult?: { indexers: number; failed: number; releases: number; accepted: number; grabbed?: string };
+  lastResult?: { indexers: number; failed: number; releases: number; accepted: number; grabbed?: string; rejections?: ReasonCount[] };
 }
 
 export interface WantedEntry { movie: Movie; reason: string; available: boolean; search?: SearchState }

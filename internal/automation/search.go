@@ -168,7 +168,7 @@ func (s *Service) Search(ctx context.Context, movieID int64, origin domain.Searc
 		}
 	}
 	res := domain.SearchEventData{Origin: origin, Indexers: sum.Indexers, Failed: sum.Failed, Releases: sum.Releases,
-		Accepted: sum.Accepted, Grabbed: sum.Grabbed}
+		Accepted: sum.Accepted, Grabbed: sum.Grabbed, Rejections: Rejections(ds)}
 	s.record(ctx, m, res)
 	s.publish(domain.EvSearchCompleted, "automation", []domain.EventItem{m.EventItem()}, res)
 	return sum, nil

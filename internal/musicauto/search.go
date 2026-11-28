@@ -128,8 +128,13 @@ func (s *Service) run(ctx context.Context, sc scope, origin domain.SearchOrigin)
 			s.warn("grab", err, "release", top.Release.Title)
 		}
 	}
-	s.publish(domain.EvSearchCompleted, "automation", []domain.EventItem{sc.album.EventItem(sc.artist.Name)}, domain.SearchEventData{
-		Origin: origin, Indexers: sum.Indexers, Failed: sum.Failed, Releases: sum.Releases, Accepted: sum.Accepted, Grabbed: sum.Grabbed})
+	res := domain.SearchEventData{Origin: origin, Indexers: sum.Indexers, Failed: sum.Failed, Releases: sum.Releases,
+		Accepted: sum.Accepted, Grabbed: sum.Grabbed, Rejections: automation.Rejections(ds)}
+	if s.d.Searches != nil {
+		err := automation.RecordSearch(ctx, s.d.Searches, sc.album.Ref(), s.d.Now().UTC(), res)
+		s.warn("save search state", err, "album", sc.album.ID)
+	}
+	s.publish(domain.EvSearchCompleted, "automation", []domain.EventItem{sc.album.EventItem(sc.artist.Name)}, res)
 	return sum
 }
 

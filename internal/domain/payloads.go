@@ -92,6 +92,17 @@ type SearchEventData struct {
 	Releases int          `json:"releases"`
 	Accepted int          `json:"accepted"`
 	Grabbed  string       `json:"grabbed,omitempty"` // release title
+	// Rejections are the rules that rejected the most releases, most first.
+	Rejections []ReasonCount `json:"rejections,omitempty"`
+}
+
+// ReasonCount is how many releases of one search a rule rejected, with
+// one of its messages as an example.
+type ReasonCount struct {
+	RuleID   string         `json:"ruleId"`
+	Category ReasonCategory `json:"category"`
+	Message  string         `json:"message"`
+	Count    int            `json:"count"`
 }
 
 // FileEventData is the data of file.deleted|renamed.

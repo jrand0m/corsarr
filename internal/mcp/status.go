@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/store"
@@ -63,7 +64,7 @@ func judge(st *Status) {
 	case !st.Monitored:
 		st.State, st.Reason = StateUnmonitored, "not monitored, so automation does not search for it"
 	case st.Have > 0:
-		st.State, st.Reason = StatePartial, fmt.Sprintf("%d of %d have files", st.Have, st.Wanted)
+		st.State, st.Reason = StatePartial, fmt.Sprintf("%d of %d have files", st.Have, st.Wanted)+lastSearchNote(st.LastSearch)
 	default:
 		st.State, st.Reason = searchVerdict(st.LastSearch)
 	}
@@ -76,9 +77,31 @@ func searchVerdict(ls *domain.SearchState) (string, string) {
 	case ls.LastResult.Releases == 0:
 		return StateNotFound, fmt.Sprintf("the last search found no releases (%d indexers, %d failed)", ls.LastResult.Indexers, ls.LastResult.Failed)
 	case ls.LastResult.Accepted == 0:
-		return StateRejected, fmt.Sprintf("all %d releases were rejected; search_releases shows each one's reasons", ls.LastResult.Releases)
+		return StateRejected, fmt.Sprintf("all %d releases were rejected%s; search_releases shows each one's reasons",
+			ls.LastResult.Releases, reasonsText(ls.LastResult.Rejections))
 	}
 	return StateWanted, fmt.Sprintf("%d acceptable releases found; waiting for the grab or a better one", ls.LastResult.Accepted)
+}
+
+// lastSearchNote adds what the last finished search found.
+func lastSearchNote(ls *domain.SearchState) string {
+	if ls == nil || ls.LastResult == nil {
+		return ""
+	}
+	_, why := searchVerdict(ls)
+	return "; last search: " + why
+}
+
+// reasonsText lists the top rejection reasons of a search.
+func reasonsText(list []domain.ReasonCount) string {
+	if len(list) == 0 {
+		return ""
+	}
+	parts := make([]string, len(list))
+	for i, r := range list {
+		parts[i] = fmt.Sprintf("%s ×%d", r.Message, r.Count)
+	}
+	return " (top reasons: " + strings.Join(parts, "; ") + ")"
 }
 
 // status gathers and judges an item's state.
@@ -125,7 +148,26 @@ func (s *Service) seriesStatus(ctx context.Context, t target) (Status, []domain.
 	for _, e := range d.Episodes {
 		refs = append(refs, e.Ref())
 	}
-	return st, refs, nil
+	st.LastSearch, err = s.latestSearch(ctx, domain.KindTV, refs[1:])
+	return st, refs, err
+}
+
+// latestSearch is the most recent search of any of the parts (episodes of
+// a series, albums of an artist), which says why the last one came back
+// empty.
+func (s *Service) latestSearch(ctx context.Context, kind domain.MediaKind, parts []domain.ItemRef) (*domain.SearchState, error) {
+	all, err := s.d.Searches.States(ctx, kind)
+	if err != nil {
+		return nil, err
+	}
+	var latest *domain.SearchState
+	for _, p := range parts {
+		st, ok := all[p.ID]
+		if ok && st.LastSearched != nil && (latest == nil || st.LastSearched.After(*latest.LastSearched)) {
+			latest = &st
+		}
+	}
+	return latest, nil
 }
 
 func (s *Service) musicStatus(ctx context.Context, t target) (Status, []domain.ItemRef, error) {
@@ -142,7 +184,8 @@ func (s *Service) musicStatus(ctx context.Context, t target) (Status, []domain.I
 	for _, al := range d.Albums {
 		refs = append(refs, al.Ref())
 	}
-	return st, refs, nil
+	st.LastSearch, err = s.latestSearch(ctx, domain.KindMusic, refs[1:])
+	return st, refs, err
 }
 
 func (s *Service) albumStatus(ctx context.Context, id int64) (Status, []domain.ItemRef, error) {

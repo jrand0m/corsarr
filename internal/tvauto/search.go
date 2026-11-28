@@ -154,9 +154,22 @@ func (s *Service) run(ctx context.Context, sc scope, req domain.SearchRequest, o
 			s.warn("grab", err, "release", top.Release.Title)
 		}
 	}
-	s.publish(domain.EvSearchCompleted, "automation", s.items(sc, req.ItemRefs), domain.SearchEventData{Origin: origin,
-		Indexers: sum.Indexers, Failed: sum.Failed, Releases: sum.Releases, Accepted: sum.Accepted, Grabbed: sum.Grabbed})
+	res := domain.SearchEventData{Origin: origin, Indexers: sum.Indexers, Failed: sum.Failed, Releases: sum.Releases,
+		Accepted: sum.Accepted, Grabbed: sum.Grabbed, Rejections: automation.Rejections(ds)}
+	s.record(ctx, req.ItemRefs, res)
+	s.publish(domain.EvSearchCompleted, "automation", s.items(sc, req.ItemRefs), res)
 	return sum
+}
+
+// record keeps the search's result on every episode it searched.
+func (s *Service) record(ctx context.Context, refs []domain.ItemRef, res domain.SearchEventData) {
+	if s.d.Searches == nil {
+		return
+	}
+	at := s.d.Now().UTC()
+	for _, ref := range refs {
+		s.warn("save search state", automation.RecordSearch(ctx, s.d.Searches, ref, at, res), "episode", ref.ID)
+	}
 }
 
 // items names episode refs of the scope for events.

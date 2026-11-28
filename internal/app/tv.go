@@ -22,7 +22,7 @@ func (a *App) newTV() *tv.Service {
 func (a *App) newTVAuto() *tvauto.Service {
 	st := a.d.Store
 	return tvauto.New(tvauto.Deps{TV: a.TV, Files: st.Library(), Queue: a.Queue, Blocklist: st.Blocklist(),
-		Cursors: st.FeedCursors(), Recent: st.RecentReleases(), Indexers: a.indexers, Pub: a.d.Bus, Payload: decide.PayloadPolicy{}, Modes: a.mode, Log: a.d.Log})
+		Cursors: st.FeedCursors(), Recent: st.RecentReleases(), Searches: st.Searches(), Indexers: a.indexers, Pub: a.d.Bus, Payload: decide.PayloadPolicy{}, Modes: a.mode, Log: a.d.Log})
 }
 
 func (a *App) seriesMetadata() (plugin.SeriesMetadata, bool) {

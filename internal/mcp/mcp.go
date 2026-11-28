@@ -117,6 +117,7 @@ type Library interface {
 // SearchStates reads an item's search state (store.Searches).
 type SearchStates interface {
 	State(ctx context.Context, item domain.ItemRef) (domain.SearchState, error)
+	States(ctx context.Context, kind domain.MediaKind) (map[int64]domain.SearchState, error)
 }
 
 // History pages History (store.History).

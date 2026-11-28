@@ -402,10 +402,21 @@ func (fakeLibrary) FilesOf(_ context.Context, ref domain.ItemRef) ([]domain.Libr
 
 type fakeSearches struct {
 	states map[domain.ItemRef]domain.SearchState
+	err    error
 }
 
 func (f fakeSearches) State(_ context.Context, ref domain.ItemRef) (domain.SearchState, error) {
 	return f.states[ref], nil
+}
+
+func (f fakeSearches) States(_ context.Context, kind domain.MediaKind) (map[int64]domain.SearchState, error) {
+	out := map[int64]domain.SearchState{}
+	for ref, st := range f.states {
+		if ref.Kind == kind {
+			out[ref.ID] = st
+		}
+	}
+	return out, f.err
 }
 
 type fakeHistory struct{}
