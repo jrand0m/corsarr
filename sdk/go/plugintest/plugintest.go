@@ -35,6 +35,7 @@ type Host struct {
 // Harness is an installed fake host.
 type Harness struct {
 	h      Host
+	funcs  map[string]func([]byte) (any, error)
 	mu     sync.Mutex
 	logs   []abi.LogRequest
 	events []abi.EventRequest
@@ -49,6 +50,15 @@ func New(h Host) *Harness {
 		h.Now = time.Now
 	}
 	hs := &Harness{h: h}
+	hs.funcs = map[string]func([]byte) (any, error){
+		abi.HostLog:         hs.log,
+		abi.HostEmitEvent:   hs.emit,
+		abi.HostSettingsGet: hs.settings,
+		abi.HostSecretGet:   hs.secret,
+		abi.HostNow:         hs.now,
+		abi.HostSleep:       sleep,
+		abi.HostHTTPDo:      hs.http,
+	}
 	plugin.SetHost(hs.serve)
 	return hs
 }
@@ -110,40 +120,52 @@ func (hs *Harness) serve(name string, req []byte) []byte {
 }
 
 func (hs *Harness) handle(name string, req []byte) (any, error) {
-	switch name {
-	case abi.HostLog:
-		var r abi.LogRequest
-		_ = json.Unmarshal(req, &r)
-		hs.mu.Lock()
-		hs.logs = append(hs.logs, r)
-		hs.mu.Unlock()
-		return nil, nil
-	case abi.HostEmitEvent:
-		var r abi.EventRequest
-		_ = json.Unmarshal(req, &r)
-		hs.mu.Lock()
-		hs.events = append(hs.events, r)
-		hs.mu.Unlock()
-		return nil, nil
-	case abi.HostSettingsGet:
-		return abi.SettingsResponse{Values: hs.h.Settings}, nil
-	case abi.HostSecretGet:
-		var r abi.SecretRequest
-		_ = json.Unmarshal(req, &r)
-		v, ok := hs.h.Secrets[r.Name]
-		if !ok {
-			return nil, &abi.Error{Class: abi.ClassDenied, Message: "secret " + r.Name + " is not declared"}
-		}
-		return abi.SecretResponse{Value: v}, nil
-	case abi.HostNow:
-		return abi.NowResponse{UnixNano: hs.h.Now().UnixNano()}, nil
-	case abi.HostSleep:
-		return nil, nil
-	case abi.HostHTTPDo:
-		return hs.http(req)
+	fn, ok := hs.funcs[name]
+	if !ok {
+		return nil, denied("unknown host function " + name)
 	}
-	return nil, &abi.Error{Class: abi.ClassDenied, Message: "unknown host function " + name}
+	return fn(req)
 }
+
+func denied(msg string) error { return &abi.Error{Class: abi.ClassDenied, Message: msg} }
+
+func (hs *Harness) log(req []byte) (any, error) {
+	var r abi.LogRequest
+	_ = json.Unmarshal(req, &r)
+	hs.mu.Lock()
+	hs.logs = append(hs.logs, r)
+	hs.mu.Unlock()
+	return nil, nil
+}
+
+func (hs *Harness) emit(req []byte) (any, error) {
+	var r abi.EventRequest
+	_ = json.Unmarshal(req, &r)
+	hs.mu.Lock()
+	hs.events = append(hs.events, r)
+	hs.mu.Unlock()
+	return nil, nil
+}
+
+func (hs *Harness) settings([]byte) (any, error) {
+	return abi.SettingsResponse{Values: hs.h.Settings}, nil
+}
+
+func (hs *Harness) secret(req []byte) (any, error) {
+	var r abi.SecretRequest
+	_ = json.Unmarshal(req, &r)
+	v, ok := hs.h.Secrets[r.Name]
+	if !ok {
+		return nil, denied("secret " + r.Name + " is not declared")
+	}
+	return abi.SecretResponse{Value: v}, nil
+}
+
+func (hs *Harness) now([]byte) (any, error) {
+	return abi.NowResponse{UnixNano: hs.h.Now().UnixNano()}, nil
+}
+
+func sleep([]byte) (any, error) { return nil, nil }
 
 func (hs *Harness) http(raw []byte) (any, error) {
 	var r abi.HTTPRequest
@@ -155,7 +177,7 @@ func (hs *Harness) http(raw []byte) (any, error) {
 		return nil, err
 	}
 	if len(hs.h.Hosts) > 0 && !allowed(hs.h.Hosts, u.Hostname()) {
-		return nil, &abi.Error{Class: abi.ClassDenied, Message: "host " + u.Hostname() + " is not declared"}
+		return nil, denied("host " + u.Hostname() + " is not declared")
 	}
 	req, err := http.NewRequest(r.Method, r.URL, bytes.NewReader(r.Body))
 	if err != nil {

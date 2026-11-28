@@ -3,7 +3,7 @@ import { planAsJSON, planAsText,
   addressReady, applyCount, configNotice, countTiles, defaultForm, fromPrefixView, hasConfigNotice, InstantCheck, keyReady, pathCheckBody, pathCheckReady,
   pathCheckSig, sampleView, sourceCheckBody, sourceCheckReady, sourceCheckSig, sourceCheckView, toPrefixView, type CheckView, type KindState, type PathCheck,
   type SourceCheck, filterEntries, outcomeView, planFacets, progressOf, requestBody, scopeProblems, sourceProblems, toggleExclude,
-  writes, type PlanEntry, type StreamLine,
+  writes, type PlanEntry, type SourceApp, type StreamLine,
 } from './migration';
 import { vocabulary } from '../lib/status/vocabulary';
 
@@ -81,6 +81,16 @@ describe('migration report', () => {
     const p = progressOf(['sonarr', 'radarr'], done);
     expect(p[0]).toMatchObject({ state: 'ok', count: 2 });
     expect(p[1]).toMatchObject({ state: 'failed', reason: 'unauthorised' });
+  });
+
+  it('counts no entries for a report without them and names an unknown source by its id', () => {
+    const app = 'mylar' as SourceApp;
+    const lines: StreamLine[] = [{ summary: { done: true, report: { mode: 'plan', planHash: 'h', counts: {}, entries: undefined as unknown as PlanEntry[], sources: [] } } }];
+    expect(progressOf(['sonarr', app], lines)).toEqual([
+      { id: 'sonarr', name: 'Sonarr', state: 'ok', count: 0 },
+      { id: 'mylar', name: 'mylar', state: 'ok', count: 0 },
+    ]);
+    expect(progressOf([app], [])).toEqual([{ id: 'mylar', name: 'mylar', state: 'pending' }]);
   });
 
   it('leaves out only what an apply would write', () => {
@@ -251,6 +261,13 @@ describe('source check', () => {
       expect(v.detail).toBe('why');
     }
   });
+
+  it('explains a check that got no answer and names an unknown app by its id', () => {
+    expect(sourceCheckView({ status: 'error' })).toEqual({ value: 'unreachable', detail: 'corsarr could not run the check: no answer' });
+    expect(sourceCheckView({ status: 'done' })).toEqual({ value: 'unreachable', detail: 'corsarr could not run the check: no answer' });
+    const r: SourceCheck = { app: 'mylar' as SourceApp, state: 'reachable', version: '1.2', supported: '1.x' };
+    expect(sourceCheckView({ status: 'done', result: r })).toEqual({ value: 'reachable', detail: 'mylar 1.2 · supported 1.x' });
+  });
 });
 
 describe('path check', () => {
@@ -313,6 +330,14 @@ describe('path check', () => {
     expect(sampleView(bad).value).toBe('fail');
     expect(sampleView(bad).items![1]).toMatch(/found, not readable/);
     expect(sampleView(roots({ roots: [] })).value).toBe('warn');
+  });
+
+  it('warns about unreadable sources even when every root is found', () => {
+    const ok = roots({ sources: [{ app: 'mylar' as SourceApp, reason: 'Unreachable.' }] });
+    ok.roots = [ok.roots[0]];
+    expect(sampleView(ok)).toEqual({
+      value: 'warn', detail: 'All 1 root folders exist for corsarr.', items: ['/data/media/tv → /media/tv: found', 'mylar: Unreachable.'],
+    });
   });
 });
 

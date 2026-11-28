@@ -54,26 +54,40 @@ export const isActiveDownload = (d: Download) => !['imported', 'removed'].includ
  * caller may name them (`episodes`, e.g. "Example Show · S01 · 10 episodes"), else the count shows.
  */
 export function toQueueCard(d: Download, titleOf: (id: number) => string | undefined, episodes?: (ids: number[]) => string | undefined): QueueCardData {
-  const links = d.links ?? [];
-  const tv = links.filter((l) => l.item.kind === 'tv').map((l) => l.item.id);
-  const link = links.find((l) => l.item.kind === 'movie');
-  const item = tv.length ? (episodes?.(tv) ?? count(tv.length, 'episode')) : link ? titleOf(link.item.id) : undefined;
+  const item = queueItem(d, titleOf, episodes);
   return {
     id: String(d.id),
-    title: item ?? d.title,
-    subtitle: item ? d.title : undefined,
-    kind: d.kind || (tv.length ? 'tv' : 'movie'),
+    title: item.title ?? d.title,
+    subtitle: item.title ? d.title : undefined,
+    kind: d.kind || (item.tv ? 'tv' : 'movie'),
     state: d.state,
-    reason: d.statusReason || undefined,
+    reason: orNone(d.statusReason),
     held: d.held,
-    progress: d.state === 'queued' && !d.size ? undefined : d.progress,
-    size: d.size || undefined,
-    downloaded: d.downloaded || undefined,
-    speed: d.speed || undefined,
+    progress: queueProgress(d),
+    size: orNone(d.size),
+    downloaded: orNone(d.downloaded),
+    speed: orNone(d.speed),
     eta: d.eta > 0 ? d.eta : undefined,
-    href: link && !tv.length ? `#/library/movies/${link.item.id}` : undefined,
+    href: item.movieId === undefined ? undefined : `#/library/movies/${item.movieId}`,
   };
 }
+
+interface QueueItem { title?: string; tv: boolean; movieId?: number }
+
+/** What a download fetches: its episodes when it has TV links, else the linked movie. */
+function queueItem(d: Download, titleOf: (id: number) => string | undefined, episodes?: (ids: number[]) => string | undefined): QueueItem {
+  const links = d.links ?? [];
+  const tv = links.filter((l) => l.item.kind === 'tv').map((l) => l.item.id);
+  if (tv.length) return { title: episodes?.(tv) ?? count(tv.length, 'episode'), tv: true };
+  const movieId = links.find((l) => l.item.kind === 'movie')?.item.id;
+  return { title: movieId === undefined ? undefined : titleOf(movieId), tv: false, movieId };
+}
+
+/** A queued download of unknown size shows no progress yet. */
+const queueProgress = (d: Download) => (d.state === 'queued' && !d.size ? undefined : d.progress);
+
+/** Empty strings and zeros read as "not known". */
+const orNone = <T>(v: T): T | undefined => v || undefined;
 
 export interface EventView { label: string; family: StatusFamily; value: string }
 
@@ -107,17 +121,23 @@ const eventViews: Record<string, EventView> = {
 
 /** Label and badge for a History event; health changes take the new health state. */
 export function eventView(ev: LiveEvent): EventView {
-  if (ev.type === 'health.changed') {
-    const to = String(ev.data?.to ?? 'ok') as HealthStatus;
-    return { label: `Health: ${healthLabel[to] ?? to}`, family: 'health', value: to };
-  }
-  if (ev.type === 'mediakind.mode_changed') {
-    const to = String(ev.data?.to ?? 'active');
-    return { label: `${String(ev.data?.kind ?? 'Kind')} mode: ${to}`, family: 'kindMode', value: to };
-  }
-  if (ev.type === 'plugin.changed') return pluginChangeViews[String(ev.data?.action)] ?? { label: 'Plugin changed', family: 'check', value: 'pass' };
+  const fromData = dataViews[ev.type];
+  if (fromData) return fromData(ev.data ?? {});
   return eventViews[ev.type] ?? { label: ev.type, family: 'check', value: 'pending' };
 }
+
+/** Events whose label and badge depend on their data. */
+const dataViews: Record<string, (d: Record<string, unknown>) => EventView> = {
+  'health.changed': (d) => {
+    const to = String(d.to ?? 'ok');
+    return { label: `Health: ${healthLabel[to] ?? to}`, family: 'health', value: to };
+  },
+  'mediakind.mode_changed': (d) => {
+    const to = String(d.to ?? 'active');
+    return { label: `${String(d.kind ?? 'Kind')} mode: ${to}`, family: 'kindMode', value: to };
+  },
+  'plugin.changed': (d) => pluginChangeViews[String(d.action)] ?? { label: 'Plugin changed', family: 'check', value: 'pass' },
+};
 
 const pluginChangeViews: Record<string, EventView> = {
   installed: { label: 'Plugin installed', family: 'check', value: 'pass' },
@@ -152,17 +172,24 @@ export function actorLabel(actor: string): string {
 
 /** The subject of an event: item titles, else the integration or release it names. */
 export function eventSubject(ev: LiveEvent): string {
-  if (ev.items?.length) {
-    const episodes = ev.items.filter((i) => i.ref.kind === 'tv' && i.ref.variant !== 'series');
-    if (episodes.length > 1 && episodes.length === ev.items.length) return summariseEpisodes(episodes);
-    return ev.items.map((i) => i.title).join(', ');
-  }
+  if (ev.items?.length) return itemsSubject(ev.items);
+  return dataSubject(ev) ?? ev.type;
+}
+
+/** Item titles, or one line for several episodes when that is all the event names. */
+function itemsSubject(items: NonNullable<LiveEvent['items']>): string {
+  const episodes = items.filter((i) => i.ref.kind === 'tv' && i.ref.variant !== 'series');
+  if (episodes.length > 1 && episodes.length === items.length) return summariseEpisodes(episodes);
+  return items.map((i) => i.title).join(', ');
+}
+
+/** The plugin, integration or release an event's data names. */
+function dataSubject(ev: LiveEvent): string | undefined {
   const d = ev.data ?? {};
   if (ev.type === 'plugin.changed' && typeof d.id === 'string') return d.id;
   const ref = d.ref as { type?: string; key?: string } | undefined;
   if (ref?.key) return integrationName(ref as IntegrationHealth['ref']);
-  const rel = (d.release as { title?: string } | undefined)?.title ?? (d.title as string | undefined);
-  return rel ?? ev.type;
+  return (d.release as { title?: string } | undefined)?.title ?? (d.title as string | undefined);
 }
 
 /** One line on what happened, from the event data. */
@@ -239,47 +266,83 @@ export function parseEnvExport(text: string): ExportView {
   const view: ExportView = { kinds: {}, rootFolders: [], instances: [], server: {}, mcp: { enabled: false, scope: 'read', tools: [] } };
   const byKey = new Map<string, ConfiguredInstance>();
   for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
-    const eq = line.indexOf('=');
-    if (eq < 0 || !line.startsWith('CORSARR_')) continue;
-    const name = line.slice(8, eq);
-    const value = line.slice(eq + 1);
-    const parts = name.split('_');
-    const [head, a, b, ...rest] = parts;
-    if (head === 'MEDIAKINDS' && b === 'MODE') view.kinds[a.toLowerCase() as MediaKind] = value;
-    else if (head === 'MCP') readMcp(view, a, b, value);
-    else if (head === 'ROOTFOLDERS') {
-      const i = Number(a);
-      view.rootFolders[i] ??= { path: '', kind: '' };
-      if (b === 'PATH') view.rootFolders[i].path = value;
-      if (b === 'KIND') view.rootFolders[i].kind = value;
-    } else if (instanceSections[head] && a && b) {
-      const id = `${head}.${a}`;
-      let inst = byKey.get(id);
-      if (!inst) {
-        inst = { section: instanceSections[head], key: a.toLowerCase(), plugin: '', values: {}, secrets: {} };
-        byKey.set(id, inst);
-        view.instances.push(inst);
-      }
-      const field = b.toLowerCase();
-      if (field === 'type') inst.plugin = value;
-      else if (field === 'name') inst.name = value;
-      else if (rest.length && /^\d+$/.test(rest[0])) {
-        const list = (inst.values[field] as string[] | undefined) ?? [];
-        list[Number(rest[0])] = value;
-        inst.values[field] = list;
-      } else if (rest.length) {
-        const map = (inst.values[field] as Record<string, string> | undefined) ?? {};
-        map[rest.join('_').toLowerCase()] = value;
-        inst.values[field] = map;
-      } else if (value === '') inst.secrets[field] = `CORSARR_SECRET_${name}`;
-      else inst.values[field] = value;
-    } else if (head === 'SERVER' || head === 'DATA' || head === 'LOG' || head === 'AUTH') {
-      view.server[parts.join('.').toLowerCase()] = value;
-    }
+    const line = readEnvLine(raw);
+    if (line) applyEnvLine(view, byKey, line);
   }
   view.rootFolders = view.rootFolders.filter(Boolean);
   view.mcp.tools = view.mcp.tools.filter(Boolean);
   return view;
+}
+
+/** One `CORSARR_NAME=value` line: the name after the prefix, split on `_`, and its value. */
+interface EnvLine { name: string; parts: string[]; value: string }
+
+/** Reads an export line; blank lines, comments and other variables give undefined. */
+function readEnvLine(raw: string): EnvLine | undefined {
+  const line = raw.trim();
+  const eq = line.indexOf('=');
+  if (eq < 0 || !line.startsWith('CORSARR_')) return undefined;
+  const name = line.slice(8, eq);
+  return { name, parts: name.split('_'), value: line.slice(eq + 1) };
+}
+
+/** Server-level settings sections, kept as dotted names. */
+const serverSections = new Set(['SERVER', 'DATA', 'LOG', 'AUTH']);
+
+/** Files one export line into the view by its section; unknown sections are skipped. */
+function applyEnvLine(view: ExportView, byKey: Map<string, ConfiguredInstance>, line: EnvLine) {
+  const [head, a, b] = line.parts;
+  if (head === 'MEDIAKINDS') readKind(view, a, b, line.value);
+  else if (head === 'MCP') readMcp(view, a, b, line.value);
+  else if (head === 'ROOTFOLDERS') readRootFolder(view, a, b, line.value);
+  else if (instanceSections[head]) readInstance(view, byKey, line);
+  else if (serverSections.has(head)) view.server[line.parts.join('.').toLowerCase()] = line.value;
+}
+
+function readKind(view: ExportView, kind: string, field: string | undefined, value: string) {
+  if (field === 'MODE') view.kinds[kind.toLowerCase() as MediaKind] = value;
+}
+
+function readRootFolder(view: ExportView, index: string, field: string | undefined, value: string) {
+  const folder = (view.rootFolders[Number(index)] ??= { path: '', kind: '' });
+  if (field === 'PATH') folder.path = value;
+  if (field === 'KIND') folder.kind = value;
+}
+
+/** SECTION_KEY_FIELD[_SUB]=value: plugin type, name, list or map entries, secrets and plain values. */
+function readInstance(view: ExportView, byKey: Map<string, ConfiguredInstance>, line: EnvLine) {
+  const [head, key, rawField, ...rest] = line.parts;
+  if (!key || !rawField) return;
+  const inst = instanceFor(view, byKey, head, key);
+  const field = rawField.toLowerCase();
+  if (field === 'type') inst.plugin = line.value;
+  else if (field === 'name') inst.name = line.value;
+  else if (rest.length) readNested(inst, field, rest, line.value);
+  else if (line.value === '') inst.secrets[field] = `CORSARR_SECRET_${line.name}`;
+  else inst.values[field] = line.value;
+}
+
+/** The instance a section and key name, added to the view on first sight. */
+function instanceFor(view: ExportView, byKey: Map<string, ConfiguredInstance>, head: string, key: string): ConfiguredInstance {
+  const id = `${head}.${key}`;
+  let inst = byKey.get(id);
+  if (!inst) {
+    inst = { section: instanceSections[head], key: key.toLowerCase(), plugin: '', values: {}, secrets: {} };
+    byKey.set(id, inst);
+    view.instances.push(inst);
+  }
+  return inst;
+}
+
+/** FIELD_N is a list entry, FIELD_SUB a map entry. */
+function readNested(inst: ConfiguredInstance, field: string, rest: string[], value: string) {
+  if (/^\d+$/.test(rest[0])) {
+    const list = (inst.values[field] as string[] | undefined) ?? [];
+    list[Number(rest[0])] = value;
+    inst.values[field] = list;
+  } else {
+    const map = (inst.values[field] as Record<string, string> | undefined) ?? {};
+    map[rest.join('_').toLowerCase()] = value;
+    inst.values[field] = map;
+  }
 }

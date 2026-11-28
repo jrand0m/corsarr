@@ -81,15 +81,20 @@ func StatusError(status int, body []byte) error {
 	if len(body) > 0 && len(body) < 200 {
 		msg += ": " + string(body)
 	}
+	return Errorf(statusClass(status), "%s", msg)
+}
+
+// statusClass is the error class of a non-2xx status.
+func statusClass(status int) string {
 	switch {
 	case status == 401 || status == 403:
-		return Errorf(abi.ClassAuth, "%s", msg)
+		return abi.ClassAuth
 	case status == 404:
-		return Errorf(abi.ClassNotFound, "%s", msg)
+		return abi.ClassNotFound
 	case status == 429:
-		return Errorf(abi.ClassRateLimited, "%s", msg)
+		return abi.ClassRateLimited
 	case status >= 500:
-		return Errorf(abi.ClassServerError, "%s", msg)
+		return abi.ClassServerError
 	}
-	return Errorf(abi.ClassParse, "%s", msg)
+	return abi.ClassParse
 }

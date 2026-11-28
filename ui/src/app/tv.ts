@@ -27,9 +27,16 @@ export function queuedEpisodes(downloads: Download[]): Map<number, Download> {
   return out;
 }
 
+/** The state of an episode on disk: an upgrade while its file misses the cutoff, else had; undefined without a file. */
+function fileState(ep: Episode): BayState | undefined {
+  if (!ep.file && !ep.fileId && ep.status !== 'downloaded') return undefined;
+  return ep.file && !ep.file.cutoffMet ? 'upgrade' : 'have';
+}
+
 /** The bay-grid state of an episode: the file wins, then a live download, then air date and monitoring. */
 export function episodeState(ep: Episode, queued: ReadonlyMap<number, Pick<Download, 'state'>>): BayState {
-  if (ep.file || ep.fileId || ep.status === 'downloaded') return ep.file && !ep.file.cutoffMet ? 'upgrade' : 'have';
+  const onDisk = fileState(ep);
+  if (onDisk) return onDisk;
   const d = queued.get(ep.id);
   if (d) return d.state === 'downloading' ? 'downloading' : 'queued';
   if (ep.status === 'notAired') return 'unaired';
