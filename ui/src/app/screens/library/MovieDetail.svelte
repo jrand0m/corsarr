@@ -14,7 +14,8 @@
   import EmptyState from '../../../lib/components/molecules/EmptyState/EmptyState.svelte';
   import ErrorState from '../../../lib/components/molecules/ErrorState/ErrorState.svelte';
   import Drawer from '../../../lib/components/organisms/Drawer/Drawer.svelte';
-  import DecisionPanel, { type Decision as PanelDecision, type DecisionReason } from '../../../lib/components/organisms/DecisionPanel/DecisionPanel.svelte';
+  import ReleaseResults from '../../../lib/components/organisms/ReleaseResults/ReleaseResults.svelte';
+  import { nothingAcceptedNote, readSort, sortOptions, sortReleases, toPanel, writeSort, type SortKey } from '../../interactive.svelte';
   import ConfirmDialog from '../../../lib/components/organisms/ConfirmDialog/ConfirmDialog.svelte';
   import type { TimelineEntry } from '../../../lib/components/organisms/Timeline/Timeline.svelte';
   import type { MonitorState } from '../../../lib/components/molecules/MonitorToggle/MonitorToggle.svelte';
@@ -182,23 +183,16 @@
     streaming = false;
   }
 
-  const ranked = $derived(decided.slice().sort((a, b) =>
-    Number(b.decision.accepted) - Number(a.decision.accepted) || (a.decision.rankKey < b.decision.rankKey ? 1 : a.decision.rankKey > b.decision.rankKey ? -1 : 0)));
+  let sort = $state<SortKey>(readSort());
+  function setSort(v: string) { sort = v as SortKey; writeSort(sort); }
+  const ranked = $derived(sortReleases(decided, 'automation'));
+  const sorted = $derived(sortReleases(decided, sort));
   const accepted = $derived(ranked.filter((d) => d.decision.accepted).length);
-  function toPanel(d: Decided, i: number): PanelDecision {
-    const r = d.release;
-    return {
-      release: {
-        title: r.title, indexer: (r.indexers ?? []).map((x) => x.name || x.key).join(', ') || 'unknown indexer', protocol: r.protocol === 'usenet' ? 'usenet' : 'torrent',
-        size: r.size, publishedAt: r.publishedAt, seeders: r.protocol === 'usenet' ? undefined : r.seeders, quality: d.decision.quality || 'unknown',
-        runtimeSeconds: m?.runtimeMin ? m.runtimeMin * 60 : undefined,
-      },
-      verdict: d.decision.accepted ? 'accept' : 'reject',
-      rank: d.decision.accepted ? i + 1 : undefined,
-      candidates: d.decision.accepted ? accepted : undefined,
-      score: { total: d.decision.formatScore, formats: [] },
-      reasons: (d.decision.reasons ?? []).map<DecisionReason>((x) => ({ rule: x.ruleId, category: x.category, message: x.message, blocklist: x.ruleId.includes('blocklist') })),
-    };
+  const items = $derived(sorted.map((d) => ({ key: d.release.id, decision: toPanel(d, ranked.indexOf(d), accepted,
+    { verdict: summary?.automation, streaming, runtimeSeconds: m?.runtimeMin ? m.runtimeMin * 60 : undefined }) })));
+  function grabKey(key: string, over: unknown[]) {
+    const d = decided.find((x) => x.release.id === key);
+    if (d) void grab(d, over.length > 0);
   }
 
   let confirmGrab = $state<{ d: Decided; reasons: string[] } | undefined>();
@@ -358,15 +352,10 @@
         <EmptyState size="sm" title={summary.indexers ? 'No releases found' : 'No indexers are configured'} icon="search" level={3}>
           {summary.indexers ? (summary.failed ? `${summary.failed} of ${summary.indexers} indexers failed; the others had nothing for this movie.` : 'None of the indexers had a release for this movie.') : 'Add an indexer to the config, then search again.'}
         </EmptyState>
-      {:else if summary && !accepted}
-        <p class="note" role="status">None of the {ranked.length} releases passed the profile. The reasons are listed on each; you can grab one anyway where the rules allow it.</p>
       {/if}
       {#if ranked.length}
-        <ol class="results" aria-label="Releases, best first">
-          {#each ranked as d, i (d.release.id)}
-            <li><DecisionPanel decision={toPanel(d, i)} ongrab={(over) => grab(d, over.length > 0)} /></li>
-          {/each}
-        </ol>
+        <ReleaseResults {items} {sort} {sortOptions} onsort={setSort} ongrab={grabKey}
+          note={summary && !accepted ? nothingAcceptedNote(ranked.length, summary.rejections) : undefined} />
       {/if}
       {#if streaming}
         <div class="pending" aria-busy="true" aria-label="Waiting for indexers"><Skeleton shape="block" height="6.5rem" /></div>
@@ -408,6 +397,4 @@
   .side { display: grid; gap: var(--space-3); }
   h2 { font-size: var(--text-lg); }
   .search { display: grid; gap: var(--space-4); }
-  .results { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
-  .note { color: var(--ink-muted); font-size: var(--text-md); }
 </style>

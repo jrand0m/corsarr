@@ -56,10 +56,24 @@ export const vocabulary = {
     reject: e('Rejected', 'x', 'error'),
   },
   reason: {
-    safety: e('Safety', 'shield', 'error'),
-    permanent: e('Permanent', 'ban', 'error'),
-    preference: e('Preference', 'sliders', 'neutral'),
-    temporary: e('Temporary', 'clock', 'warn'),
+    safety: { ...e('Safety', 'shield', 'error'), hint: 'Protects your machine and library. Never overridden.' },
+    permanent: { ...e('Permanent', 'ban', 'error'), hint: 'Will not change by waiting: blocklisted, wrong item or below the profile floor. Overriding needs a confirmation.' },
+    preference: { ...e('Preference', 'sliders', 'neutral'), hint: 'Your profile’s choices: size, formats, resolution cap. You can grab anyway.' },
+    temporary: { ...e('Temporary', 'clock', 'warn'), hint: 'May pass later: seeders, a delay profile or an indexer limit. You can grab anyway.' },
+  },
+  automation: {
+    grab: { ...e('Automation pick', 'bolt', 'ok'), hint: 'Automatic search would grab this release.' },
+    shadow: { ...e('Automation pick (shadow)', 'shadow', 'info'), hint: 'Shadow mode: automatic search would grab this release, but only records it in History.' },
+    outranked: { ...e('Accepted, not the pick', 'check', 'neutral'), hint: 'Passes the profile, but automatic search prefers a higher-ranked release.' },
+    declined: { ...e('Rejected', 'x', 'error'), hint: 'Automatic search would skip this release.' },
+    pending: { ...e('Deciding…', 'clock', 'neutral'), hint: 'The automation decision appears when every indexer has answered.' },
+    unavailable: { ...e('Accepted', 'check', 'neutral'), hint: 'The search stopped early, so automation’s pick is unknown.' },
+  },
+  availability: {
+    complete: { ...e('Complete', 'check-circle', 'ok'), hint: 'At least one full copy is available.' },
+    may_be_incomplete: { ...e('May be incomplete', 'half', 'warn'), hint: 'No one is seeding a full copy; peers may not have every piece.' },
+    no_peers: { ...e('No peers', 'x-circle', 'error'), hint: 'The indexer reports nobody sharing this torrent.' },
+    unknown: { ...e('Availability unknown', 'help-circle', 'neutral'), hint: 'The indexer does not report completeness.' },
   },
   override: {
     allowed: e('Override allowed', 'unlock', 'neutral'),
