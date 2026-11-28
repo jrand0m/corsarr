@@ -2,9 +2,13 @@
 
 Short notes per release. Each release's assets, checksums and how to verify them are on its GitHub release page.
 
-## Unreleased
+## v0.5.4 — 2026-11-28
 
 - Rate limits are learned per service (announced limits first, then where it throttles) and requests are kept below them; observed limits are re-checked gently about once a week while there is demand. See them in System › Health; settings under `server.rateLearning`.
+- Media-type mode badges explain Disabled, Shadow and Active on hover.
+- Config-managed fields show only a lock; hover names the key and where it is set.
+- Add movie, series and artist forms line up on a two-column grid.
+- Groundwork for Transmission and rTorrent download clients (protocol clients; installable modules come later).
 
 ## v0.5.3 — 2026-11-27
 
