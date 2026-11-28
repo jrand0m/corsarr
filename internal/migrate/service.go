@@ -363,7 +363,8 @@ func anyQueue(snaps []Snapshot) bool {
 
 // configView extracts what the active config sets.
 func configView(cfg *config.Config) ConfigView {
-	v := ConfigView{RootFolders: map[string]bool{}, Indexers: map[string]bool{}, Clients: map[string]bool{}, KindExplicit: map[string]bool{}}
+	v := ConfigView{RootFolders: map[string]bool{}, Indexers: map[string]bool{}, Clients: map[string]bool{}, KindExplicit: map[string]bool{},
+		KindMode: map[string]string{}}
 	if cfg == nil {
 		return v
 	}
@@ -378,6 +379,9 @@ func configView(cfg *config.Config) ConfigView {
 	}
 	for _, k := range []domain.MediaKind{domain.KindTV, domain.KindMovie, domain.KindMusic, domain.KindBook} {
 		v.KindExplicit[string(k)] = ConfigSetsKind(cfg, k)
+		if v.KindExplicit[string(k)] {
+			v.KindMode[string(k)] = string(cfg.MediaKinds[k])
+		}
 	}
 	return v
 }

@@ -193,7 +193,8 @@ type ConfigView struct {
 	RootFolders  map[string]bool // path
 	Indexers     map[string]bool // url
 	Clients      map[string]bool // url
-	KindExplicit map[string]bool // media kind whose mode the config sets
+	KindExplicit map[string]bool   // media kind whose mode the config sets
+	KindMode     map[string]string // effective mode of each kind the config sets
 }
 
 // hashOf fingerprints any value through its JSON form.

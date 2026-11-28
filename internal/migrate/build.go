@@ -286,7 +286,7 @@ func (b *builder) kindMode(k domain.MediaKind) Entry {
 	}
 	switch cur, ok := b.st.Overrides["kind:"+string(k)]; {
 	case b.st.Config.KindExplicit[string(k)]:
-		e.Outcome, e.Reason = OutManaged, "your config file sets this kind's mode; set mediaKinds."+string(k)+".mode: shadow there to compare first"
+		e.Outcome, e.Reason = OutManaged, configModeReason(k, b.st.Config.KindMode[string(k)], mode)
 	case ok:
 		e.Outcome, e.Reason = OutUnchanged, "kept your choice: "+cur
 	default:
@@ -297,6 +297,22 @@ func (b *builder) kindMode(k domain.MediaKind) Entry {
 		}
 	}
 	return e
+}
+
+// configModeReason says whether the mode the config file sets is already
+// the one the run wants, or which line to change.
+func configModeReason(k domain.MediaKind, cur string, want domain.KindMode) string {
+	if cur == string(want) {
+		return "your config file already sets " + cur + "; nothing to change"
+	}
+	why := "to compare first"
+	if want == domain.ModeActive {
+		why = "to let corsarr act"
+	}
+	if cur == "" {
+		cur = "this kind's mode"
+	}
+	return "your config file sets " + cur + "; set mediaKinds." + string(k) + ".mode: " + string(want) + " there " + why
 }
 
 func (b *builder) ruleMode() Entry {

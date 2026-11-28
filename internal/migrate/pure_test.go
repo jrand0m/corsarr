@@ -274,7 +274,7 @@ downloadClients:
 	}
 	v := configView(cfg)
 	if !v.RootFolders["/media/tv"] || !v.Indexers["http://idx/torznab"] || !v.Clients["http://qbit:8080"] ||
-		!v.KindExplicit["tv"] || v.KindExplicit["movie"] {
+		!v.KindExplicit["tv"] || v.KindExplicit["movie"] || v.KindMode["tv"] != "active" || v.KindMode["movie"] != "" {
 		t.Fatalf("%+v", v)
 	}
 	if e := configView(nil); len(e.RootFolders) != 0 {
@@ -290,5 +290,43 @@ func TestKeysAreUniqueAndWellFormed(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("%v", got)
 		}
+	}
+}
+
+func TestConfigModeReasonReadsTheEffectiveMode(t *testing.T) {
+	cases := []struct {
+		cur  string
+		want domain.KindMode
+		has  string
+		not  string
+	}{
+		{"shadow", domain.ModeShadow, "already sets shadow; nothing to change", "set mediaKinds"},
+		{"active", domain.ModeShadow, "set mediaKinds.movie.mode: shadow", "already"},
+		{"active", domain.ModeActive, "already sets active", "set mediaKinds"},
+		{"disabled", domain.ModeActive, "set mediaKinds.movie.mode: active", "already"},
+	}
+	for _, c := range cases {
+		got := configModeReason(domain.KindMovie, c.cur, c.want)
+		if !strings.Contains(got, c.has) || strings.Contains(got, c.not) {
+			t.Errorf("%s→%s: %q", c.cur, c.want, got)
+		}
+	}
+}
+
+func TestKindModeEntryForAConfigThatAlreadySaysShadow(t *testing.T) {
+	r := newRig(t)
+	snaps := r.svc.read(context.Background(), r.req, func(Progress) {})
+	st, err := r.svc.state(context.Background(), snaps, r.req.Options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Config.KindExplicit = map[string]bool{"tv": true, "movie": true}
+	st.Config.KindMode = map[string]string{"tv": "shadow", "movie": "active"}
+	rep := BuildPlan(snaps, st, r.req.Options)
+	if e := entry(t, rep, "corsarr:mode:tv"); e.Outcome != OutManaged || !strings.Contains(e.Reason, "nothing to change") {
+		t.Errorf("tv: %+v", e)
+	}
+	if e := entry(t, rep, "corsarr:mode:movie"); e.Outcome != OutManaged || !strings.Contains(e.Reason, "mediaKinds.movie.mode: shadow") {
+		t.Errorf("movie: %+v", e)
 	}
 }
