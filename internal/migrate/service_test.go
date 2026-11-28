@@ -332,3 +332,27 @@ func TestRunsAreListed(t *testing.T) {
 		t.Fatalf("%+v %v", runs, err)
 	}
 }
+
+func TestReportRecordsRealStartFinishAndReadTimes(t *testing.T) {
+	r := newRig(t, "aaaa")
+	clock := day
+	r.svc.d.Now = func() time.Time { clock = clock.Add(time.Second); return clock }
+	rep := r.plan()
+	if !rep.Started.Before(rep.Finished) {
+		t.Fatalf("started %s finished %s", rep.Started, rep.Finished)
+	}
+	var total int64
+	for _, s := range rep.Sources {
+		if s.ReadMs < 1000 {
+			t.Errorf("%s read in %d ms", s.App, s.ReadMs)
+		}
+		total += s.ReadMs
+	}
+	if rep.Finished.Sub(rep.Started).Milliseconds() <= total {
+		t.Fatalf("run %s shorter than its reads %d ms", rep.Finished.Sub(rep.Started), total)
+	}
+	stored, ok, err := r.svc.RunReport(context.Background(), rep.RunID)
+	if err != nil || !ok || !strings.Contains(string(stored), `"readMs":`) {
+		t.Fatalf("stored report %s %v", stored, err)
+	}
+}

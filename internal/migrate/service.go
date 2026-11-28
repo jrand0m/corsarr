@@ -109,12 +109,13 @@ func (s *Service) run(ctx context.Context, req Request, mode, reviewed string, p
 	}
 	defer s.mu.Unlock()
 	progress = s.progress(progress)
-	id, err := s.d.Store.Migration().StartRun(ctx, mode, appsOf(req.Sources), s.d.Now())
+	start := s.d.Now()
+	id, err := s.d.Store.Migration().StartRun(ctx, mode, appsOf(req.Sources), start)
 	if err != nil {
 		return Report{}, err
 	}
 	r, err := s.execute(ctx, req, mode, reviewed, progress)
-	r.RunID = id
+	r.RunID, r.Started, r.Finished = id, start, s.d.Now()
 	s.finish(ctx, &r, err)
 	return r, err
 }
@@ -136,7 +137,6 @@ func (s *Service) execute(ctx context.Context, req Request, mode, reviewed strin
 		return r, ErrPlanChanged
 	}
 	err = Apply(ctx, &r, storeTarget{s.d.Store}, s.d.Now(), progress)
-	r.Finished = s.d.Now()
 	if s.d.AfterApply != nil {
 		s.d.AfterApply(context.WithoutCancel(ctx))
 	}
@@ -153,7 +153,9 @@ func (s *Service) read(ctx context.Context, req Request, progress func(Progress)
 	since := s.d.Now().Add(-time.Duration(min(days, MaxHistoryDays)) * 24 * time.Hour)
 	var out []Snapshot
 	for _, ep := range req.Sources {
+		began := s.d.Now()
 		snap, err := Read(ctx, NewClient(ep, s.d.HTTP), ReadOptions{Scope: req.Options.scope(), HistorySince: since}, progress)
+		snap.Source.ReadMs = s.d.Now().Sub(began).Milliseconds()
 		if err != nil {
 			s.d.Log.Warn("migration source failed", "source", ep.App, "url", ep.URL.String(), "err", err)
 		}
