@@ -159,7 +159,7 @@ func audioCandidate(title, file string, p decide.QualityProfile) candidate {
 		m.Format = parse.Field[parse.AudioFormat]{Value: formatOfExt(file), Known: formatOfExt(file) != ""}
 	}
 	q, _ := decide.AudioQualityOf(m)
-	score, _ := p.Score(title)
+	score, _ := p.ScoreTitle(title)
 	return candidate{quality: q, parsed: parse.ParsedRelease{Group: m.Group}, score: score}
 }
 

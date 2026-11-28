@@ -66,7 +66,7 @@ func TestCustomFormat_Matches(t *testing.T) {
 		{notAudioDTS, "Movie.2020.1080p.BluRay.AC3.x264-GRP", true},
 	}
 	for _, c := range cases {
-		if got := c.f.Matches(c.title); got != c.want {
+		if got := c.f.Matches(TitleSubject(c.title)); got != c.want {
 			t.Errorf("%s on %s: got %v", c.f.Name(), c.title, got)
 		}
 	}
@@ -143,17 +143,17 @@ func TestProfileScore(t *testing.T) {
 	free := mustFormat(t, "Freeleech", mustCond(t, "fl", `freeleech`, false, false))
 	bad := mustFormat(t, "Bad group", mustCond(t, "grp", `-BADGRP$`, false, false))
 	p, err := NewQualityProfile(ProfileSpec{Name: "p", Kind: domain.KindMovie, Groups: single("webdl-1080p"),
-		Cutoff: "webdl-1080p", Formats: []FormatScore{{free, 50}, {bad, -1000}}})
+		Cutoff: "webdl-1080p", Formats: []FormatScore{{Format: free, Score: 50}, {Format: bad, Score: -1000}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if free.Name() != "Freeleech" {
 		t.Fatalf("name %q", free.Name())
 	}
-	if s, n := p.Score("Movie.2020.1080p.WEB.FREELEECH-BADGRP"); s != -950 || len(n) != 2 {
+	if s, n := p.ScoreTitle("Movie.2020.1080p.WEB.FREELEECH-BADGRP"); s != -950 || len(n) != 2 {
 		t.Fatalf("score %d %v", s, n)
 	}
-	if s, n := p.Score("Movie.2020.1080p.WEB-GOOD"); s != 0 || len(n) != 0 {
+	if s, n := p.ScoreTitle("Movie.2020.1080p.WEB-GOOD"); s != 0 || len(n) != 0 {
 		t.Fatalf("score %d %v", s, n)
 	}
 }

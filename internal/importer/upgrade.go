@@ -36,7 +36,7 @@ func (s *Service) candidate(ctx context.Context, d store.StoredDownload, video F
 	}
 	parsed := parse.ParseRelease(title)
 	q, _ := decide.QualityOf(parsed)
-	score, _ := p.Score(title)
+	score, _ := p.ScoreTitle(title)
 	return candidate{quality: q, parsed: parsed, score: score}
 }
 
