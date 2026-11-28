@@ -515,3 +515,17 @@ func (r *changeRecorder) Publish(ev domain.Event) (domain.Event, error) {
 	r.evs = append(r.evs, ev)
 	return ev, nil
 }
+
+// CachedOffers returns the offers of the last verified catalogue copy, by
+// id, without network access (none when nothing is cached).
+func (p *PluginAdmin) CachedOffers() map[string]catalogue.Offer {
+	out := map[string]catalogue.Offer{}
+	snap, ok := p.fetch.Cached(p.catalogueURL())
+	if !ok {
+		return out
+	}
+	for _, o := range catalogue.Offers(snap.Index, p.installed(), p.d.Version) {
+		out[o.Entry.ID] = o
+	}
+	return out
+}

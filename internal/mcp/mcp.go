@@ -154,6 +154,7 @@ type Deps struct {
 	MusicSearch MusicSearch
 	Queue       Queue
 	Downloaders Downloaders // nil leaves the download-client tools out
+	Plugins     Plugins     // nil leaves list_plugins out
 	Library     Library
 	Searches    SearchStates
 	History     History
@@ -196,6 +197,7 @@ func New(d Deps) *Service {
 	s.register(s.requestTools()...)
 	s.register(s.libraryTools()...)
 	s.register(s.downloaderTools()...)
+	s.register(s.pluginTools()...)
 	outputs := toolOutputs()
 	for i := range s.tools {
 		if s.tools[i].Output == nil {

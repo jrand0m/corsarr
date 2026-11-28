@@ -80,7 +80,7 @@ func newHarness(t *testing.T) *harness {
 		Queue: h.q, Downloaders: h.dl, Library: fakeLibrary{}, Searches: fakeSearches{states: map[domain.ItemRef]domain.SearchState{
 			{Kind: domain.KindMovie, ID: 2}: {LastSearched: &searched, LastResult: &domain.SearchEventData{Releases: 3,
 				Rejections: []domain.ReasonCount{{RuleID: "quality.notWanted", Message: "quality not wanted", Count: 3}}}},
-		}}, History: fakeHistory{}, Health: fakeHealth{}, RootFolders: fakeRoots{}, Bus: h.bus,
+		}}, History: fakeHistory{}, Health: fakeHealth{}, RootFolders: fakeRoots{}, Bus: h.bus, Plugins: fakePlugins{},
 		Go: func(fn func(context.Context)) { fn(context.Background()) }, Now: func() time.Time { return h.now }})
 	h.sess = h.s.NewSession(KeyFull)
 	return h

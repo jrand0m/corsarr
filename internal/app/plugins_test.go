@@ -415,3 +415,19 @@ func TestPluginAdminWithoutModules(t *testing.T) {
 		t.Fatal("no keys: the catalogue must say why it cannot be read")
 	}
 }
+
+func TestMCPPluginList(t *testing.T) {
+	f := newAdminFixture(t)
+	f.cat.offer(t, exampleAt(t, "1.0.0", nil))
+	if _, err := f.admin.installFromCatalogue(context.Background(), "exampledl", "1.0.0", "user"); err != nil {
+		t.Fatal(err)
+	}
+	f.cat.offer(t, exampleAt(t, "1.0.1", nil))
+	_ = f.admin.Catalogue(context.Background(), true)
+	a := &App{d: Deps{Config: func() *config.Config { return f.cfg }, Plugins: f.reg}, Plugins: f.admin}
+	list := mcpPlugins{a}.PluginList()
+	if len(list) != 1 || list[0].Delivery != "module" || list[0].Status != "active" || list[0].Update != "1.0.1" ||
+		len(list[0].Instances) != 1 || list[0].Hosts[0] != "$setting:url" {
+		t.Fatalf("%+v", list)
+	}
+}
