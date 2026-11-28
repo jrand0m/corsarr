@@ -41,7 +41,7 @@ func entryFor(module []byte) Entry {
 	return Entry{ID: "fakeclient", Name: "Fake client", Version: "1.2.0", Kind: "downloader", ABIVersion: 1,
 		Description: "A test module.", License: "MIT",
 		Permissions: abi.Permissions{HTTP: abi.HTTPPermission{Hosts: []string{"$setting:url"}}, Secrets: []string{"password"}},
-		MinCorsarr: "1.0.0", Size: int64(len(module)), SHA256: wasm.SHA256(module), URL: "fakeclient-1.2.0.wasm"}
+		MinCorsarr:  "1.0.0", Size: int64(len(module)), SHA256: wasm.SHA256(module), URL: "fakeclient-1.2.0.wasm"}
 }
 
 func indexBytes(t *testing.T, entries ...Entry) []byte {
