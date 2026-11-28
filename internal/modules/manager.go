@@ -123,6 +123,9 @@ func (m *Manager) Register() {
 	for _, id := range m.store.IDs() {
 		active, _ := m.store.Active(id)
 		if active == "" {
+			if m.isRecordOnly(id) {
+				m.registerRecord(id)
+			}
 			continue
 		}
 		if err := m.registerStored(id, active); err != nil {
@@ -187,6 +190,7 @@ func (m *Manager) Install(ctx context.Context, module, sidecar []byte, expectedS
 	if err := m.activate(v, man, mod); err != nil {
 		return Info{}, err
 	}
+	m.store.dropRecord(man.ID)
 	info, _ := m.Get(man.ID)
 	return info, nil
 }
@@ -422,9 +426,14 @@ func (m *Manager) List() []Info {
 	}
 	m.mu.Unlock()
 	for _, id := range m.store.IDs() {
-		if !seen[id] {
-			out = append(out, m.storedInfo(id))
+		if seen[id] {
+			continue
 		}
+		if info, _, ok := m.recordInfo(id); ok && m.isRecordOnly(id) {
+			out = append(out, info)
+			continue
+		}
+		out = append(out, m.storedInfo(id))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
