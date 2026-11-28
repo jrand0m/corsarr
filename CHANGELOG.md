@@ -5,6 +5,7 @@ Short notes per release. Each release's assets, checksums and how to verify them
 ## Unreleased
 
 - Migration plan: copy the shown rows as text or JSON, or download them.
+- Migration plan: the config-file snippet folds away as optional, and the environment variables for API keys are listed one per line with a copy button.
 - Interactive search leads with the decision: each result says what automatic search would do (the single pick, accepted but outranked and why, or rejected with the main reason in one line); the full reason list folds under "Why it was rejected?", and the separate override notice is gone.
 - Interactive search shows seeders against leechers with a ratio bar and health word, whether the whole payload is available (with file count, times downloaded and the tracker's seed ratio when the indexer reports them), and how close each release is to the profile, above or below target.
 - Interactive search can sort by automation order, closest to profile, seeders, size, newest or quality; the choice stays in the page link.

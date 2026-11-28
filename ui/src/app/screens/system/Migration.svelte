@@ -7,6 +7,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Button from '../../../lib/components/atoms/Button/Button.svelte';
+  import CopyableValue from '../../../lib/components/atoms/CopyableValue/CopyableValue.svelte';
   import ManagedValue, { managedFrom } from '../../../lib/components/atoms/ManagedValue/ManagedValue.svelte';
   import StatusBadge from '../../../lib/components/atoms/StatusBadge/StatusBadge.svelte';
   import Timestamp from '../../../lib/components/atoms/Timestamp/Timestamp.svelte';
@@ -267,8 +268,18 @@
       {/snippet}
     </DataTable>
     {#if report.config}
-      <p class="note">These objects live in the config file. Add the snippet to it and set {report.env?.join(', ')} in the environment; secrets are never copied.</p>
-      <CodeViewer code={report.config} language="yaml" filename="migrated.yaml" download maxHeight="18rem" />
+      <!-- Optional: settings that live in the config file. Closed by default so it doesn't crowd the plan. -->
+      <details class="cfg">
+        <summary>Settings for the config file <span class="count">(optional)</span></summary>
+        <p class="note">Indexers, download clients and root folders are not imported; add this snippet to the config file only if you want them in corsarr.</p>
+        <CodeViewer code={report.config} language="yaml" filename="migrated.yaml" download maxHeight="18rem" />
+        {#if report.env?.length}
+          <p class="note">API keys are never copied from the source. Set these environment variables with the keys:</p>
+          <ul class="envs">
+            {#each report.env as name (name)}<li><CopyableValue value={name} label="Environment variable" /></li>{/each}
+          </ul>
+        {/if}
+      </details>
     {/if}
   {/if}
 {/snippet}
@@ -379,6 +390,10 @@
 </WizardPage>
 
 <style>
+  .cfg summary { cursor: pointer; font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--ink-muted); }
+  .cfg[open] summary { margin-bottom: var(--space-2); }
+  .cfg .count { font-weight: var(--weight-regular); color: var(--ink-subtle); }
+  .envs { list-style: none; padding: 0; margin: var(--space-2) 0 0; display: grid; gap: var(--space-1); }
   .copyrow { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }
   .sources { display: grid; gap: var(--space-5); }
   fieldset { display: grid; gap: var(--space-3); border: 0; padding: 0; margin: 0; }
