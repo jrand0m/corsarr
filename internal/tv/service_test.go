@@ -371,3 +371,27 @@ func TestAvailabilityTimerPublishesOncePerEpisode(t *testing.T) {
 		t.Fatalf("unknown episode item %+v", it)
 	}
 }
+
+func TestAddMonitorsTheChosenSeasonsOrReportsTheMetadataError(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	h.meta.err = errors.New("metadata down")
+	if _, created, err := h.svc.Add(ctx, AddRequest{TMDBID: 77}); err == nil || err.Error() != "metadata down" || created {
+		t.Fatalf("%v %v", created, err)
+	}
+	h.meta.err = nil
+	s, created, err := h.svc.Add(ctx, AddRequest{TMDBID: 77, Monitor: "none", Seasons: []int{1}})
+	if err != nil || !created {
+		t.Fatal(err)
+	}
+	d, _ := h.svc.Detail(ctx, s.ID)
+	var mon []string
+	for _, e := range d.Episodes {
+		if e.Monitored {
+			mon = append(mon, e.Code())
+		}
+	}
+	if !eq(mon, []string{"S01E01", "S01E02"}) {
+		t.Fatalf("monitored %v", mon)
+	}
+}
