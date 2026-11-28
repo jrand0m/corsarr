@@ -56,15 +56,15 @@ jobs:
   validate-nix:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v31
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v32
       - name: nix flake check
         run: scripts/deploy-samples.sh validate nixos
 
   validate-ansible:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: molecule (binary mode in a Debian container)
         run: |
           set -euo pipefail
@@ -104,7 +104,7 @@ jobs:
           $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
           scoop install deploy\windows\scoop\corsarr.json
           corsarr version
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Windows service from this commit
