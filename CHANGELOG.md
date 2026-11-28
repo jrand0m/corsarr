@@ -4,6 +4,10 @@ Short notes per release. Each release's assets, checksums and how to verify them
 
 ## Unreleased
 
+- Custom formats: conditions on release title, group, edition, source, resolution, quality modifier, video codec, audio codec and channels, HDR, Dolby Vision fallback, container, video bit depth, language, indexer flags, size, release type and year, each with negate and required; profiles score them, reject on a match or set a minimum score.
+- Custom quality profiles: allowed qualities and groups, cutoff, upgrade-until score and step, and size limits per quality; one profile can serve TV and movies. Edit both under Settings › Profiles and Settings › Custom formats (built-in profiles duplicate into editable copies), or as config-as-code under `customFormats` and `qualityProfiles`.
+- Migration carries Sonarr and Radarr custom formats and profiles over exactly: identical ones from both apps become one, items keep their profile, and anything that cannot be carried over is listed per condition.
+- Indexers: halfleech, partial freeleech and double upload flags are read from Torznab feeds.
 - Migration plan: copy the shown rows as text or JSON, or download them.
 - Migration plan: the config-file snippet folds away as optional, and the environment variables for API keys are listed one per line with a copy button.
 - Interactive search leads with the decision: each result says what automatic search would do (the single pick, accepted but outranked and why, or rejected with the main reason in one line); the full reason list folds under "Why it was rejected?", and the separate override notice is gone.
