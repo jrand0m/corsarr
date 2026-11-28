@@ -113,3 +113,50 @@ describe('Client', () => {
     expect(await api.text('config/export', { format: 'yaml' })).toBe('version: 1\n');
   });
 });
+
+describe('Client.raw', () => {
+  it('asks for JSON by default, sends no body without one and keeps the same-origin cookie', async () => {
+    const fetch = vi.fn(async () => json(200, {}));
+    const api = new Client({ fetch, base: 'x/' });
+    const res = await api.raw('GET', '/movies', { query: { q: 'a' } });
+    expect(res.status).toBe(200);
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('x/movies?q=a');
+    expect(init).toMatchObject({ method: 'GET', body: undefined, credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+  });
+
+  it('uses the given Accept header', async () => {
+    const fetch = vi.fn(async () => json(200, {}));
+    await new Client({ fetch }).raw('GET', 'export', { accept: 'text/plain' });
+    expect(((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>).Accept).toBe('text/plain');
+  });
+
+  it('names the status when the error answer has neither a body nor a status text', async () => {
+    const api = new Client({ fetch: async () => new Response(null, { status: 500 }) });
+    const err = await fail(api.raw('GET', 'queue'));
+    expect(err.code).toBe('http_500');
+    expect(err.message).toBe('HTTP 500');
+    expect(err.body).toEqual({});
+  });
+
+  it('passes the error code of a 401 and does not need a handler', async () => {
+    const answer = async () => json(401, { error: { code: 'setup_required', message: 'set up first' } });
+    const onunauthorized = vi.fn();
+    await fail(new Client({ fetch: answer, onunauthorized }).raw('GET', 'movies'));
+    expect(onunauthorized).toHaveBeenCalledWith('setup_required');
+    expect((await fail(new Client({ fetch: answer }).raw('GET', 'movies'))).status).toBe(401);
+  });
+
+  it('does not report a 403 as signed out', async () => {
+    const onunauthorized = vi.fn();
+    const api = new Client({ fetch: async () => json(403, { error: { code: 'forbidden', message: 'no' } }), onunauthorized });
+    expect((await fail(api.raw('GET', 'movies'))).code).toBe('forbidden');
+    expect(onunauthorized).not.toHaveBeenCalled();
+  });
+
+  it('reports an aborted request as cancelled', async () => {
+    const api = new Client({ fetch: async () => { throw new DOMException('stop', 'AbortError'); } });
+    expect((await fail(api.raw('GET', 'movies'))).code).toBe('aborted');
+  });
+});
