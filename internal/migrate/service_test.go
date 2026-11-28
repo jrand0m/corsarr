@@ -99,7 +99,7 @@ func TestPlanOutcomesPerObject(t *testing.T) {
 		"sonarr:series:1": OutCreate, "sonarr:series:2": OutUnsupported,
 		"sonarr:episodefile:501": OutCreate, "sonarr:episodefile:502": OutFileMissing,
 		"sonarr:profile:1": OutUnchanged, "sonarr:profile:2": OutApproximate, "sonarr:customformat:0": OutUnsupported,
-		"sonarr:naming:rename": OutUnsupported, "sonarr:downloadclient:1": OutSecretNeeded, "sonarr:downloadclient:2": OutUnsupported,
+		"sonarr:naming:tv": OutManaged, "radarr:naming:movie": OutManaged, "sonarr:downloadclient:1": OutSecretNeeded, "sonarr:downloadclient:2": OutUnsupported,
 		"radarr:downloadclient:1": OutUnchanged, "sonarr:indexer:3": OutSkip,
 		"prowlarr:indexer:4": OutApproximate, "prowlarr:indexer:5": OutSecretNeeded, "prowlarr:indexer:6": OutUnsupported,
 		"sonarr:download:aaaa": OutCreate, "sonarr:download:bbbb": OutGone,

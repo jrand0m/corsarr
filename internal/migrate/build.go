@@ -29,6 +29,7 @@ func BuildPlan(snaps []Snapshot, st State, o Options) Report {
 	b.exclude(r.Entries)
 	r.count()
 	r.Config, r.Env = b.cfg.render()
+	r.Naming = b.tokens
 	r.Finished = st.Now
 	return r
 }
@@ -45,6 +46,8 @@ type builder struct {
 	clientIDs map[string]string
 	indexers  map[string]string
 	mgrRefs   map[string]string // manager host → the secret reference its routed indexers share
+	named     map[domain.MediaKind]App
+	tokens    []TokenMapping
 }
 
 func newBuilder(snaps []Snapshot, st State, o Options) *builder {
@@ -53,7 +56,7 @@ func newBuilder(snaps []Snapshot, st State, o Options) *builder {
 	}
 	b := &builder{st: st, o: o, kinds: map[domain.MediaKind]App{}, seen: map[store.ProvenanceKey]bool{}, cfg: newConfigDoc(),
 		managers: map[string]bool{}, sabHosts: map[string]bool{}, clientIDs: map[string]string{}, indexers: map[string]string{},
-		mgrRefs: map[string]string{}}
+		mgrRefs: map[string]string{}, named: map[domain.MediaKind]App{}}
 	for _, s := range snaps {
 		if s.Source.App == Prowlarr {
 			b.managers[hostOf(s.Source.URL)] = true
@@ -144,12 +147,26 @@ func (b *builder) roots(s Snapshot) {
 }
 
 func (b *builder) naming(s Snapshot) {
-	if s.Rename == nil {
+	k := s.Source.App.Kind()
+	if s.Naming == nil || namingFields[k] == nil {
 		return
 	}
-	state := map[bool]string{true: "on", false: "off"}[*s.Rename]
-	b.add(Entry{ID: entryID(s.Source.App, "naming", "rename"), Category: CatNaming, Source: s.Source.App, Name: "Rename files",
-		Outcome: OutUnsupported, Reason: "renaming was " + state + " in the source; corsarr names files on import with its own format and has no switch for it yet"})
+	e := Entry{ID: entryID(s.Source.App, "naming", k), Category: CatNaming, Source: s.Source.App, Name: kindNames[k] + " naming",
+		Target: "naming." + string(k)}
+	first, taken := b.named[k]
+	switch {
+	case b.st.Config.Naming[string(k)]:
+		e.Outcome, e.Reason = OutManaged, "already in your config file"
+	case taken:
+		e.Outcome, e.Reason = OutSkip, "naming for "+kindNames[k]+" already taken from "+string(first)
+	default:
+		b.named[k] = s.Source.App
+		m := mapNaming(s.Source.App, *s.Naming)
+		b.cfg.naming(k, m.Scheme)
+		b.tokens = append(b.tokens, m.Tokens...)
+		e.Outcome, e.Reason = OutManaged, namingSummary(m)
+	}
+	b.add(e)
 }
 
 // ── download clients and indexers ───────────────────────────────────────────

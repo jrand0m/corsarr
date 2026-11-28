@@ -113,6 +113,7 @@ type Report struct {
 	Counts   map[Outcome]int `json:"counts"`
 	Config   string          `json:"config,omitempty"` // YAML for config-managed objects
 	Env      []string        `json:"env,omitempty"`    // variables the YAML references
+	Naming   []TokenMapping  `json:"naming,omitempty"` // how each source naming token maps
 	PlanHash string          `json:"planHash"`
 	Started  time.Time       `json:"startedAt"`
 	Finished time.Time       `json:"finishedAt"`
@@ -196,6 +197,7 @@ type ConfigView struct {
 	Clients      map[string]bool   // url
 	KindExplicit map[string]bool   // media kind whose mode the config sets
 	KindMode     map[string]string // effective mode of each kind the config sets
+	Naming       map[string]bool   // media kind whose naming the config sets
 }
 
 // hashOf fingerprints any value through its JSON form.

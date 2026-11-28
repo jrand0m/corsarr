@@ -45,7 +45,8 @@ func lidarrRoutes(day time.Time) map[string]any {
 				"releaseStatuses":     []any{allowedStatus("Official", true), allowedStatus("Bootleg", true)}},
 		},
 		"/rootfolder":    []any{map[string]any{"id": 1, "path": src("music/")}},
-		"/config/naming": map[string]any{"renameTracks": true},
+		"/config/naming": map[string]any{"renameTracks": true, "colonReplacementFormat": "dash", "artistFolderFormat": "{Artist Name}",
+			"standardTrackFormat": "{Album Title} ({Release Year})/{track:00} {Track Title}"},
 		"/downloadclient": []any{map[string]any{"id": 1, "name": "qbit", "implementation": "QBittorrent", "protocol": "torrent",
 			"enable": true, "fields": []any{field("host", "qbit"), field("port", 8080), field("musicCategory", "music")}}},
 		"/artist": []any{
@@ -113,7 +114,7 @@ func TestLidarrPlanOutcomesPerObject(t *testing.T) {
 		"lidarr:trackfile:900": OutCreate, "lidarr:trackfile:901": OutCreate, "lidarr:trackfile:902": OutSkip,
 		"lidarr:profile:1": OutUnchanged, "lidarr:profile:2": OutApproximate,
 		"lidarr:metadataprofile:1": OutUnchanged, "lidarr:metadataprofile:2": OutApproximate,
-		"lidarr:naming:rename": OutUnsupported, "lidarr:downloadclient:1": OutManaged,
+		"lidarr:naming:music": OutManaged, "lidarr:downloadclient:1": OutManaged,
 		"lidarr:download:dddd": OutCreate, "lidarr:blocklist:5": OutCreate,
 		"lidarr:history:80": OutCreate, "lidarr:history:81": OutCreate, "lidarr:history:82": OutCreate,
 		"corsarr:mode:music": OutCreate, "corsarr:rules:all": OutCreate,

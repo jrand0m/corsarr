@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/plugin"
 )
 
@@ -19,6 +20,7 @@ type configDoc struct {
 	RootFolders     []map[string]string       `yaml:"rootFolders,omitempty"`
 	Indexers        map[string]map[string]any `yaml:"indexers,omitempty"`
 	DownloadClients map[string]map[string]any `yaml:"downloadClients,omitempty"`
+	Naming          map[string]map[string]any `yaml:"naming,omitempty"`
 
 	keys  map[string]bool
 	byURL map[string]string // client url → key
@@ -27,7 +29,8 @@ type configDoc struct {
 
 func newConfigDoc() *configDoc {
 	return &configDoc{Version: 1, Indexers: map[string]map[string]any{}, DownloadClients: map[string]map[string]any{},
-		keys: map[string]bool{}, byURL: map[string]string{}}
+		Naming: map[string]map[string]any{},
+		keys:   map[string]bool{}, byURL: map[string]string{}}
 }
 
 func (c *configDoc) root(path string, k domain.MediaKind) {
@@ -117,10 +120,21 @@ func (c *configDoc) indexerEnv(ix SrcIndexer) string {
 // useEnv records a variable the fragment references.
 func (c *configDoc) useEnv(name string) { c.env = append(c.env, name) }
 
+// naming adds a kind's naming settings.
+func (c *configDoc) naming(k domain.MediaKind, s naming.Scheme) {
+	entry := map[string]any{"rename": s.Rename, "colon": string(s.Colon)}
+	for i, tmpl := range []string{s.Folder, s.Sub, s.File} {
+		if f := namingFields[k][i]; f != "" {
+			entry[f] = tmpl
+		}
+	}
+	c.Naming[string(k)] = entry
+}
+
 // render returns the YAML fragment and the variables it references; empty
 // when nothing config-managed was found.
 func (c *configDoc) render() (string, []string) {
-	if len(c.RootFolders) == 0 && len(c.Indexers) == 0 && len(c.DownloadClients) == 0 {
+	if len(c.RootFolders) == 0 && len(c.Indexers) == 0 && len(c.DownloadClients) == 0 && len(c.Naming) == 0 {
 		return "", nil
 	}
 	out, _ := yaml.Marshal(c) // plain maps and slices of strings always encode

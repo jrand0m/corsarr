@@ -121,7 +121,10 @@ func sonarrRoutes(day time.Time) map[string]any {
 		},
 		"/customformat":  []any{map[string]any{"id": 1, "name": "HDR"}},
 		"/rootfolder":    []any{map[string]any{"id": 1, "path": "/data/media/tv/"}},
-		"/config/naming": map[string]any{"renameEpisodes": false},
+		"/config/naming": map[string]any{"renameEpisodes": false, "colonReplacementFormat": 4,
+			"seriesFolderFormat": "{Series TitleYear}", "seasonFolderFormat": "Season {season:00}",
+			"standardEpisodeFormat": "{Series Title} - S{season:00}E{episode:00} - {Episode Title} {Quality Full} {MediaInfo VideoCodec}",
+			"dailyEpisodeFormat": "{Series Title} - {Air-Date}", "specialsFolderFormat": "Specials"},
 		"/downloadclient": []any{
 			map[string]any{"id": 1, "name": "qBittorrent", "implementation": "QBittorrent", "protocol": "torrent", "enable": true,
 				"fields": []any{field("host", "qbit"), field("port", 8080), field("useSsl", false), field("username", "admin"),

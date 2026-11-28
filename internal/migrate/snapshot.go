@@ -31,7 +31,7 @@ type Snapshot struct {
 	Tags          map[int]string
 	Clients       []SrcClient
 	Indexers      []SrcIndexer
-	Rename        *bool // nil = not read
+	Naming        *SrcNaming // nil = not read
 	Queue         []SrcQueue
 	Blocklist     []SrcBlock
 	History       []SrcHistory

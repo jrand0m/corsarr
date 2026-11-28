@@ -365,7 +365,7 @@ func anyQueue(snaps []Snapshot) bool {
 // configView extracts what the active config sets.
 func configView(cfg *config.Config) ConfigView {
 	v := ConfigView{RootFolders: map[string]bool{}, Indexers: map[string]bool{}, Clients: map[string]bool{}, KindExplicit: map[string]bool{},
-		KindMode: map[string]string{}, ManagerRefs: map[string]string{}}
+		KindMode: map[string]string{}, ManagerRefs: map[string]string{}, Naming: map[string]bool{}}
 	if cfg == nil {
 		return v
 	}
@@ -386,6 +386,7 @@ func configView(cfg *config.Config) ConfigView {
 	}
 	for _, k := range []domain.MediaKind{domain.KindTV, domain.KindMovie, domain.KindMusic, domain.KindBook} {
 		v.KindExplicit[string(k)] = ConfigSetsKind(cfg, k)
+		v.Naming[string(k)] = configSetsNaming(cfg, k)
 		if v.KindExplicit[string(k)] {
 			v.KindMode[string(k)] = string(cfg.MediaKinds[k])
 		}
@@ -400,6 +401,17 @@ func sortedKeys[V any](m map[domain.ObjectKey]V) []domain.ObjectKey {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// configSetsNaming reports whether the config source sets any of the kind's
+// naming settings (defaults do not count).
+func configSetsNaming(cfg *config.Config, k domain.MediaKind) bool {
+	for _, f := range append([]string{"rename", "colon"}, namingFields[k]...) {
+		if f != "" && cfg.ManagedBy("naming."+string(k)+"."+f) != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // ConfigSetsKind reports whether the config source sets the kind's mode
