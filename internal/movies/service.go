@@ -171,6 +171,7 @@ func applyRecord(m *domain.Movie, rec plugin.MovieRecord) {
 	m.IMDBID, m.Title, m.OriginalTitle, m.Year = rec.IDs["imdb"], rec.Title, rec.OriginalTitle, rec.Year
 	m.AltTitles, m.RuntimeMin = rec.AltTitles, rec.RuntimeMin
 	m.InCinemas, m.Digital, m.Physical = rec.InCinemas, rec.Digital, rec.Physical
+	m.PosterURL, m.FanartURL = rec.PosterURL, rec.FanartURL
 }
 
 // FolderName renders the movie folder from the default template.

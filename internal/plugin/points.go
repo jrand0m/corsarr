@@ -222,6 +222,7 @@ type MovieRecord struct {
 	Digital       *time.Time        `json:"digital,omitempty"`
 	Physical      *time.Time        `json:"physical,omitempty"`
 	PosterURL     string            `json:"posterUrl,omitempty"`
+	FanartURL     string            `json:"fanartUrl,omitempty"` // backdrop
 	Genres        []string          `json:"genres,omitempty"`
 }
 
@@ -255,6 +256,7 @@ type SeriesRecord struct {
 	RuntimeMin  int               `json:"runtimeMin,omitempty"`
 	Genres      []string          `json:"genres,omitempty"`
 	PosterURL   string            `json:"posterUrl,omitempty"`
+	FanartURL   string            `json:"fanartUrl,omitempty"` // backdrop
 	SeasonCount int               `json:"seasonCount"`
 	Episodes    []EpisodeRecord   `json:"episodes,omitempty"`
 }

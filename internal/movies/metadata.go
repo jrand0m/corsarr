@@ -57,6 +57,7 @@ func Merge(m domain.Movie, rec plugin.MovieRecord) (domain.Movie, []string) {
 	add("altTitles", !slices.Equal(next.AltTitles, m.AltTitles))
 	add("runtime", next.RuntimeMin != m.RuntimeMin)
 	add("imdbId", next.IMDBID != m.IMDBID)
+	add("artwork", next.PosterURL != m.PosterURL || next.FanartURL != m.FanartURL)
 	add("releaseDates", !sameTime(next.InCinemas, m.InCinemas) || !sameTime(next.Digital, m.Digital) || !sameTime(next.Physical, m.Physical))
 	return next, changed
 }

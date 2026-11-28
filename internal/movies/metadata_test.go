@@ -24,6 +24,18 @@ func TestMergeNamesChangedFields(t *testing.T) {
 	}
 }
 
+func TestMergeStoresArtwork(t *testing.T) {
+	m := domain.Movie{ID: 1, Title: "Old", Year: 1999}
+	rec := plugin.MovieRecord{Title: "Old", Year: 1999, PosterURL: "https://img.example/p.jpg", FanartURL: "https://img.example/b.jpg"}
+	next, changed := Merge(m, rec)
+	if next.PosterURL != rec.PosterURL || next.FanartURL != rec.FanartURL || len(changed) != 1 || changed[0] != "artwork" {
+		t.Fatalf("%+v %v", next, changed)
+	}
+	if _, changed := Merge(next, rec); len(changed) != 0 {
+		t.Fatal(changed)
+	}
+}
+
 func TestNextRefreshIsStaggered(t *testing.T) {
 	at := time.Unix(0, 0)
 	if NextRefresh(at, 24).Sub(at) != RefreshEvery || NextRefresh(at, 5).Sub(at) != RefreshEvery+5*time.Hour {
