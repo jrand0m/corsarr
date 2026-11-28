@@ -80,18 +80,27 @@ export class Client {
       headers['Content-Type'] = 'application/json';
       body = JSON.stringify(o.body);
     }
-    let res: Response;
+    const res = await this.#send(this.url(path, o.query), { method, headers, body, signal: o.signal, credentials: 'same-origin' });
+    if (res.ok) return res;
+    throw await this.#failure(res, path);
+  }
+
+  /** fetch, with a network failure or abort thrown as ApiError. */
+  async #send(url: string, init: RequestInit): Promise<Response> {
     try {
-      res = await this.#fetch(this.url(path, o.query), { method, headers, body, signal: o.signal, credentials: 'same-origin' });
+      return await this.#fetch(url, init);
     } catch (e) {
       throw toApiError(e);
     }
-    if (res.ok) return res;
+  }
+
+  /** The ApiError of a non-2xx answer; a 401 from a protected endpoint is reported first. */
+  async #failure(res: Response, path: string): Promise<ApiError> {
     const parsed = await res.json().catch(() => ({})) as Record<string, unknown>;
     const detail = (parsed.error as ErrorDetail | undefined) ?? { code: `http_${res.status}`, message: res.statusText || `HTTP ${res.status}` };
     const err = new ApiError(res.status, detail, parsed);
     if (res.status === 401 && !isAuthPath(path)) this.#onunauthorized?.(err.code);
-    throw err;
+    return err;
   }
 
   async request<T>(method: string, path: string, o: RequestOptions = {}): Promise<T> {
