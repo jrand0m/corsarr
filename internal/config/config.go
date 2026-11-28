@@ -52,13 +52,14 @@ type RootFolder struct {
 
 // Instance is one configured plugin instance.
 type Instance struct {
-	Section  string           `json:"section"`
-	Key      domain.ObjectKey `json:"key"`
-	Type     string           `json:"type"`
-	Name     string           `json:"name"`
-	Enabled  bool             `json:"enabled"`
-	Settings plugin.Settings  `json:"-"` // secrets resolved to plain strings for the plugin
-	Loc      Location         `json:"location"`
+	Section  string            `json:"section"`
+	Key      domain.ObjectKey  `json:"key"`
+	Type     string            `json:"type"`
+	Name     string            `json:"name"`
+	Enabled  bool              `json:"enabled"`
+	Settings plugin.Settings   `json:"-"` // secrets resolved to plain strings for the plugin
+	Refs     map[string]string `json:"-"` // setting key → the reference a secret was given as (${env:…}, ${file:…})
+	Loc      Location          `json:"location"`
 }
 
 // Config is the validated configuration. Bootstrap values are typed fields;
@@ -382,11 +383,15 @@ func instances(section string, t tree) map[domain.ObjectKey]Instance {
 	out := map[domain.ObjectKey]Instance{}
 	for key, v := range t {
 		f := v.(tree)
-		inst := Instance{Section: section, Key: domain.ObjectKey(key), Type: f["type"].(string), Enabled: f["enabled"].(bool), Settings: plugin.Settings{}}
+		inst := Instance{Section: section, Key: domain.ObjectKey(key), Type: f["type"].(string), Enabled: f["enabled"].(bool),
+			Settings: plugin.Settings{}, Refs: map[string]string{}}
 		inst.Name, _ = f["name"].(string)
 		for k, fv := range f {
 			if k != "type" && k != "name" && k != "enabled" {
 				inst.Settings[k] = plainSetting(fv)
+			}
+			if s, ok := fv.(Secret); ok && s.Ref != "" {
+				inst.Refs[k] = s.Ref
 			}
 		}
 		out[inst.Key] = inst

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -364,15 +365,21 @@ func anyQueue(snaps []Snapshot) bool {
 // configView extracts what the active config sets.
 func configView(cfg *config.Config) ConfigView {
 	v := ConfigView{RootFolders: map[string]bool{}, Indexers: map[string]bool{}, Clients: map[string]bool{}, KindExplicit: map[string]bool{},
-		KindMode: map[string]string{}}
+		KindMode: map[string]string{}, ManagerRefs: map[string]string{}}
 	if cfg == nil {
 		return v
 	}
 	for _, f := range cfg.RootFolders {
 		v.RootFolders[cleanPath(f.Path)] = true
 	}
-	for _, inst := range cfg.Instances[plugin.KindIndexer.Section()] {
-		v.Indexers[inst.Settings.String("url")] = true
+	for _, key := range sortedKeys(cfg.Instances[plugin.KindIndexer.Section()]) {
+		inst := cfg.Instances[plugin.KindIndexer.Section()][key]
+		u := inst.Settings.String("url")
+		v.Indexers[u] = true
+		host := strings.ToLower(hostOf(u))
+		if r := inst.Refs["apiKey"]; r != "" && v.ManagerRefs[host] == "" {
+			v.ManagerRefs[host] = r
+		}
 	}
 	for _, inst := range cfg.Instances[plugin.KindDownloader.Section()] {
 		v.Clients[strings.TrimRight(inst.Settings.String("url"), "/")] = true
@@ -384,6 +391,15 @@ func configView(cfg *config.Config) ConfigView {
 		}
 	}
 	return v
+}
+
+func sortedKeys[V any](m map[domain.ObjectKey]V) []domain.ObjectKey {
+	out := make([]domain.ObjectKey, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // ConfigSetsKind reports whether the config source sets the kind's mode

@@ -44,6 +44,7 @@ type builder struct {
 	sabHosts  map[string]bool // hosts of SABnzbd-type clients (bridge detection)
 	clientIDs map[string]string
 	indexers  map[string]string
+	mgrRefs   map[string]string // manager host → the secret reference its routed indexers share
 }
 
 func newBuilder(snaps []Snapshot, st State, o Options) *builder {
@@ -51,7 +52,8 @@ func newBuilder(snaps []Snapshot, st State, o Options) *builder {
 		o.Scope = DefaultScope()
 	}
 	b := &builder{st: st, o: o, kinds: map[domain.MediaKind]App{}, seen: map[store.ProvenanceKey]bool{}, cfg: newConfigDoc(),
-		managers: map[string]bool{}, sabHosts: map[string]bool{}, clientIDs: map[string]string{}, indexers: map[string]string{}}
+		managers: map[string]bool{}, sabHosts: map[string]bool{}, clientIDs: map[string]string{}, indexers: map[string]string{},
+		mgrRefs: map[string]string{}}
 	for _, s := range snaps {
 		if s.Source.App == Prowlarr {
 			b.managers[hostOf(s.Source.URL)] = true
@@ -209,10 +211,9 @@ func (b *builder) indexer(s Snapshot, ix SrcIndexer) (Outcome, string) {
 	case ix.Protocol == "usenet":
 		return b.usenet(ix)
 	case strings.EqualFold(ix.Impl, "torznab") && ix.BaseURL != "":
-		return b.torznab(ix, ix.BaseURL, ix.APIPath, ix.KeyMasked, "")
+		return b.torznab(ix, ix.BaseURL, ix.APIPath, ix.KeyMasked)
 	case s.Source.App == Prowlarr:
-		proxy := strings.TrimRight(s.Source.URL, "/") + "/" + fmt.Sprint(ix.ID)
-		return b.torznab(ix, proxy, "/api", true, "searches go through the indexer manager's Torznab feed for this indexer until a built-in definition replaces it; ")
+		return b.routed(s, ix)
 	}
 	return OutUnsupported, "no " + ix.Impl + " indexer plugin yet"
 }
@@ -230,22 +231,64 @@ func (b *builder) usenet(ix SrcIndexer) (Outcome, string) {
 	return OutUnsupported, "no usenet indexer plugin yet"
 }
 
-func (b *builder) torznab(ix SrcIndexer, u, apiPath string, needKey bool, note string) (Outcome, string) {
-	if b.st.Config.Indexers[u] {
-		return OutManaged, "already in your config file"
+func (b *builder) torznab(ix SrcIndexer, u, apiPath string, needKey bool) (Outcome, string) {
+	if out, why, done := b.seenIndexer(ix, u); done {
+		return out, why
 	}
-	if first, ok := b.indexers[u]; ok {
-		return OutUnchanged, "same indexer as " + first
-	}
-	b.indexers[u] = ix.Name
-	env := b.cfg.indexer(u, apiPath, ix, needKey)
-	switch {
-	case note != "":
-		return OutApproximate, note + "set " + env + " to the manager's API key"
-	case needKey:
+	env := b.cfg.indexerEnv(ix)
+	b.cfg.indexer(u, apiPath, ix, ref(env), ix.Enabled && !needKey)
+	if needKey {
 		return OutSecretNeeded, "the source hides the API key; set " + env + " and enable the instance (it starts disabled)"
 	}
 	return OutManaged, "add it to your config file (see the snippet)"
+}
+
+// routed maps an indexer the manager serves through its own Torznab feed;
+// every such feed uses the manager's one API key.
+func (b *builder) routed(s Snapshot, ix SrcIndexer) (Outcome, string) {
+	u := strings.TrimRight(s.Source.URL, "/") + "/" + fmt.Sprint(ix.ID)
+	if out, why, done := b.seenIndexer(ix, u); done {
+		return out, why
+	}
+	secret, existing := b.managerRef(s)
+	b.cfg.indexer(u, "/api", ix, secret, ix.Enabled)
+	note := "searches go through the indexer manager's Torznab feed for this indexer until a built-in definition replaces it; "
+	if existing {
+		return OutApproximate, note + "it uses the manager's API key your config file already references (" + secret + ")"
+	}
+	return OutApproximate, note + "set " + strings.TrimSuffix(strings.TrimPrefix(secret, "${env:"), "}") + " to the manager's API key"
+}
+
+// seenIndexer settles an indexer the config file or this run already has.
+func (b *builder) seenIndexer(ix SrcIndexer, u string) (Outcome, string, bool) {
+	if b.st.Config.Indexers[u] {
+		return OutManaged, "already in your config file", true
+	}
+	if first, ok := b.indexers[u]; ok {
+		return OutUnchanged, "same indexer as " + first, true
+	}
+	b.indexers[u] = ix.Name
+	return "", "", false
+}
+
+// managerRef is the secret reference shared by every indexer one manager
+// routes: the one the config file already uses for that manager's host, else
+// one new variable per manager. existing reports the former.
+func (b *builder) managerRef(s Snapshot) (secret string, existing bool) {
+	host := strings.ToLower(hostOf(s.Source.URL))
+	if r, ok := b.st.Config.ManagerRefs[host]; ok {
+		return r, true
+	}
+	if r, ok := b.mgrRefs[host]; ok {
+		return r, false
+	}
+	name := "CORSARR_SECRET_PROWLARR_APIKEY"
+	if len(b.mgrRefs) > 0 {
+		name = "CORSARR_SECRET_PROWLARR_" + strings.ToUpper(b.cfg.key(host)) + "_APIKEY"
+	}
+	b.cfg.useEnv(name)
+	b.mgrRefs[host] = ref(name)
+	return b.mgrRefs[host], false
 }
 
 func hostOf(raw string) string {
