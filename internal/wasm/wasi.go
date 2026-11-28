@@ -210,6 +210,16 @@ func pollOneoff(ctx context.Context, mod api.Module, stack []uint64) {
 	if hasClock && !hasFD(subs, nsubs) {
 		sleepCtx(ctx, min(wait, maxPollSleep))
 	}
+	if !mem.Write(out, pollEvents(subs, nsubs)) || !mem.WriteUint32Le(nevents, nsubs) {
+		stack[0] = errnoInval
+		return
+	}
+	stack[0] = errnoSuccess
+}
+
+// pollEvents answers every subscription: clocks fire, descriptors fail with
+// EBADF.
+func pollEvents(subs []byte, nsubs uint32) []byte {
 	events := make([]byte, 0, nsubs*eventSize)
 	for i := range nsubs {
 		sub := subs[i*subSize : (i+1)*subSize]
@@ -221,11 +231,7 @@ func pollOneoff(ctx context.Context, mod api.Module, stack []uint64) {
 		}
 		events = append(events, ev...)
 	}
-	if !mem.Write(out, events) || !mem.WriteUint32Le(nevents, nsubs) {
-		stack[0] = errnoInval
-		return
-	}
-	stack[0] = errnoSuccess
+	return events
 }
 
 func earliest(subs []byte, n uint32, now time.Time) (time.Duration, bool) {
