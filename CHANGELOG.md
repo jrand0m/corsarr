@@ -4,6 +4,8 @@ Short notes per release. Each release's assets, checksums and how to verify them
 
 ## Unreleased
 
+- Migration wizard: sources and path rewrites are checked as you type, each field has a Test button, and config-managed parts are flagged before the run.
+- Config-managed values show as the value with a lock; hover names the key and where it is set (file, arguments or environment).
 - Manual grabs can pick the download client.
 - Assistants (MCP): add a download by URL, see why something wasn't downloaded (top rejection reasons), output schemas for every tool, three prompts (weekly digest, something to watch, why not downloaded), resource notifications through `mcp stdio`.
 - Settings › General: read-only assistant key and assistant settings.
