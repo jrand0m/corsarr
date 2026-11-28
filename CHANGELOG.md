@@ -2,6 +2,9 @@
 
 Short notes per release. Each release's assets, checksums and how to verify them are on its GitHub release page.
 
+## Unreleased
+
+- Migration plan: copy the shown rows as text or JSON, or download them.
 ## v0.5.4 — 2026-11-28
 
 - Interactive search leads with the decision: each result says what automatic search would do (the single pick, accepted but outranked and why, or rejected with the main reason in one line); the full reason list folds under "Why it was rejected?", and the separate override notice is gone.

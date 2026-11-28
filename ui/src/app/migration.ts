@@ -468,3 +468,15 @@ export function configNotice(f: RunForm, modes: KindState[]): ConfigNotice {
 
 /** Whether the notice has anything to say. */
 export const hasConfigNotice = (n: ConfigNotice): boolean => n.kinds.length > 0 || n.snippetOnly.length > 0;
+
+/** The shown plan rows as tab-separated text with a header line, for pasting into a sheet or a chat. */
+export function planAsText(entries: PlanEntry[]): string {
+  const clean = (v: string | undefined) => (v ?? '').replace(/[\t\r\n]+/g, ' ').trim();
+  const rows = entries.map((e) => [outcomeView(e.outcome).label, categoryLabel(e.category), e.source, e.name, e.reason, e.target].map(clean).join('\t'));
+  return ['Outcome\tCategory\tSource\tObject\tReason\tTarget', ...rows].join('\n') + '\n';
+}
+
+/** The shown plan rows as indented JSON. */
+export function planAsJSON(entries: PlanEntry[]): string {
+  return JSON.stringify(entries, null, 2) + '\n';
+}

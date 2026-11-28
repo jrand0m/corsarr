@@ -31,7 +31,7 @@
   import { refetchOn } from '../../live.svelte';
   import { toApiError } from '../../api/client';
   import {
-    applyCount, categories, categoryLabel, configNotice, countTiles, defaultForm, filterEntries, fromPrefixView, hasConfigNotice, InstantCheck, outcomeView,
+    applyCount, categories, planAsJSON, planAsText, categoryLabel, configNotice, countTiles, defaultForm, filterEntries, fromPrefixView, hasConfigNotice, InstantCheck, outcomeView,
     pathCheckBody, pathCheckReady, pathCheckSig, planFacets, progressOf, requestBody, sampleView, scopeProblems, sourceApps, sourceCheckBody,
     sourceCheckReady, sourceCheckSig, sourceCheckView, sourceProblems, toggleExclude, toPrefixView, writes, type CheckView, type KindState,
     type MigrationReport, type MigrationRun, type PathCheck, type PathCheckInput, type PlanEntry, type SourceApp, type SourceCheck, type SourceCheckInput,
@@ -111,6 +111,23 @@
   const shown = $derived(plan ? filterEntries(result?.entries ?? plan.entries ?? [], filter) : []);
   const facets = $derived(planFacets(result?.entries ?? plan?.entries ?? []));
   const report = $derived(result ?? plan);
+
+  // Copies or downloads exactly the rows the filters show.
+  async function copyPlan(text: string, how: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toasts.push({ tone: 'ok', message: `Copied ${shown.length} ${shown.length === 1 ? 'object' : 'objects'} ${how}` });
+    } catch {
+      toasts.push({ tone: 'warn', message: 'The browser blocked the clipboard; use Download JSON instead.' });
+    }
+  }
+
+  function downloadPlan(text: string) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: 'migration-plan.json' });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   async function stream(mode: 'plan' | 'apply') {
     running = mode;
@@ -234,6 +251,11 @@
       {#each countTiles(report.counts) as t (t.outcome)}<StatTile label={t.label} value={t.n} />{/each}
     </div>
     <FilterBar {facets} bind:value={filter} searchLabel="Filter the plan" placeholder="Filter by name or reason" shortcut={false} />
+    <div class="copyrow">
+      <Button variant="secondary" size="sm" icon="copy" disabled={!shown.length} onclick={() => copyPlan(planAsText(shown), 'as text')}>Copy {shown.length} as text</Button>
+      <Button variant="secondary" size="sm" icon="copy" disabled={!shown.length} onclick={() => copyPlan(planAsJSON(shown), 'as JSON')}>Copy as JSON</Button>
+      <Button variant="ghost" size="sm" icon="download" disabled={!shown.length} onclick={() => downloadPlan(planAsJSON(shown))}>Download JSON</Button>
+    </div>
     <DataTable rows={shown} {columns} {cell} rowKey={(e) => e.id} label="Migration plan" noun="object" height="28rem"
       rowActions={(e) => (result || !writes(e) ? [] : [{ id: 'toggle', label: excluded(e) ? 'Include again' : 'Leave out', icon: excluded(e) ? 'undo' : 'minus' }])}
       onaction={(_, e) => (form.exclude = toggleExclude(form.exclude, e.id))}>
@@ -357,6 +379,7 @@
 </WizardPage>
 
 <style>
+  .copyrow { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }
   .sources { display: grid; gap: var(--space-5); }
   fieldset { display: grid; gap: var(--space-3); border: 0; padding: 0; margin: 0; }
   .tiles { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); margin-block: var(--space-4); }
