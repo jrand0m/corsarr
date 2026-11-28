@@ -284,6 +284,9 @@ func TestEpisodeSearchAndInteractiveAndManualGrab(t *testing.T) {
 	if err != nil || sum.Releases != 2 || sum.Accepted != 1 || len(e.q.grabs) != 0 {
 		t.Fatalf("interactive %+v %v", sum, err)
 	}
+	if a := sum.Automation; a == nil || a.Pick != title || a.Outcomes[title].Status != automation.OutcomeGrab || len(sum.Rejections) != 1 {
+		t.Fatalf("automation verdict %+v %+v", a, sum.Rejections)
+	}
 	if _, _, err := e.svc.GrabRelease(ctx, s.ID, "Other.Show.S02E01.1080p.WEB-DL.x264-GRP", false); !errors.Is(err, automation.ErrNeedsConfirm) {
 		t.Fatalf("another show needs confirmation: %v", err)
 	}

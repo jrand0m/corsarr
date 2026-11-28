@@ -43,8 +43,7 @@ func (s *Service) InteractiveSeason(ctx context.Context, seriesID int64, season 
 
 func (s *Service) interactive(ctx context.Context, sc scope, req domain.SearchRequest, em automation.Emitter) automation.Summary {
 	ds, sum := s.collect(ctx, sc, req, em)
-	_, sum.Accepted, _ = automation.Best(ds)
-	return sum
+	return automation.Explain(sum, ds, s.d.Modes.Of(domain.KindTV))
 }
 
 // GrabRelease grabs a release from a recent search by hand for a series:

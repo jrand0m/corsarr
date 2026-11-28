@@ -58,7 +58,7 @@ func (s *Service) releases(w http.ResponseWriter, r *http.Request) {
 	}
 	nd := api.NewNDJSON(w)
 	sum, _ := s.Interactive(r.Context(), id, nd)
-	_ = nd.Done(map[string]any{"indexers": sum.Indexers, "failed": sum.Failed, "releases": sum.Releases, "accepted": sum.Accepted})
+	_ = nd.Done(automation.DoneFields(sum))
 }
 
 type grabBody struct {

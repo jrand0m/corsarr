@@ -20,7 +20,7 @@ func TestHTTPEndpoints(t *testing.T) {
 
 	code, body := testkit.Do(t, srv, "GET", "/api/v1/movies/1/releases", "")
 	lines := strings.Split(strings.TrimSpace(body), "\n")
-	if code != 200 || len(lines) != 4 || !strings.Contains(lines[3], `"summary"`) || !strings.Contains(lines[0], `"decision"`) {
+	if code != 200 || len(lines) != 4 || !strings.Contains(lines[3], `"summary"`) || !strings.Contains(lines[3], `"automation":{"mode":"active","pick":`) || !strings.Contains(lines[0], `"availability"`) {
 		t.Fatalf("ndjson %d:\n%s", code, body)
 	}
 	var row struct {

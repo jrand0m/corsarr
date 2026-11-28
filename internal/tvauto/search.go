@@ -110,7 +110,7 @@ func (s *Service) queuedEqualOrBetter(ctx context.Context, e domain.Episode, p d
 func (s *Service) decideOne(ctx context.Context, sc scope, rel domain.Release) automation.Decided {
 	covered := tv.Covered(parse.ParseRelease(rel.Title).Episode, sc.episodes)
 	profile, _ := tv.ProfileByKey(sc.series.ProfileKey)
-	return automation.Decided{Release: rel, Decision: tv.Decide(sc.series, profile, rel, s.targets(ctx, sc, covered, rel), nil)}
+	return automation.NewDecided(rel, tv.Decide(sc.series, profile, rel, s.targets(ctx, sc, covered, rel), nil))
 }
 
 // collect queries every indexer, dedupes, decides each release and streams it.
