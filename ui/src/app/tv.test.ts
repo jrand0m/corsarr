@@ -40,6 +40,12 @@ describe('episodeState', () => {
     expect(episodeState(ep(), none)).toBe('missing');
   });
 
+  it('counts a file id or a downloaded status as on disk, and an unmonitored episode as unmonitored whatever its status', () => {
+    expect(episodeState(ep({ fileId: 3 }), none)).toBe('have');
+    expect(episodeState(ep({ status: 'downloaded' }), none)).toBe('have');
+    expect(episodeState(ep({ monitored: false }), none)).toBe('unmonitored');
+  });
+
   it('collects the episodes live downloads cover', () => {
     const q = queuedEpisodes([
       dl({ id: 1, links: [{ item: { kind: 'tv', id: 10 }, status: 'pending' }, { item: { kind: 'tv', id: 11 }, status: 'pending' }] }),

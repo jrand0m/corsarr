@@ -179,7 +179,7 @@ export function eventSubject(ev: LiveEvent): string {
 /** Item titles, or one line for several episodes when that is all the event names. */
 function itemsSubject(items: NonNullable<LiveEvent['items']>): string {
   const episodes = items.filter((i) => i.ref.kind === 'tv' && i.ref.variant !== 'series');
-  if (episodes.length > 1 && episodes.length === items.length) return summariseEpisodes(episodes);
+  if (episodes.length === items.length) return summariseEpisodes(episodes);
   return items.map((i) => i.title).join(', ');
 }
 

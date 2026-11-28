@@ -93,6 +93,8 @@ describe('events', () => {
     const gone = ev({ action: 'uninstalled', id: 'x', version: '1.0.0', source: 'file' });
     expect(eventView(gone)).toEqual({ label: 'Plugin uninstalled', family: 'download', value: 'removed' });
     expect(eventDetail(gone)).toBe('1.0.0 · from a file');
+    expect(eventDetail(ev({ action: 'installed', id: 'x', version: '1.0.0', previous: '' }))).toBe('1.0.0');
+    expect(eventDetail(ev({ action: 'installed', id: 'x', version: '1.0.0', previous: 1 }))).toBe('1.0.0');
   });
   it('falls back for unknown and incomplete events', () => {
     const ev = (type: string, data?: Record<string, unknown>) => ({ eventId: 'u', type, occurredAt: '', actor: 'system', data });
