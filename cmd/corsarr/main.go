@@ -8,6 +8,7 @@
 //	corsarr config defaults [--format=table|markdown|yaml|env]   every setting, its default and meaning
 //	corsarr migrate plan|run --from=… --url=… --api-key-file=…   import an existing installation
 //	corsarr admin reset-password [--username=…]   new admin password from stdin
+//	corsarr plugin list|test|load|unload|rollback   plugin modules (see docs/plugins.md)
 //	corsarr version
 //
 // Configuration args (`--server.address=:8090`, `--configFile=…`) may follow
@@ -40,6 +41,8 @@ func main() {
 // cli is one parsed invocation.
 type cli struct {
 	cmd     []string // e.g. ["config", "export"]
+	args    []string // positional arguments after a command that takes them
+	mods    *moduleState
 	flags   map[string]string
 	cfgArgs []string
 	in      config.Inputs
@@ -57,7 +60,7 @@ func init() {
 }
 
 func parse(args, environ []string, stdout, stderr io.Writer) cli {
-	c := cli{flags: map[string]string{}, stdout: stdout, stderr: stderr}
+	c := cli{flags: map[string]string{}, stdout: stdout, stderr: stderr, mods: &moduleState{}}
 	for _, a := range args {
 		name, val, _ := strings.Cut(strings.TrimPrefix(a, "--"), "=")
 		switch {
@@ -88,6 +91,7 @@ var commands = map[string]func(c cli, ctx context.Context) int{
 	"migrate run":          func(c cli, ctx context.Context) int { return c.migrate(ctx, "run") },
 	"admin reset-password": func(c cli, ctx context.Context) int { return c.resetPassword(ctx) },
 	"mcp stdio":            func(c cli, ctx context.Context) int { return c.mcpStdio(ctx) },
+	"plugin":               func(c cli, ctx context.Context) int { return c.plugin(ctx) },
 	"service":              func(c cli, ctx context.Context) int { return c.service(ctx, "") },
 }
 
@@ -97,7 +101,10 @@ func run(ctx context.Context, args, environ []string, stdout, stderr io.Writer) 
 	if h, ok := commands[name]; ok {
 		return h(c, ctx)
 	}
-	fmt.Fprintf(stderr, "unknown command %q (serve | healthcheck | config validate|export|schema|defaults | migrate plan|run | admin reset-password | version)\n", name)
+	if len(c.cmd) > 1 && c.cmd[0] == "plugin" { // plugin subcommands take positional arguments
+		return commands["plugin"](c, ctx)
+	}
+	fmt.Fprintf(stderr, "unknown command %q (serve | healthcheck | config validate|export|schema|defaults | migrate plan|run | admin reset-password | plugin list|test|load|unload | version)\n", name)
 	return 2
 }
 
@@ -108,6 +115,7 @@ func (c cli) schema() int {
 
 // load reads the active config source; errors are printed one per line.
 func (c cli) load() (*config.Config, bool) {
+	c.registerModules()
 	cfg, err := config.Load(c.in, plugin.Default)
 	if err != nil {
 		fmt.Fprintln(c.stderr, "configuration invalid:")

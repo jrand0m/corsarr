@@ -10,6 +10,11 @@ Short notes per release. Each release's assets, checksums and how to verify them
 - Interactive search shows seeders against leechers with a ratio bar and health word, whether the whole payload is available (with file count, times downloaded and the tracker's seed ratio when the indexer reports them), and how close each release is to the profile, above or below target.
 - Interactive search can sort by automation order, closest to profile, seeders, size, newest or quality; the choice stays in the page link.
 - Indexers: a missing seeders/peers count is no longer read as zero; Torznab `files` and `minimumratio` are carried through.
+- Plugin modules: add download clients as sandboxed WebAssembly files without a new corsarr build; drop them into the plugins folder or use `corsarr plugin load`, hot-swapped on upgrade with rollback to the previous version. See `docs/plugins.md`.
+- `corsarr plugin list|test|load|unload|rollback`; `plugin test` verifies a module and runs the download-client conformance suite against it.
+- Go SDK for modules (`sdk/go`) with a test harness and an example download client.
+- New `plugins` settings: plugins folder, built-ins to switch off, and memory, time, concurrency and size limits for modules.
+- Plugin settings forms are typed data checked on the server: a closed set of field types, plain text with a small emoji set, per-field errors.
 
 ## v0.5.4 — 2026-11-28
 

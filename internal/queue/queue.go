@@ -175,7 +175,7 @@ func (s *Service) downloader(key domain.ObjectKey) (plugin.Downloader, bool) {
 // download client reports them.
 func (s *Service) PayloadFiles(ctx context.Context, d store.StoredDownload) ([]string, error) {
 	dl, ok := s.downloader(d.Downloader)
-	lister, lists := dl.(plugin.FileLister)
+	lister, lists := plugin.As[plugin.FileLister](dl)
 	if !ok || !lists {
 		return nil, ErrNoDownloader
 	}
