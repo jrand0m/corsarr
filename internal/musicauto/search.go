@@ -80,7 +80,7 @@ func (s *Service) queuedEqualOrBetter(ctx context.Context, ref domain.ItemRef, p
 
 // decideOne decides a release for the album of the scope.
 func (s *Service) decideOne(ctx context.Context, sc scope, rel domain.Release) automation.Decided {
-	p, _ := music.ProfileByKey(sc.artist.ProfileKey)
+	p := music.ProfileOrDefault(sc.artist.ProfileKey)
 	t := music.Target{Artist: sc.artist, Album: sc.album, Current: sc.cur, Context: s.context(ctx, sc, p, rel),
 		Released: music.IsReleased(sc.album, s.d.Now())}
 	return automation.NewDecided(rel, music.Decide(t, p, rel))

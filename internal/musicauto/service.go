@@ -102,7 +102,7 @@ func WantedReason(ar domain.Artist, al domain.Album, files []domain.LibraryFile,
 	if len(files) == 0 || len(files) < al.TrackCount {
 		return automation.ReasonMissing
 	}
-	p, _ := music.ProfileByKey(ar.ProfileKey)
+	p := music.ProfileOrDefault(ar.ProfileKey)
 	if cur := music.Current(p, files); cur != nil && automation.BelowCutoff(p, *cur) {
 		return automation.ReasonCutoffUnmet
 	}
@@ -227,7 +227,7 @@ func (x *Index) Len() int {
 func (s *Service) entry(ctx context.Context, ar domain.Artist, al domain.Album) Entry {
 	files, err := s.d.Music.AlbumFiles(ctx, al.ID)
 	s.warn("album files", err, "album", al.ID)
-	p, _ := music.ProfileByKey(ar.ProfileKey)
+	p := music.ProfileOrDefault(ar.ProfileKey)
 	return Entry{Album: al, Artist: music.RefOf(ar), Reason: WantedReason(ar, al, files, s.d.Now()), Files: len(files),
 		Cur: music.Current(p, files)}
 }

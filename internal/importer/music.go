@@ -113,7 +113,7 @@ func (s *Service) loadMusic(ctx context.Context, d store.StoredDownload) (musicI
 	if in.artist, err = s.d.Music.Artist(ctx, in.album.ArtistID); err != nil {
 		return in, err
 	}
-	in.profile, _ = music.ProfileByKey(in.artist.ProfileKey)
+	in.profile = music.ProfileOrDefault(in.artist.ProfileKey)
 	in.items = []domain.EventItem{in.album.EventItem(in.artist.Name)}
 	if g, ok, err := s.d.Queue.GrabOf(ctx, d); err == nil && ok {
 		in.title = g.Release.Title

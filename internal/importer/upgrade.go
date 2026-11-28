@@ -66,7 +66,7 @@ func (s *Service) place(ctx context.Context, d store.StoredDownload, m domain.Mo
 	if dest, _, ok, err := s.d.Library.ImportRecord(ctx, d.ID, video.Path); err == nil && ok {
 		return imported(d.ID, m, items, dest, nil, "imported", "") // already imported: same end state
 	}
-	profile, _ := movies.ProfileByKey(m.ProfileKey)
+	profile := movies.ProfileOrDefault(m.ProfileKey)
 	cand := s.candidate(ctx, d, video, profile)
 	cur, hasCur := s.current(ctx, m)
 	if hasCur {

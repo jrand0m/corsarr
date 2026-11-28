@@ -12,7 +12,6 @@ import (
 
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
-	"github.com/jrand0m/corsarr/internal/movies"
 )
 
 // Id map spaces.
@@ -98,9 +97,9 @@ type profile struct {
 func (s *Service) profiles(kind domain.MediaKind) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		out := []profile{}
-		for _, p := range decide.DefaultProfiles(kind) {
+		for _, p := range decide.ProfilesFor(kind) {
 			spec := p.Spec()
-			out = append(out, profile{ID: s.idOf(r.Context(), spaceProfile, movies.ProfileKey(spec.Name)), Name: spec.Name, UpgradeAllowed: spec.Upgrades})
+			out = append(out, profile{ID: s.idOf(r.Context(), spaceProfile, p.Key()), Name: spec.Name, UpgradeAllowed: spec.Upgrades})
 		}
 		ok(w, out)
 	}

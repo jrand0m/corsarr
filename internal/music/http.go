@@ -8,7 +8,6 @@ import (
 	"github.com/jrand0m/corsarr/internal/api"
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
-	"github.com/jrand0m/corsarr/internal/movies"
 )
 
 // Mount registers the artist and album endpoints (search endpoints are
@@ -207,8 +206,8 @@ type profileView struct {
 // profiles lists the music quality profiles and the metadata profiles.
 func profiles(w http.ResponseWriter, _ *http.Request) {
 	quality := []profileView{}
-	for _, p := range decide.DefaultProfiles(domain.KindMusic) {
-		key := movies.ProfileKey(p.Spec().Name)
+	for _, p := range decide.ProfilesFor(domain.KindMusic) {
+		key := p.Key()
 		quality = append(quality, profileView{Key: key, Name: p.Spec().Name, Cutoff: string(p.Spec().Cutoff), IsDefault: key == DefaultProfileKey})
 	}
 	api.WriteJSON(w, http.StatusOK, map[string]any{"quality": quality, "metadata": domain.MetadataProfiles})

@@ -74,7 +74,7 @@ func (s *Service) loadTV(ctx context.Context, d store.StoredDownload) (tvImport,
 	if in.all, err = s.d.TV.Episodes(ctx, in.series.ID); err != nil {
 		return in, err
 	}
-	in.profile, _ = tv.ProfileByKey(in.series.ProfileKey)
+	in.profile = tv.ProfileOrDefault(in.series.ProfileKey)
 	for _, e := range in.linked {
 		in.items = append(in.items, e.EventItem(in.series.Title))
 	}
