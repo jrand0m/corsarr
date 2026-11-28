@@ -3,7 +3,7 @@ import {
   UnsupportedSchema, configSnippet, formatGoDuration, fromFormValues, parseGoDuration, permissionDiff, problemErrors,
   sectionFor, toFormSchema, toFormValues,
 } from './plugin-schema';
-import type { ModuleField, ModuleSchema } from '../../app/api/types';
+import type { ModuleField, ModuleSchema } from './plugin-types';
 
 const every: ModuleSchema = {
   fields: [

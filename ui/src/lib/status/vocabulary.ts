@@ -156,6 +156,27 @@ export const vocabulary = {
     incompatible: e('Incompatible', 'alert-triangle', 'warn'),
     excluded: e('Excluded', 'minus-circle', 'neutral'),
   },
+  module: {
+    active: { ...e('Active', 'check-circle', 'ok'), hint: 'Loaded and running for the instances that use it.' },
+    failed: e('Failed to load', 'x-circle', 'error'),
+    unloaded: { ...e('Unloaded', 'pause-circle', 'neutral'), hint: 'Installed but not loaded; its instances wait.' },
+    uninstalled: { ...e('Uninstalled', 'minus-circle', 'neutral'), hint: 'Its instances stay in the config and run again once it is installed.' },
+  },
+  offer: {
+    available: e('Available', 'download', 'neutral'),
+    installed: e('Installed', 'check-circle', 'ok'),
+    update: e('Update available', 'arrow-up', 'info'),
+    update_needs_approval: { ...e('Update needs approval', 'shield', 'warn'), hint: 'The new version asks for more permissions, so it waits for you.' },
+    older: e('Newer installed', 'check', 'neutral'),
+    incompatible: e('Incompatible', 'ban', 'warn'),
+  },
+  actionOutcome: {
+    running: e('Running', 'refresh', 'info', true),
+    ok: e('OK', 'check-circle', 'ok'),
+    warn: e('Warning', 'alert-triangle', 'warn'),
+    fail: e('Failed', 'x-circle', 'error'),
+    refused: e('Not shown', 'ban', 'neutral'),
+  },
   kindMode: {
     disabled: { ...e('Disabled', 'minus-circle', 'neutral'), hint: 'Off: this kind is hidden from the library and never searched or downloaded.' },
     shadow: { ...e('Shadow', 'shadow', 'info'), hint: 'Dry run: corsarr searches and decides, and records what it would grab in History, but sends nothing to the download client and changes no files.' },

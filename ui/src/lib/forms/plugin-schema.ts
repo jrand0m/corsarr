@@ -4,7 +4,7 @@
 // it becomes a label, help or option label prop and is never parsed or turned into markup.
 import type { FieldMeta, FormValues, SchemaField, SettingsSchema } from './schema';
 import type { MapEntry } from '../components/molecules/MapField/MapField.svelte';
-import type { ModuleAction, ModuleField, ModulePermissions, ModuleSchema, PermissionDiff, Problem } from '../../app/api/types';
+import type { ModuleAction, ModuleField, ModulePermissions, ModuleSchema, PermissionDiff, Problem } from './plugin-types';
 
 /** The schema holds something the closed set does not: the form shows nothing from it. */
 export class UnsupportedSchema extends Error {
