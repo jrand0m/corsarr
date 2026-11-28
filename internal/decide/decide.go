@@ -2,6 +2,7 @@ package decide
 
 import (
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -117,6 +118,8 @@ func Decide(in Input) domain.Decision {
 		FormatScore: f.score,
 		RankKey:     rankKey(f),
 		Override:    domain.OverrideFor(reasons),
+
+		Desirability: desirabilityOf(f),
 	}
 }
 
@@ -124,30 +127,30 @@ func rulePayloadDangerous(f facts) *domain.Reason {
 	if f.payload.Status != PayloadDangerous {
 		return nil
 	}
-	return reason("payload.dangerous", domain.ReasonSafety, map[string]any{"files": f.payload.Files},
-		"executable or script in payload: %s", strings.Join(f.payload.Files, ", "))
+	return brief(reason("payload.dangerous", domain.ReasonSafety, map[string]any{"files": f.payload.Files},
+		"executable or script in payload: %s", strings.Join(f.payload.Files, ", ")), "Unsafe file inside: %s", firstPlus(f.payload.Files))
 }
 
 func rulePayloadNotVideo(f facts) *domain.Reason {
 	if f.payload.Status != PayloadNotVideo {
 		return nil
 	}
-	return reason("payload.not_video", domain.ReasonSafety, map[string]any{"files": f.payload.Files},
-		"largest file %s is not a video file", f.payload.Files[0])
+	return brief(reason("payload.not_video", domain.ReasonSafety, map[string]any{"files": f.payload.Files},
+		"largest file %s is not a video file", f.payload.Files[0]), "Main file is not a video")
 }
 
 func ruleBlocklisted(f facts) *domain.Reason {
 	if !f.in.Context.Blocklisted {
 		return nil
 	}
-	return reason("blocklist", domain.ReasonPermanent, nil, "release is blocklisted for this item")
+	return brief(reason("blocklist", domain.ReasonPermanent, nil, "release is blocklisted for this item"), "Blocklisted")
 }
 
 func ruleGrabbedBefore(f facts) *domain.Reason {
 	if !f.in.Context.GrabbedBefore {
 		return nil
 	}
-	return reason("history.grabbed", domain.ReasonPermanent, nil, "release was grabbed before for this item")
+	return brief(reason("history.grabbed", domain.ReasonPermanent, nil, "release was grabbed before for this item"), "Grabbed before")
 }
 
 func ruleProfileKind(f facts) *domain.Reason {
@@ -155,32 +158,46 @@ func ruleProfileKind(f facts) *domain.Reason {
 	if pk == f.in.Item.Ref.Kind {
 		return nil
 	}
-	return reason("profile.kind", domain.ReasonPermanent, map[string]any{"profileKind": pk, "itemKind": f.in.Item.Ref.Kind},
-		"profile %q is for %s, item is %s", f.in.Item.Profile.spec.Name, pk, f.in.Item.Ref.Kind)
+	return brief(reason("profile.kind", domain.ReasonPermanent, map[string]any{"profileKind": pk, "itemKind": f.in.Item.Ref.Kind},
+		"profile %q is for %s, item is %s", f.in.Item.Profile.spec.Name, pk, f.in.Item.Ref.Kind), "Profile is for %s", pk)
 }
 
 func ruleDiscImage(f facts) *domain.Reason {
 	if !f.in.Parsed.Disc.Known || f.in.Item.Profile.spec.AllowDiscImage {
 		return nil
 	}
-	return reason("disc_image", domain.ReasonPermanent, map[string]any{"disc": f.in.Parsed.Disc.Value},
-		"disc image (%s) not allowed by profile", f.in.Parsed.Disc.Value)
+	return brief(reason("disc_image", domain.ReasonPermanent, map[string]any{"disc": f.in.Parsed.Disc.Value},
+		"disc image (%s) not allowed by profile", f.in.Parsed.Disc.Value), "Disc image, not allowed")
 }
 
 func ruleThreeD(f facts) *domain.Reason {
 	if !f.in.Parsed.ThreeD || f.in.Item.Profile.spec.Allow3D {
 		return nil
 	}
-	return reason("three_d", domain.ReasonPermanent, nil, "3D release not allowed by profile")
+	return brief(reason("three_d", domain.ReasonPermanent, nil, "3D release not allowed by profile"), "3D, not allowed")
 }
 
 func ruleQualityAllowed(f facts) *domain.Reason {
 	if f.allowed {
 		return nil
 	}
-	return reason("quality.not_allowed", domain.ReasonPermanent,
+	return brief(reason("quality.not_allowed", domain.ReasonPermanent,
 		map[string]any{"quality": f.quality.Name, "confident": f.confident},
-		"quality %s is not allowed by profile %q", f.quality.Name, f.in.Item.Profile.spec.Name)
+		"quality %s is not allowed by profile %q", f.quality.Name, f.in.Item.Profile.spec.Name), "%s is not in the profile", f.quality.Name)
+}
+
+// brief adds the short line a result card shows.
+func brief(r *domain.Reason, format string, args ...any) *domain.Reason {
+	r.Summary = fmt.Sprintf(format, args...)
+	return r
+}
+
+// firstPlus names the first item and how many more there are.
+func firstPlus(xs []string) string {
+	if len(xs) > 1 {
+		return fmt.Sprintf("%s (+%d more)", path.Base(strings.ReplaceAll(xs[0], `\`, "/")), len(xs)-1)
+	}
+	return path.Base(strings.ReplaceAll(xs[0], `\`, "/"))
 }
 
 func gbStr(b int64) string { return fmt.Sprintf("%.1f GB", float64(b)/gb) }
@@ -201,16 +218,16 @@ func ruleSizeMax(f facts) *domain.Reason {
 	if f.in.Release.Size <= f.bounds.Max {
 		return nil
 	}
-	return reason("size.max", domain.ReasonPermanent, sizeValues(f, f.bounds.Max),
-		"size %s exceeds max %s for %s at %s", gbStr(f.in.Release.Size), gbStr(f.bounds.Max), f.quality.Name, runtimeNote(f.bounds))
+	return brief(reason("size.max", domain.ReasonPermanent, sizeValues(f, f.bounds.Max),
+		"size %s exceeds max %s for %s at %s", gbStr(f.in.Release.Size), gbStr(f.bounds.Max), f.quality.Name, runtimeNote(f.bounds)), "Too large: %s, max %s", gbStr(f.in.Release.Size), gbStr(f.bounds.Max))
 }
 
 func ruleSizeMin(f facts) *domain.Reason {
 	if f.in.Release.Size <= 0 || f.in.Release.Size >= f.bounds.Min {
 		return nil
 	}
-	return reason("size.min", domain.ReasonPermanent, sizeValues(f, f.bounds.Min),
-		"size %s is below min %s for %s at %s", gbStr(f.in.Release.Size), gbStr(f.bounds.Min), f.quality.Name, runtimeNote(f.bounds))
+	return brief(reason("size.min", domain.ReasonPermanent, sizeValues(f, f.bounds.Min),
+		"size %s is below min %s for %s at %s", gbStr(f.in.Release.Size), gbStr(f.bounds.Min), f.quality.Name, runtimeNote(f.bounds)), "Too small: %s, min %s", gbStr(f.in.Release.Size), gbStr(f.bounds.Min))
 }
 
 func ruleMaxResolution(f facts) *domain.Reason {
@@ -218,8 +235,8 @@ func ruleMaxResolution(f facts) *domain.Reason {
 	if limit <= 0 || !f.in.Parsed.Resolution.Known || res <= limit {
 		return nil
 	}
-	return reason("search.max_resolution", domain.ReasonPreference, map[string]any{"resolution": res, "cap": limit},
-		"resolution %dp is above this search's cap of %dp", res, limit)
+	return brief(reason("search.max_resolution", domain.ReasonPreference, map[string]any{"resolution": res, "cap": limit},
+		"resolution %dp is above this search's cap of %dp", res, limit), "Above this search's %dp cap", limit)
 }
 
 func ruleMinFormatScore(f facts) *domain.Reason {
@@ -227,8 +244,8 @@ func ruleMinFormatScore(f facts) *domain.Reason {
 	if f.score >= min {
 		return nil
 	}
-	return reason("format.min_score", domain.ReasonPreference, map[string]any{"score": f.score, "min": min, "formats": f.formats},
-		"format score %d is below the profile minimum %d", f.score, min)
+	return brief(reason("format.min_score", domain.ReasonPreference, map[string]any{"score": f.score, "min": min, "formats": f.formats},
+		"format score %d is below the profile minimum %d", f.score, min), "Format score %d, needs %d", f.score, min)
 }
 
 func ruleUpgrade(f facts) *domain.Reason {
@@ -240,9 +257,9 @@ func ruleUpgrade(f facts) *domain.Reason {
 	if ok {
 		return nil
 	}
-	return reason("upgrade.not_better", domain.ReasonPreference,
+	return brief(reason("upgrade.not_better", domain.ReasonPreference,
 		map[string]any{"current": cur.Quality, "currentScore": cur.FormatScore, "candidate": f.quality.ID, "candidateScore": f.score},
-		"not an upgrade: %s", why)
+		"not an upgrade: %s", why), "Not an upgrade")
 }
 
 func candidateOf(f facts) Candidate {
@@ -254,21 +271,21 @@ func ruleMonitored(f facts) *domain.Reason {
 	if f.in.Item.Monitored {
 		return nil
 	}
-	return reason("item.unmonitored", domain.ReasonPreference, nil, "item is not monitored")
+	return brief(reason("item.unmonitored", domain.ReasonPreference, nil, "item is not monitored"), "Not monitored")
 }
 
 func ruleAvailable(f facts) *domain.Reason {
 	if f.in.Item.Available {
 		return nil
 	}
-	return reason("item.not_available", domain.ReasonTemporary, nil, "item is not available yet")
+	return brief(reason("item.not_available", domain.ReasonTemporary, nil, "item is not available yet"), "Not released yet")
 }
 
 func ruleQueued(f facts) *domain.Reason {
 	if !f.in.Context.QueuedEqualOrBetter {
 		return nil
 	}
-	return reason("queue.equal_or_better", domain.ReasonTemporary, nil, "an equal or better release is already queued")
+	return brief(reason("queue.equal_or_better", domain.ReasonTemporary, nil, "an equal or better release is already queued"), "Equal or better already queued")
 }
 
 func ruleTooNew(f facts) *domain.Reason {
@@ -280,8 +297,8 @@ func ruleTooNew(f facts) *domain.Reason {
 	if age >= c.MinAge {
 		return nil
 	}
-	return reason("release.too_new", domain.ReasonTemporary, map[string]any{"age": age.String(), "minAge": c.MinAge.String()},
-		"release is %s old, waiting until %s", age.Round(time.Minute), c.MinAge)
+	return brief(reason("release.too_new", domain.ReasonTemporary, map[string]any{"age": age.String(), "minAge": c.MinAge.String()},
+		"release is %s old, waiting until %s", age.Round(time.Minute), c.MinAge), "Too new: waiting %s", c.MinAge)
 }
 
 func ruleSeeders(f facts) *domain.Reason {
@@ -289,8 +306,8 @@ func ruleSeeders(f facts) *domain.Reason {
 	if r.Protocol != domain.ProtoTorrent || r.Seeders >= min {
 		return nil
 	}
-	return reason("seeders.min", domain.ReasonTemporary, map[string]any{"seeders": r.Seeders, "min": min},
-		"%d seeders, need at least %d", r.Seeders, min)
+	return brief(reason("seeders.min", domain.ReasonTemporary, map[string]any{"seeders": r.Seeders, "min": min},
+		"%d seeders, need at least %d", r.Seeders, min), "Too few seeders: %d, needs %d", r.Seeders, min)
 }
 
 // Rank orders decisions: accepted first, then by rank key (best first), then

@@ -282,3 +282,27 @@ func TestDecide_MaxResolutionIsInclusive(t *testing.T) {
 		}
 	}
 }
+
+func TestEveryReasonHasAShortSummary(t *testing.T) {
+	in := input(t, "The.Quiet.Valley.2019.1080p.3D.BluRay.AVC.ISO", 60*gb)
+	in.Release.Seeders = 0
+	in.Item.Monitored, in.Item.Available = false, false
+	in.Context = Context{Now: now, Blocklisted: true, GrabbedBefore: true, QueuedEqualOrBetter: true, MinAge: 72 * time.Hour, MinSeeders: 3}
+	in.Files = []PayloadFile{{Path: "a/setup.exe"}, {Path: "b.scr"}}
+	d := Decide(in)
+	if len(d.Reasons) < 10 {
+		t.Fatalf("expected many reasons, got %v", ruleIDs(d))
+	}
+	for _, r := range d.Reasons {
+		if r.Summary == "" || len(r.Summary) > 60 {
+			t.Errorf("%s: summary %q", r.RuleID, r.Summary)
+		}
+	}
+	if got := d.Reasons[0].Summary; got != "Unsafe file inside: setup.exe (+1 more)" {
+		t.Errorf("payload summary %q", got)
+	}
+	small := Decide(input(t, "Film.2020.1080p.WEB-DL-GRP", gb/10))
+	if s := small.Reasons[0].Summary; !strings.HasPrefix(s, "Too small: 0.1 GB, min ") {
+		t.Errorf("size summary %q", s)
+	}
+}

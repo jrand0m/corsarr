@@ -2,6 +2,7 @@ package music
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jrand0m/corsarr/internal/decide"
@@ -82,7 +83,7 @@ func mismatch(t Target, m parse.MusicRelease) *domain.Reason {
 	if Matches(t.Artist, t.Album, m) {
 		return nil
 	}
-	return &domain.Reason{RuleID: "music.mismatch", Category: domain.ReasonPermanent,
+	return &domain.Reason{RuleID: "music.mismatch", Category: domain.ReasonPermanent, Summary: "Different album",
 		Message: "release does not match " + t.Artist.Name + " - " + t.Album.Title,
 		Values:  map[string]any{"artist": m.Artist, "album": m.Album, "year": m.Year.Value}}
 }
@@ -91,7 +92,7 @@ func discography(m parse.MusicRelease) *domain.Reason {
 	if !m.Discography {
 		return nil
 	}
-	return &domain.Reason{RuleID: "music.discography", Category: domain.ReasonPreference,
+	return &domain.Reason{RuleID: "music.discography", Category: domain.ReasonPreference, Summary: "Whole discography",
 		Message: "a discography covers more than this album"}
 }
 
@@ -109,7 +110,7 @@ func noAudio(rel domain.Release) *domain.Reason {
 	if len(rel.FileList) == 0 || audioFiles(rel.FileList) > 0 {
 		return nil
 	}
-	return &domain.Reason{RuleID: "payload.no_audio", Category: domain.ReasonSafety,
+	return &domain.Reason{RuleID: "payload.no_audio", Category: domain.ReasonSafety, Summary: "No audio files inside",
 		Message: "the release holds no audio files", Values: map[string]any{"files": rel.FileList}}
 }
 
@@ -120,6 +121,6 @@ func trackCount(al domain.Album, rel domain.Release) *domain.Reason {
 	if n == 0 || al.TrackCount == 0 || (n >= al.TrackCount/2 && n <= al.TrackCount*2) {
 		return nil
 	}
-	return &domain.Reason{RuleID: "music.track_count", Category: domain.ReasonPermanent,
+	return &domain.Reason{RuleID: "music.track_count", Category: domain.ReasonPermanent, Summary: strconv.Itoa(n) + " tracks, album has " + strconv.Itoa(al.TrackCount),
 		Message: "the release has a track count far from the album's", Values: map[string]any{"files": n, "tracks": al.TrackCount}}
 }

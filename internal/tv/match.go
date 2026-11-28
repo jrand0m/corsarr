@@ -181,11 +181,11 @@ func rejected(rel domain.Release, p parse.ParsedRelease, why *domain.Reason) dom
 }
 
 func reasonNoEpisode(s domain.Series, p parse.ParsedRelease) *domain.Reason {
-	return &domain.Reason{RuleID: "tv.no_episode", Category: domain.ReasonPermanent,
+	return &domain.Reason{RuleID: "tv.no_episode", Category: domain.ReasonPermanent, Summary: "Covers no wanted episode",
 		Message: "release covers no episode of " + s.Title, Values: map[string]any{"parsedTitle": p.Title, "episode": p.Episode}}
 }
 
 func reasonMismatch(s domain.Series, p parse.ParsedRelease) *domain.Reason {
-	return &domain.Reason{RuleID: "tv.mismatch", Category: domain.ReasonPermanent,
+	return &domain.Reason{RuleID: "tv.mismatch", Category: domain.ReasonPermanent, Summary: "Different series",
 		Message: "release does not match " + s.Title, Values: map[string]any{"parsedTitle": p.Title, "parsedYear": p.Year.Value}}
 }
