@@ -14,6 +14,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/music"
 	"github.com/jrand0m/corsarr/internal/plugin"
+	"github.com/jrand0m/corsarr/internal/rootfolders"
 )
 
 // albumMeta serves one artist with one two-disc album of 2 + 1 tracks.
@@ -255,5 +256,78 @@ func TestDeletingAnArtistOrSeriesRefRecyclesNothingOfItsOwn(t *testing.T) {
 	}
 	if formatOfExt("x.FLAC") != "flac" || formatOfExt("x.txt") != "" {
 		t.Fatal("formats")
+	}
+}
+
+// singleMeta serves the album as one edition of a single track.
+type singleMeta struct{ albumMeta }
+
+func (singleMeta) Releases(context.Context, string) ([]plugin.ReleaseRecord, error) {
+	return []plugin.ReleaseRecord{{MBID: "r1", Status: "official", Media: []plugin.MediumRecord{
+		{Position: 1, Format: "CD", Tracks: []plugin.TrackRecord{{Position: 1, Title: "Opening"}}}}}}, nil
+}
+
+// noEditionMeta knows the album but none of its editions.
+type noEditionMeta struct{ albumMeta }
+
+func (noEditionMeta) Releases(context.Context, string) ([]plugin.ReleaseRecord, error) { return nil, nil }
+
+func TestMusicImportOfAOneTrackAlbum(t *testing.T) {
+	e, _, _ := musicEnvWith(t, "Example Artist - First Album (2020) [FLAC]", singleMeta{})
+	e.payload(t, map[string]string{"01 Opening.flac": "a"})
+	e.completed(t, 7)
+	if o := e.q.outcomes[0]; o.Status != domain.ImportImported || len(o.Items[0].NewPaths) != 1 {
+		t.Fatalf("%+v", o)
+	}
+}
+
+func TestMusicImportNeedsTheTrackList(t *testing.T) {
+	e, _, _ := musicEnvWith(t, "Example Artist - First Album (2020) [FLAC]", noEditionMeta{})
+	e.payload(t, map[string]string{"01 Opening.flac": "a"})
+	e.completed(t, 7)
+	if o := e.q.outcomes[0]; o.Status != domain.ImportBlocked || !strings.Contains(o.Items[0].Reason, "the track list of First Album is not known yet") {
+		t.Fatalf("%+v", o)
+	}
+	e.q.d.Links = []domain.DownloadLink{{Item: domain.ItemRef{Kind: domain.KindMusic, ID: 999}, Status: domain.LinkPending}}
+	e.completed(t, 8)
+	if o := e.q.outcomes[1]; o.Status != domain.ImportBlocked {
+		t.Fatalf("unknown album: %+v", o)
+	}
+}
+
+func TestMusicQualityComesFromTheGrabbedTitle(t *testing.T) {
+	e, _, _ := musicEnv(t, "Example Artist - First Album (2020) [MP3 320kbps]")
+	e.q.d.Title = "plain rip"
+	e.payload(t, map[string]string{"01 Opening.flac": "a"})
+	e.completed(t, 7)
+	if o := e.q.outcomes[0]; o.Status != domain.ImportImported || o.Items[0].Quality != "MP3-320" {
+		t.Fatalf("grabbed title: %+v", o)
+	}
+	e2, _, _ := musicEnv(t, "Example Artist - First Album (2020) [MP3 320kbps]")
+	e2.q.title = ""
+	e2.payload(t, map[string]string{"01 Opening.flac": "a"})
+	e2.completed(t, 7)
+	if o := e2.q.outcomes[0]; o.Status != domain.ImportImported || o.Items[0].Quality != "MP3-320" {
+		t.Fatalf("no grab: the download's title: %+v", o)
+	}
+}
+
+func TestMusicImportStopsWithoutRoomOrOnAConflict(t *testing.T) {
+	e, _, _ := musicEnv(t, "Example Artist - First Album (2020) [FLAC]")
+	var short []string
+	e.svc.d.NoSpace = func(root string) { short = append(short, root) }
+	free := e.svc.d.FreeSpace
+	e.svc.d.FreeSpace = func(string) int64 { return rootfolders.Reserve - 1 }
+	e.payload(t, map[string]string{"01 Opening.flac": "a"})
+	e.completed(t, 7)
+	root := filepath.Join(filepath.Dir(e.lib), "music")
+	if o := e.q.outcomes[0]; o.Status != domain.ImportBlocked || o.ReasonCode != "no-space" || len(short) != 1 || short[0] != root {
+		t.Fatalf("%+v %v", o, short)
+	}
+	e.svc.d.FreeSpace = free
+	write(t, filepath.Join(root, "Example Artist", "First Album (2020)", "CD 01", "Example Artist - First Album - 01 - Opening.flac"), "foreign")
+	e.completed(t, 8)
+	if o := e.q.outcomes[1]; o.Status != domain.ImportBlocked || o.ReasonCode != "conflict" {
+		t.Fatalf("%+v", o)
 	}
 }
