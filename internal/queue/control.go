@@ -123,7 +123,7 @@ func (s *Service) SetCategory(ctx context.Context, id int64, category string) er
 		is[plugin.Categoriser])
 }
 
-func is[T any](dl plugin.Downloader) bool { _, ok := dl.(T); return ok }
+func is[T any](dl plugin.Downloader) bool { _, ok := plugin.As[T](dl); return ok }
 
 // setCategory is SetCategory for an API body whose category is required.
 func (s *Service) setCategory(ctx context.Context, id int64, category *string) error {

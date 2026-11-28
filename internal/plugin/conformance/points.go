@@ -2,6 +2,7 @@ package conformance
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -10,14 +11,27 @@ import (
 	"github.com/jrand0m/corsarr/internal/plugin"
 )
 
-func ctx(t *testing.T) context.Context {
+// T is the part of testing.T the checks use, so the suite also runs outside
+// go test (corsarr plugin test) with a reporter that records each failure.
+type T interface {
+	Helper()
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+	Cleanup(func())
+}
+
+var _ T = (*testing.T)(nil)
+
+func ctx(t T) context.Context {
 	t.Helper()
 	c, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
 	return c
 }
 
-func must(t *testing.T, what string, err error) {
+func must(t T, what string, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatalf("%s: %v", what, err)
@@ -96,7 +110,7 @@ func indexerFeed(t *testing.T, ix plugin.Indexer, kind domain.MediaKind) {
 
 // Downloader checks the add/list/control/remove lifecycle, including idempotent add,
 // against a stateful fake client.
-func Downloader(t *testing.T, d plugin.Downloader, add plugin.AddRequest) {
+func Downloader(t T, d plugin.Downloader, add plugin.AddRequest) {
 	t.Helper()
 	must(t, "Test", d.Test(ctx(t)))
 	if len(d.Protocols()) == 0 {
@@ -110,13 +124,18 @@ func Downloader(t *testing.T, d plugin.Downloader, add plugin.AddRequest) {
 		t.Fatalf("download %s missing from List", id)
 	}
 	downloaderControl(t, d, id)
-	must(t, "Remove", d.Remove(ctx(t), id, true))
+	DownloaderOptional(t, d, id, add.Category)
+	keeps := false
+	if k, ok := plugin.As[plugin.DataKeeper](d); ok {
+		keeps = k.KeepsDataOnRemove()
+	}
+	must(t, "Remove", d.Remove(ctx(t), id, !keeps))
 	if listed(t, d, add.Category, id) {
 		t.Errorf("download %s still listed after Remove", id)
 	}
 }
 
-func downloaderAdd(t *testing.T, d plugin.Downloader, add plugin.AddRequest) string {
+func downloaderAdd(t T, d plugin.Downloader, add plugin.AddRequest) string {
 	t.Helper()
 	id, err := d.Add(ctx(t), add)
 	must(t, "Add", err)
@@ -129,7 +148,7 @@ func downloaderAdd(t *testing.T, d plugin.Downloader, add plugin.AddRequest) str
 	return id
 }
 
-func downloaderControl(t *testing.T, d plugin.Downloader, id string) {
+func downloaderControl(t T, d plugin.Downloader, id string) {
 	t.Helper()
 	must(t, "Pause", d.Pause(ctx(t), id))
 	must(t, "Resume", d.Resume(ctx(t), id))
@@ -138,7 +157,74 @@ func downloaderControl(t *testing.T, d plugin.Downloader, id string) {
 	}
 }
 
-func listed(t *testing.T, d plugin.Downloader, category, id string) bool {
+// DownloaderOptional exercises every optional capability the downloader
+// offers (as plugin.As sees it); a part a client cannot do may answer
+// ErrUnsupported.
+func DownloaderOptional(t T, d plugin.Downloader, id, category string) {
+	t.Helper()
+	for _, c := range optionalChecks {
+		if err := c.run(ctx(t), d, id, category); err != nil && !errors.Is(err, plugin.ErrUnsupported) {
+			t.Errorf("%s: %v", c.name, err)
+		}
+	}
+}
+
+type optionalCheck struct {
+	name string
+	run  func(ctx context.Context, d plugin.Downloader, id, category string) error
+}
+
+func capCheck[C any](name string, fn func(ctx context.Context, c C, id, category string) error) optionalCheck {
+	return optionalCheck{name, func(ctx context.Context, d plugin.Downloader, id, category string) error {
+		c, ok := plugin.As[C](d)
+		if !ok {
+			return nil
+		}
+		return fn(ctx, c, id, category)
+	}}
+}
+
+var optionalChecks = []optionalCheck{
+	capCheck("Files", func(ctx context.Context, c plugin.FileLister, id, _ string) error {
+		_, err := c.Files(ctx, id)
+		return err
+	}),
+	capCheck("Trackers", func(ctx context.Context, c plugin.TrackerLister, id, _ string) error {
+		_, err := c.Trackers(ctx, id)
+		return err
+	}),
+	capCheck("SetPriorityLevel", func(ctx context.Context, c plugin.PriorityLeveler, id, _ string) error {
+		return c.SetPriorityLevel(ctx, id, plugin.PrioHigh)
+	}),
+	capCheck("Recheck", func(ctx context.Context, c plugin.Rechecker, id, _ string) error { return c.Recheck(ctx, id) }),
+	capCheck("Reannounce", func(ctx context.Context, c plugin.Reannouncer, id, _ string) error { return c.Reannounce(ctx, id) }),
+	capCheck("SetCategory", func(ctx context.Context, c plugin.Categoriser, id, category string) error {
+		return c.SetCategory(ctx, id, category)
+	}),
+	capCheck("Stats", func(ctx context.Context, c plugin.ClientStats, _, _ string) error { _, err := c.Stats(ctx); return err }),
+	capCheck("SpeedLimits", func(ctx context.Context, c plugin.SpeedLimiter, _, _ string) error {
+		l, err := c.SpeedLimits(ctx)
+		if err != nil {
+			return err
+		}
+		return c.SetSpeedLimits(ctx, l)
+	}),
+	capCheck("AltSpeed", func(ctx context.Context, c plugin.SpeedLimiter, _, _ string) error {
+		on, err := c.AltSpeed(ctx)
+		if err != nil {
+			return err
+		}
+		return c.SetAltSpeed(ctx, on)
+	}),
+	capCheck("PauseAll", func(ctx context.Context, c plugin.GlobalPauser, _, _ string) error {
+		if err := c.PauseAll(ctx); err != nil {
+			return err
+		}
+		return c.ResumeAll(ctx)
+	}),
+}
+
+func listed(t T, d plugin.Downloader, category, id string) bool {
 	t.Helper()
 	snaps, err := d.List(ctx(t), []string{category})
 	must(t, "List", err)

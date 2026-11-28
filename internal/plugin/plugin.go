@@ -107,7 +107,7 @@ type Manifest struct {
 	Version      string      `json:"version"`
 	APIVersion   int         `json:"apiVersion"`
 	Name         string      `json:"name"`
-	Delivery     string      `json:"delivery"` // builtin|declarative|external
+	Delivery     string      `json:"delivery"` // builtin|declarative|external|module
 	Capabilities []string    `json:"capabilities,omitempty"`
 	Settings     []Field     `json:"settings"`
 	SetupFlows   []SetupFlow `json:"setupFlows,omitempty"`
@@ -172,6 +172,29 @@ func (r *Registry) Register(reg Registration) error {
 	}
 	r.byID[m.ID] = reg
 	return nil
+}
+
+// Replace swaps the registration of an existing id (a plugin module's new
+// version) or adds it when absent.
+func (r *Registry) Replace(reg Registration) error {
+	m := reg.Manifest
+	if m.ID == "" || m.Kind == "" || reg.New == nil {
+		return fmt.Errorf("plugin registration needs id, kind and factory")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.byID[m.ID] = reg
+	return nil
+}
+
+// Unregister removes a plugin (an unloaded module, a disabled built-in) and
+// returns what was registered.
+func (r *Registry) Unregister(id string) (Registration, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	reg, ok := r.byID[id]
+	delete(r.byID, id)
+	return reg, ok
 }
 
 // MustRegister is Register for init() of built-ins.

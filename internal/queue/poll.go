@@ -245,7 +245,7 @@ func (s *Service) progress(ctx context.Context, d *store.StoredDownload) {
 // and publishes payload.rejected (pre-download) when it is
 // dangerous; the safety action then removes the download.
 func (s *Service) checkPayload(ctx context.Context, dl plugin.Downloader, d *store.StoredDownload) (bool, error) {
-	lister, ok := dl.(plugin.FileLister)
+	lister, ok := plugin.As[plugin.FileLister](dl)
 	if !ok {
 		return false, nil
 	}

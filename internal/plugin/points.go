@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/jrand0m/corsarr/internal/domain"
@@ -297,3 +298,33 @@ type Notifier interface {
 // ReadLimited reads at most n bytes of a body: plugins never load unbounded
 // responses into memory.
 func ReadLimited(r io.Reader, n int64) ([]byte, error) { return io.ReadAll(io.LimitReader(r, n)) }
+
+// DataKeeper is an optional downloader capability flag: a client that cannot
+// delete a download's files with it reports true, Remove with deleteFiles
+// answers ErrUnsupported, and callers remove without data.
+type DataKeeper interface {
+	KeepsDataOnRemove() bool
+}
+
+// ── optional capabilities ────────────────────────────────────────────────────
+
+// CapabilityGate is implemented by plugins whose optional capabilities are
+// known only at run time (plugin modules): such a plugin implements every
+// optional interface of its kind and reports which ones really work.
+type CapabilityGate interface {
+	Supports(capability reflect.Type) bool
+}
+
+// As is the type assertion callers use for optional capabilities: impl must
+// implement T and, when it is a CapabilityGate, support it.
+func As[T any](impl any) (T, bool) {
+	t, ok := impl.(T)
+	if !ok {
+		return t, false
+	}
+	if g, gated := impl.(CapabilityGate); gated && !g.Supports(reflect.TypeFor[T]()) {
+		var zero T
+		return zero, false
+	}
+	return t, true
+}
