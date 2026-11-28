@@ -1,7 +1,6 @@
 package movies
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -20,7 +19,6 @@ func (s *Service) Mount(m api.Mounter) {
 	m.Handle("PUT /api/v1/movies/{id}", s.Enabled(s.update))
 	m.Handle("GET /api/v1/movies/{id}/move", s.Enabled(s.previewMove))
 	m.Handle("DELETE /api/v1/movies/{id}", s.Enabled(s.remove))
-	m.Handle("GET /api/v1/qualityprofiles", qualityProfiles)
 }
 
 // Enabled answers 409 while movies are disabled; the mode
@@ -176,25 +174,4 @@ func (s *Service) remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-type profileView struct {
-	Key       string          `json:"key"`
-	Name      string          `json:"name"`
-	Kind      string          `json:"kind"`
-	Cutoff    string          `json:"cutoff"`
-	Upgrades  bool            `json:"upgrades"`
-	Groups    json.RawMessage `json:"groups"`
-	IsDefault bool            `json:"isDefault"`
-}
-
-func qualityProfiles(w http.ResponseWriter, _ *http.Request) {
-	var out []profileView
-	for _, p := range Profiles() {
-		spec := p.Profile.Spec()
-		groups, _ := json.Marshal(spec.Groups) // plain data
-		out = append(out, profileView{Key: p.Key, Name: spec.Name, Kind: string(spec.Kind), Cutoff: string(spec.Cutoff),
-			Upgrades: spec.Upgrades, Groups: groups, IsDefault: p.Key == DefaultProfileKey})
-	}
-	api.WriteJSON(w, http.StatusOK, map[string]any{"items": out})
 }

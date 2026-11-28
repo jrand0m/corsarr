@@ -186,6 +186,7 @@ type State struct {
 	Stat      func(path string) (size int64, ok bool)
 	Config    ConfigView
 	Overrides map[string]string // "kind:tv" | "rule:*" → mode already chosen
+	Quality   QualityState
 	Now       time.Time
 }
 

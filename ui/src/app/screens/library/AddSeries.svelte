@@ -20,7 +20,7 @@
   import ListField from '../../../lib/components/molecules/ListField/ListField.svelte';
   import PathField from '../../../lib/components/molecules/PathField/PathField.svelte';
   import Dialog from '../../../lib/components/organisms/Dialog/Dialog.svelte';
-  import { app } from '../../context.svelte';
+  import { app, profilesFor, defaultProfile } from '../../context.svelte';
   import { Resource } from '../../resource.svelte';
   import { ApiError, toApiError } from '../../api/client';
   import type { RootFolder, Series, SeriesRecord } from '../../api/types';
@@ -54,7 +54,7 @@
     if (!rootFolder && roots.data) rootFolder = roots.data.find((r) => r.kind === 'tv' && r.accessible)?.path ?? roots.data.find((r) => r.kind === 'tv')?.path ?? '';
   });
   $effect(() => {
-    if (!profileKey && profiles.data?.length) profileKey = (profiles.data.find((p) => p.isDefault) ?? profiles.data[0]).key;
+    if (!profileKey && profiles.data?.length) profileKey = defaultProfile(profiles.data, 'tv')?.key ?? '';
   });
 
   // Look up 350 ms after typing stops; a newer term cancels the older request.
@@ -173,7 +173,7 @@
       <div class="options">
         <PathField label="Root folder" {locations} bind:value={rootFolder} placeholder="/data/media/tv" error={fieldErrors.rootFolder} required
           help={locations.length ? undefined : 'No TV root folder is configured; add one with kind tv to rootFolders in the config.'} />
-        <EnumField label="Quality profile" bind:value={profileKey} error={fieldErrors.profileKey} options={(profiles.data ?? []).map((p) => ({ value: p.key, label: p.name }))} />
+        <EnumField label="Quality profile" bind:value={profileKey} error={fieldErrors.profileKey} options={profilesFor(profiles.data, 'tv').map((p) => ({ value: p.key, label: p.name }))} />
         <EnumField label="Monitor" bind:value={monitor} error={fieldErrors.monitor} options={monitorModes}
           help={monitorModes.find((o) => o.value === monitor)?.description} />
         <EnumField label="New seasons" bind:value={monitorNew} error={fieldErrors.monitorNew}

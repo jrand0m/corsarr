@@ -314,7 +314,7 @@ func TestMusicProfileMapping(t *testing.T) {
 	if m := mapProfile(SrcProfile{Name: "Mine", Cutoff: "MP3-320"}, domain.KindMusic); m.Key != "standard" {
 		t.Fatal(m)
 	}
-	if k := profileKey(nil, 9, domain.KindMusic); k != "standard" {
+	if k := profileKey(Snapshot{}, 9, domain.KindMusic); k != "standard" {
 		t.Fatal(k)
 	}
 }

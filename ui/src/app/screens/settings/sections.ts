@@ -5,6 +5,8 @@ export const settingsSections = (instances?: number): SettingsSection[] => [
   { id: 'general', label: 'General', href: '#/settings/general' },
   { id: 'plugins', label: 'Plugins & integrations', href: '#/settings/plugins', count: instances },
   { id: 'indexers', label: 'Indexers', href: '#/settings/indexers' },
+  { id: 'profiles', label: 'Profiles', href: '#/settings/profiles' },
+  { id: 'custom-formats', label: 'Custom formats', href: '#/settings/custom-formats' },
 ];
 
 /** How to change config for each source (one config source). */

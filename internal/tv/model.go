@@ -24,12 +24,13 @@ const DefaultProfileKey = movies.DefaultProfileKey
 // ProfileByKey finds a TV quality profile; TV ships the same profile names
 // (and so the same keys) as movies, on the TV kind.
 func ProfileByKey(key string) (decide.QualityProfile, bool) {
-	for _, p := range decide.DefaultProfiles(domain.KindTV) {
-		if movies.ProfileKey(p.Spec().Name) == key {
-			return p, true
-		}
-	}
-	return decide.QualityProfile{}, false
+	return decide.Lookup(domain.KindTV, key)
+}
+
+// ProfileOrDefault is the series' profile, or the default one when its key
+// no longer names a profile.
+func ProfileOrDefault(key string) decide.QualityProfile {
+	return movies.OrDefault(domain.KindTV, key, DefaultProfileKey)
 }
 
 // AvailableAt is when an episode can be searched: air time plus runtime;

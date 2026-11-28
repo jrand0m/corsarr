@@ -86,8 +86,11 @@ func closestProfile(p SrcProfile, k domain.MediaKind) string {
 }
 
 // profileKey maps an item's profile id, defaulting when the id is unknown.
-func profileKey(profiles map[int]SrcProfile, id int, k domain.MediaKind) string {
-	if p, ok := profiles[id]; ok {
+func profileKey(snap Snapshot, id int, k domain.MediaKind) string {
+	if key, ok := snap.ProfileKeys[id]; ok {
+		return key
+	}
+	if p, ok := snap.Profiles[id]; ok {
 		return mapProfile(p, k).Key
 	}
 	if k == domain.KindMusic {
@@ -112,7 +115,7 @@ func tagLabels(tags map[int]string, ids []int) []string {
 func seriesTarget(s SrcSeries, snap Snapshot, rw Rewrite) (domain.Series, []domain.Season, []domain.Episode) {
 	ser := domain.Series{TMDBID: s.TMDB, TVDBID: s.TVDB, IMDBID: s.IMDB, Title: s.Title, SortTitle: sortTitle(s.Title), Year: s.Year,
 		Status: s.Status, Network: s.Network, RuntimeMin: s.Runtime, RootFolder: rw.Apply(s.Root), Path: rw.Apply(s.Path),
-		ProfileKey: profileKey(snap.Profiles, s.ProfileID, domain.KindTV), Tags: tagLabels(snap.Tags, s.Tags), Type: s.Type,
+		ProfileKey: profileKey(snap, s.ProfileID, domain.KindTV), Tags: tagLabels(snap.Tags, s.Tags), Type: s.Type,
 		SeasonFolders: s.SeasonFolders, MonitorNew: s.MonitorNew, Monitored: s.Monitored}
 	eps := make([]domain.Episode, 0, len(s.Episodes))
 	for _, e := range s.Episodes {
@@ -174,7 +177,7 @@ func movieTarget(m SrcMovie, snap Snapshot, rw Rewrite) (domain.Movie, []string)
 	}
 	return domain.Movie{TMDBID: m.TMDB, IMDBID: m.IMDB, Title: m.Title, OriginalTitle: m.Original, Year: m.Year, RuntimeMin: m.Runtime,
 		InCinemas: m.InCinemas, Digital: m.Digital, Physical: m.Physical, Monitored: m.Monitored, MinAvailability: avail,
-		ProfileKey: profileKey(snap.Profiles, m.ProfileID, domain.KindMovie), RootFolder: rw.Apply(m.Root), Path: rw.Apply(m.Path)}, notes
+		ProfileKey: profileKey(snap, m.ProfileID, domain.KindMovie), RootFolder: rw.Apply(m.Root), Path: rw.Apply(m.Path)}, notes
 }
 
 // MovieTargetHash fingerprints the settings a migration writes for a movie.

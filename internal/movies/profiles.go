@@ -1,6 +1,7 @@
 package movies
 
 import (
+	"log/slog"
 	"strings"
 
 	"github.com/jrand0m/corsarr/internal/decide"
@@ -26,21 +27,33 @@ func ProfileKey(name string) string {
 	}, strings.ToLower(name))
 }
 
-// Profiles lists the movie quality profiles (shipped defaults in the MVP).
+// Profiles lists the profiles movies may use: built-ins, then custom ones.
 func Profiles() []Profile {
 	var out []Profile
-	for _, p := range decide.DefaultProfiles(domain.KindMovie) {
-		out = append(out, Profile{Key: ProfileKey(p.Spec().Name), Profile: p})
+	for _, p := range decide.ProfilesFor(domain.KindMovie) {
+		out = append(out, Profile{Key: p.Key(), Profile: p})
 	}
 	return out
 }
 
-// ProfileByKey finds a profile.
+// ProfileByKey finds a profile movies may use.
 func ProfileByKey(key string) (decide.QualityProfile, bool) {
-	for _, p := range Profiles() {
-		if p.Key == key {
-			return p.Profile, true
-		}
+	return decide.Lookup(domain.KindMovie, key)
+}
+
+// ProfileOrDefault is the movie's profile, or the default one when its key
+// no longer names a profile (removed from the config file).
+func ProfileOrDefault(key string) decide.QualityProfile {
+	return OrDefault(domain.KindMovie, key, DefaultProfileKey)
+}
+
+// OrDefault looks a kind's profile up and falls back to the kind's default
+// profile, logging the missing key.
+func OrDefault(kind domain.MediaKind, key, fallback string) decide.QualityProfile {
+	if p, ok := decide.Lookup(kind, key); ok {
+		return p
 	}
-	return decide.QualityProfile{}, false
+	slog.Warn("quality profile not found; using the default profile", "kind", kind, "profile", key, "default", fallback)
+	p, _ := decide.Lookup(kind, fallback)
+	return p
 }

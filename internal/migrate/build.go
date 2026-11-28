@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -14,7 +15,9 @@ import (
 // BuildPlan decides one outcome per source object without writing anything.
 // It is pure: the same snapshots, state and options give the same plan.
 func BuildPlan(snaps []Snapshot, st State, o Options) Report {
+	snaps = slices.Clone(snaps)
 	b := newBuilder(snaps, st, o)
+	b.planQuality(snaps)
 	r := Report{Mode: "plan", Started: st.Now}
 	for _, s := range snaps {
 		r.Sources = append(r.Sources, s.Source)
@@ -23,6 +26,7 @@ func BuildPlan(snaps []Snapshot, st State, o Options) Report {
 		}
 	}
 	b.modes()
+	b.qualityEntries()
 	r.Entries = b.entries
 	sortEntries(r.Entries)
 	r.PlanHash = r.hash() // before exclusions: leaving objects out does not change the reviewed plan
@@ -45,6 +49,7 @@ type builder struct {
 	sabHosts  map[string]bool // hosts of SABnzbd-type clients (bridge detection)
 	clientIDs map[string]string
 	indexers  map[string]string
+	quality   *qualityPlan
 	mgrRefs   map[string]string // manager host → the secret reference its routed indexers share
 	named     map[domain.MediaKind]App
 	tokens    []TokenMapping
@@ -100,6 +105,9 @@ func (b *builder) profiles(s Snapshot) {
 	}
 	sort.Ints(ids)
 	for _, id := range ids {
+		if _, planned := s.ProfileKeys[id]; planned {
+			continue // a custom profile: planned across sources
+		}
 		p := s.Profiles[id]
 		m := mapProfile(p, s.Source.App.Kind())
 		out := OutApproximate
@@ -109,9 +117,12 @@ func (b *builder) profiles(s Snapshot) {
 		b.add(Entry{ID: entryID(s.Source.App, "profile", id), Category: CatProfiles, Source: s.Source.App, Name: p.Name,
 			Outcome: out, Reason: m.Reason, Target: "profile:" + m.Key})
 	}
-	for i, f := range s.CustomFormats {
-		b.add(Entry{ID: entryID(s.Source.App, "customformat", i), Category: CatProfiles, Source: s.Source.App, Name: f,
-			Outcome: OutUnsupported, Reason: "custom formats are not supported yet; listed so you can recreate it later"})
+	if mapsCustom(s.Source.App) {
+		return // formats are planned across sources
+	}
+	for _, f := range s.CustomFormats {
+		b.add(Entry{ID: entryID(s.Source.App, "customformat", f.ID), Category: CatProfiles, Source: s.Source.App, Name: f.Name,
+			Outcome: OutUnsupported, Reason: "custom formats from this app are not carried over; listed so you can recreate it"})
 	}
 }
 

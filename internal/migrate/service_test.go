@@ -98,7 +98,7 @@ func TestPlanOutcomesPerObject(t *testing.T) {
 	want := map[string]Outcome{
 		"sonarr:series:1": OutCreate, "sonarr:series:2": OutUnsupported,
 		"sonarr:episodefile:501": OutCreate, "sonarr:episodefile:502": OutFileMissing,
-		"sonarr:profile:1": OutUnchanged, "sonarr:profile:2": OutApproximate, "sonarr:customformat:0": OutUnsupported,
+		"sonarr:profile:1": OutCreate, "sonarr:profile:2": OutApproximate, "sonarr:customformat:1": OutUnsupported,
 		"sonarr:naming:tv": OutManaged, "radarr:naming:movie": OutManaged, "sonarr:downloadclient:1": OutSecretNeeded, "sonarr:downloadclient:2": OutUnsupported,
 		"radarr:downloadclient:1": OutUnchanged, "sonarr:indexer:3": OutSkip,
 		"prowlarr:indexer:4": OutApproximate, "prowlarr:indexer:5": OutSecretNeeded, "prowlarr:indexer:6": OutUnsupported,
@@ -330,6 +330,16 @@ func TestRunsAreListed(t *testing.T) {
 	runs, err := r.svc.Runs(context.Background())
 	if err != nil || len(runs) != 1 || runs[0].Mode != "plan" || runs[0].Status != "done" {
 		t.Fatalf("%+v %v", runs, err)
+	}
+}
+
+func TestApplyWritesCustomProfiles(t *testing.T) {
+	r := newRig(t, "aaaa")
+	r.apply()
+	ctx := context.Background()
+	rows, err := r.st.Quality().List(ctx, store.TableProfiles)
+	if err != nil || len(rows) != 1 || rows[0].Key != "hd1080psonarr" || rows[0].Name != "HD-1080p (Sonarr)" {
+		t.Fatalf("profiles %+v %v", rows, err)
 	}
 }
 

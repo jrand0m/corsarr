@@ -99,18 +99,16 @@ type wProfileItem struct {
 	Allowed bool
 }
 
-type wFormatItem struct {
-	Name  string
-	Score int
-}
-
 type wProfile struct {
-	ID             int
-	Name           string
-	UpgradeAllowed bool
-	Cutoff         int
-	Items          []wProfileItem
-	FormatItems    []wFormatItem
+	ID                    int
+	Name                  string
+	UpgradeAllowed        bool
+	Cutoff                int
+	Items                 []wProfileItem
+	FormatItems           []wFormatScore
+	MinFormatScore        int
+	CutoffFormatScore     int
+	MinUpgradeFormatScore int
 }
 
 type wNamed struct {

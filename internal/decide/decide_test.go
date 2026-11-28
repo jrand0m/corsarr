@@ -172,7 +172,7 @@ func TestDecide_KnownRuntimeAndUsenetSkipsSeeders(t *testing.T) {
 func TestDecide_FormatScoreBelowMinimum(t *testing.T) {
 	bad := mustFormat(t, "Bad group", mustCond(t, "grp", `-BADGRP$`, false, false))
 	spec := profile(t, "HD-1080p").Spec()
-	spec.Formats = []FormatScore{{bad, -1000}}
+	spec.Formats = []FormatScore{{Format: bad, Score: -1000}}
 	p, err := NewQualityProfile(spec)
 	if err != nil {
 		t.Fatal(err)
@@ -304,5 +304,98 @@ func TestEveryReasonHasAShortSummary(t *testing.T) {
 	small := Decide(input(t, "Film.2020.1080p.WEB-DL-GRP", gb/10))
 	if s := small.Reasons[0].Summary; !strings.HasPrefix(s, "Too small: 0.1 GB, min ") {
 		t.Errorf("size summary %q", s)
+	}
+}
+
+func customProfile(t *testing.T, mut func(*ProfileDoc)) QualityProfile {
+	t.Helper()
+	formats := map[string]CustomFormat{}
+	for _, d := range []FormatDoc{
+		{Key: "incompatible", Name: "Audio - Incompatible", Conditions: []ConditionDoc{{Kind: CondAudio, Values: []string{"dts", "truehd"}}}},
+		{Key: "safe", Name: "Audio - Safe", Conditions: []ConditionDoc{{Kind: CondAudio, Values: []string{"aac", "ac3", "eac3"}}}},
+		{Key: "dv5", Name: "No DV", Conditions: []ConditionDoc{{Kind: CondHDR, Values: []string{"dv"}}}},
+	} {
+		f, es := CompileFormat(d)
+		if len(es) > 0 {
+			t.Fatal(es)
+		}
+		formats[d.Key] = f
+	}
+	doc := ProfileDoc{Key: "ps5", Name: "High - PS5", Kinds: []domain.MediaKind{domain.KindTV, domain.KindMovie},
+		Groups: []GroupDoc{{Name: "WEB 1080p", Qualities: []QualityID{"webrip-1080p", "webdl-1080p"}}, {Qualities: []QualityID{"bluray-1080p"}}},
+		Cutoff: "bluray-1080p", Upgrades: true, CutoffFormatScore: 100,
+		Formats: []ScoreDoc{{Format: "incompatible", Score: -10000}, {Format: "safe", Score: 100}, {Format: "dv5", Reject: true}}}
+	if mut != nil {
+		mut(&doc)
+	}
+	p, es := CompileProfile(doc, formats)
+	if len(es) > 0 {
+		t.Fatal(es)
+	}
+	return p
+}
+
+func TestDecide_CustomProfileScoresAndRejects(t *testing.T) {
+	p := customProfile(t, nil)
+	dts := input(t, "Movie.2020.1080p.WEB-DL.DTS-HD.MA.5.1.H.264-GRP", 5*gb)
+	dts.Parsed.Audio = parse.Field[parse.Audio]{Value: parse.AudioDTS, Known: true}
+	dts.Item.Profile = p
+	d := Decide(dts)
+	if got := ruleIDs(d); !reflect.DeepEqual(got, []string{"format.min_score"}) {
+		t.Fatalf("reasons %v", got)
+	}
+	if d.Reasons[0].Message != "format score -10000 is below the profile minimum 0 (Audio - Incompatible -10000)" {
+		t.Fatalf("message %q", d.Reasons[0].Message)
+	}
+	eac3 := input(t, "Movie.2020.1080p.WEB-DL.DDP5.1.H.264-GRP", 5*gb)
+	eac3.Item.Profile = p
+	ok := Decide(eac3)
+	if !ok.Accepted || ok.FormatScore != 100 || len(ok.Formats) != 1 || ok.Formats[0].Key != "safe" {
+		t.Fatalf("eac3 %+v", ok)
+	}
+	dv := input(t, "Movie.2020.1080p.WEB-DL.DV.DDP5.1.H.265-GRP", 5*gb)
+	dv.Item.Profile = p
+	r := Decide(dv)
+	if got := ruleIDs(r); !reflect.DeepEqual(got, []string{"format.reject"}) || r.Reasons[0].Category != domain.ReasonPermanent {
+		t.Fatalf("reject %v", r.Reasons)
+	}
+	tv := eac3
+	tv.Item.Ref.Kind, tv.Release.Size = domain.KindTV, 2*gb
+	if !Decide(tv).Accepted {
+		t.Fatal("a profile serving tv and movies decides for tv")
+	}
+	music := eac3
+	music.Item.Ref.Kind = domain.KindMusic
+	if got := ruleIDs(Decide(music)); !contains(got, "profile.kind") {
+		t.Fatalf("music item on a video profile: %v", got)
+	}
+}
+
+func TestDecide_ProfileSizeLimitsOverrideDefinitions(t *testing.T) {
+	p := customProfile(t, func(d *ProfileDoc) {
+		d.Sizes = []SizeDoc{{Quality: "webdl-1080p", Min: 5, Max: 25}} // 120 min → 0.6–3.0 GB
+	})
+	big := input(t, "Movie.2020.1080p.WEB-DL.DDP5.1.H.264-GRP", 4*gb)
+	big.Item.Profile = p
+	if got := ruleIDs(Decide(big)); !reflect.DeepEqual(got, []string{"size.max"}) {
+		t.Fatalf("reasons %v", got)
+	}
+	big.Release.Size = 2 * gb
+	if d := Decide(big); !d.Accepted || d.Desirability == nil {
+		t.Fatalf("within limits: %v", d.Reasons)
+	}
+}
+
+func TestDecide_UpgradeUntilCutoffFormatScore(t *testing.T) {
+	p := customProfile(t, nil)
+	in := input(t, "Movie.2020.1080p.BluRay.DDP5.1.x264-GRP", 8*gb)
+	in.Item.Profile = p
+	in.Item.Current = &CurrentFile{Quality: "bluray-1080p", FormatScore: 40}
+	if d := Decide(in); !d.Accepted {
+		t.Fatalf("score 100 over 40 below cutoff score: %v", d.Reasons)
+	}
+	in.Item.Current.FormatScore = 100
+	if got := ruleIDs(Decide(in)); !reflect.DeepEqual(got, []string{"upgrade.not_better"}) {
+		t.Fatalf("cutoffs met: %v", got)
 	}
 }

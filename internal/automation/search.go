@@ -70,7 +70,7 @@ func (nopEmitter) Error(string, error) error { return nil }
 
 // decideOne evaluates a release for a movie with the lookups the decision engine needs.
 func (s *Service) decideOne(ctx context.Context, m domain.Movie, rel domain.Release) domain.Decision {
-	profile, _ := movies.ProfileByKey(m.ProfileKey)
+	profile := movies.ProfileOrDefault(m.ProfileKey)
 	e := s.entry(ctx, m)
 	c := decide.Context{Now: s.d.Now(), Payload: s.d.Payload}
 	var err1, err2, err3 error

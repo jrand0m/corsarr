@@ -10,7 +10,6 @@ import (
 	"github.com/jrand0m/corsarr/internal/automation"
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
-	"github.com/jrand0m/corsarr/internal/movies"
 	"github.com/jrand0m/corsarr/internal/store"
 	"github.com/jrand0m/corsarr/internal/tv"
 )
@@ -413,9 +412,9 @@ type kindFilter struct {
 func (s *Service) listProfiles(_ context.Context, in kindFilter) (Result, error) {
 	out := []ProfileView{}
 	for _, k := range s.findKinds(in.Kind) {
-		for _, p := range decide.DefaultProfiles(k) {
+		for _, p := range decide.ProfilesFor(k) {
 			spec := p.Spec()
-			out = append(out, ProfileView{Key: movies.ProfileKey(spec.Name), Name: spec.Name, Kind: k, Upgrades: spec.Upgrades, Cutoff: string(spec.Cutoff)})
+			out = append(out, ProfileView{Key: p.Key(), Name: spec.Name, Kind: k, Upgrades: spec.Upgrades, Cutoff: string(spec.Cutoff)})
 		}
 	}
 	data := ProfilesOut{Profiles: out}

@@ -142,11 +142,23 @@ func (it rssItem) categories() []int {
 	return out
 }
 
+// downloadFlags names the share of the download that counts against the
+// account's ratio.
+var downloadFlags = map[float64]string{0: "freeleech", 0.25: "freeleech75", 0.5: "halfleech", 0.75: "freeleech25"}
+
+// flags reads the indexer flags from the volume factors: how much of the
+// download counts (freeleech and partial freeleech) and double upload credit.
 func (it rssItem) flags() []string {
-	if f, err := strconv.ParseFloat(it.attr("downloadvolumefactor"), 64); err == nil && f == 0 {
-		return []string{"freeleech"}
+	var out []string
+	if f, err := strconv.ParseFloat(it.attr("downloadvolumefactor"), 64); err == nil {
+		if flag, ok := downloadFlags[f]; ok {
+			out = append(out, flag)
+		}
 	}
-	return nil
+	if f, err := strconv.ParseFloat(it.attr("uploadvolumefactor"), 64); err == nil && f >= 2 {
+		out = append(out, "doubleupload")
+	}
+	return out
 }
 
 func (it rssItem) externalIDs() map[string]string {

@@ -30,6 +30,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/musicauto"
 	"github.com/jrand0m/corsarr/internal/notify"
 	"github.com/jrand0m/corsarr/internal/plugin"
+	"github.com/jrand0m/corsarr/internal/profiles"
 	"github.com/jrand0m/corsarr/internal/queue"
 	"github.com/jrand0m/corsarr/internal/rootfolders"
 	"github.com/jrand0m/corsarr/internal/rules"
@@ -90,6 +91,9 @@ type App struct {
 	Legacy *legacy.Service
 	// MCP is the endpoint for AI assistants.
 	MCP *mcp.Service
+	// Profiles is the one writer of custom formats, custom profiles and the
+	// decision catalog.
+	Profiles *profiles.Service
 	// Images is the artwork cache.
 	Images  *imagecache.Cache
 	wg      sync.WaitGroup
@@ -115,6 +119,9 @@ func New(ctx context.Context, d Deps) (*App, error) {
 	}
 	a.modes = modesWith(d.Config(), a.overrides())
 	if err := a.newIndexerAdmin(ctx); err != nil {
+		return nil, err
+	}
+	if err := a.newProfiles(ctx); err != nil {
 		return nil, err
 	}
 	a.applyInstances(d.Config())
@@ -277,6 +284,7 @@ func (a *App) recheckRoots(string) {
 func (a *App) OnConfig(cfg *config.Config) {
 	a.applyInstances(cfg)
 	a.applyRuleModes(cfg)
+	a.Profiles.OnConfig()
 	a.recheckRoots("")
 	a.publishModeChanges(cfg, "config")
 }
@@ -316,7 +324,7 @@ func (a *App) importWaiting(ctx context.Context, k domain.MediaKind) {
 func (a *App) Mounts() []func(api.Mounter) {
 	return []func(api.Mounter){a.Movies.Mount, a.Queue.Mount, a.Automation.Mount, a.Rules.Mount,
 		a.Roots.Mount, a.Notify.Mount, a.TV.Mount, a.TVAuto.Mount, a.IndexerAdmin.Mount, a.Migrate.Mount,
-		a.Music.Mount, a.MusicAuto.Mount, a.Legacy.Mount, a.MCP.Mount, a.Images.Mount}
+		a.Music.Mount, a.MusicAuto.Mount, a.Legacy.Mount, a.MCP.Mount, a.Images.Mount, a.Profiles.Mount}
 }
 
 func typeIn(types ...domain.EventType) func(domain.EventType) bool {
