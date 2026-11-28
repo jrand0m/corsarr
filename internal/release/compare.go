@@ -31,8 +31,8 @@ func (r Result) String() string {
 	return fmt.Sprintf("%-34s DIFFERS: %s", r.Name, r.Detail)
 }
 
-// CompareArchives compares every release file (archives and Linux packages)
-// in two folders by name.
+// CompareArchives compares every release file (archives, Linux packages,
+// plugin modules and the plugin index) in two folders by name.
 func CompareArchives(a, b string) ([]Result, error) {
 	names, err := archiveNames(a, b)
 	if err != nil {
@@ -53,7 +53,7 @@ func archiveNames(dirs ...string) ([]string, error) {
 			return nil, err
 		}
 		for _, e := range entries {
-			if n := e.Name(); isArchive(n) || isPackage(n) {
+			if n := e.Name(); isArchive(n) || isPackage(n) || isPlain(n) {
 				seen[n] = true
 			}
 		}
@@ -77,13 +77,17 @@ func compareArchive(name, a, b string) Result {
 	case bytes.Equal(ab, bb):
 		return Result{Name: name, Same: true}
 	}
-	if isPackage(name) {
-		return Result{Name: name, Detail: fmt.Sprintf("package bytes differ (%d vs %d bytes); diffoscope shows where", len(ab), len(bb))}
+	if isPackage(name) || isPlain(name) {
+		return Result{Name: name, Detail: fmt.Sprintf("bytes differ (%d vs %d bytes); diffoscope shows where", len(ab), len(bb))}
 	}
 	return Result{Name: name, Detail: firstEntryDiff(name, ab, bb)}
 }
 
 func isArchive(n string) bool { return strings.HasSuffix(n, ".tar.gz") || strings.HasSuffix(n, ".zip") }
+
+// isPlain names release files compared as plain bytes: plugin modules and
+// the plugin index.
+func isPlain(n string) bool { return strings.HasSuffix(n, ".wasm") || n == "plugins-index.json" }
 
 func isPackage(n string) bool {
 	return strings.HasSuffix(n, ".deb") || strings.HasSuffix(n, ".rpm") || strings.HasSuffix(n, ".apk")

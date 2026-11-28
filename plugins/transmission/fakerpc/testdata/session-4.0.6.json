@@ -1,0 +1,30 @@
+{
+  "alt-speed-down": 50,
+  "alt-speed-enabled": false,
+  "alt-speed-up": 50,
+  "config-dir": "/config",
+  "default-trackers": "",
+  "download-dir": "/downloads/complete",
+  "download-queue-enabled": true,
+  "download-queue-size": 5,
+  "incomplete-dir": "/downloads/incomplete",
+  "incomplete-dir-enabled": true,
+  "peer-port": 51413,
+  "rpc-version": 17,
+  "rpc-version-minimum": 14,
+  "rpc-version-semver": "5.3.0",
+  "session-id": "",
+  "speed-limit-down": 1000,
+  "speed-limit-down-enabled": true,
+  "speed-limit-up": 100,
+  "speed-limit-up-enabled": false,
+  "units": {
+    "memory-bytes": 1024,
+    "memory-units": ["KiB", "MiB", "GiB", "TiB"],
+    "size-bytes": 1000,
+    "size-units": ["kB", "MB", "GB", "TB"],
+    "speed-bytes": 1000,
+    "speed-units": ["kB/s", "MB/s", "GB/s", "TB/s"]
+  },
+  "version": "4.0.6 (38c164933e)"
+}
