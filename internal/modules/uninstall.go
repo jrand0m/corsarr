@@ -75,10 +75,7 @@ func (m *Manager) manifestBytes(id, version string) ([]byte, error) {
 
 // recordInfo describes an uninstalled module from its kept manifest.
 func (m *Manager) recordInfo(id string) (Info, abi.Manifest, bool) {
-	raw, ok := m.store.Record(id)
-	if !ok {
-		return Info{}, abi.Manifest{}, false
-	}
+	raw, _ := m.store.Record(id) // no record: nil, which does not parse
 	man, err := wasm.ParseManifest(raw)
 	if err != nil || man.ID != id {
 		return Info{}, abi.Manifest{}, false
