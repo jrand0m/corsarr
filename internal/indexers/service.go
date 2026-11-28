@@ -267,7 +267,8 @@ type Row struct {
 	Plugin     string                    `json:"plugin"`
 	PluginName string                    `json:"pluginName"`
 	Delivery   string                    `json:"delivery"`
-	Source     string                    `json:"source"` // config | ui
+	Source     string                    `json:"source"`              // config | ui
+	ManagedBy  *config.Managed           `json:"managedBy,omitempty"` // where the config sets it
 	Enabled    bool                      `json:"enabled"`
 	Running    bool                      `json:"running"`
 	Priority   int                       `json:"priority"`
@@ -314,6 +315,7 @@ func (s *Service) row(inst config.Instance, fromConfig, running bool) Row {
 		Settings: map[string]any{}, SecretsSet: []string{}, Torznab: s.d.BasePath() + "/torznab/" + string(inst.Key) + "/api"}
 	if fromConfig {
 		r.Source = "config"
+		r.ManagedBy = config.ManagedAt(Section+"."+string(inst.Key), inst.Loc)
 	}
 	secret := map[string]bool{}
 	if reg, ok := s.d.Plugins.Get(inst.Type); ok {
