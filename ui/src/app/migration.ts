@@ -2,6 +2,7 @@
 // (request body, outcome badges, progress per source, filtering the plan).
 import type { FilterFacet, FilterState } from '../lib/filters/url';
 import type { SourceProgress } from '../lib/components/molecules/SourceProgressStrip/SourceProgressStrip.svelte';
+import type { ManagedSource } from '../lib/components/atoms/ManagedValue/ManagedValue.svelte';
 
 export type SourceApp = 'sonarr' | 'radarr' | 'lidarr' | 'prowlarr';
 export const sourceApps: { app: SourceApp; label: string; note: string }[] = [
@@ -48,7 +49,11 @@ export interface MigrationRun {
   finishedAt?: string;
 }
 
-export interface KindState { kind: string; mode: 'disabled' | 'shadow' | 'active'; managedByConfig: boolean; snippet?: string }
+export interface KindState {
+  kind: string; mode: 'disabled' | 'shadow' | 'active'; managedByConfig: boolean; snippet?: string;
+  /** The config key and source that set the mode. */
+  managedBy?: ManagedSource;
+}
 
 export interface SourceForm { app: SourceApp; include: boolean; url: string; apiKey: string }
 
@@ -201,3 +206,265 @@ export const writes = (e: PlanEntry): boolean =>
 /** How many entries an apply writes, after the ones left out. */
 export const applyCount = (entries: PlanEntry[] | null | undefined, exclude: string[]): number =>
   (entries ?? []).filter((e) => writes(e) && !exclude.includes(e.id)).length;
+
+// ── Instant checks ──────────────────────────────────────────────────────────
+
+/** What an instant check shows: nothing yet, in flight, an answer, or a failure to ask. */
+export interface CheckView<R> { status: 'idle' | 'checking' | 'done' | 'error'; result?: R; error?: string }
+
+export interface InstantCheckOptions<I, R> {
+  /** Runs one check; it must stop when the signal aborts. */
+  run: (input: I, signal: AbortSignal) => Promise<R>;
+  /** Identity of an input: equal signatures are the same check. */
+  sig: (input: I) => string;
+  /** Whether the input is complete and well-formed enough to check. */
+  ready: (input: I) => boolean;
+  onview: (v: CheckView<R>) => void;
+  /** Pause after the last keystroke before checking, in ms. */
+  delay?: number;
+}
+
+/**
+ * Checks an input as it is entered: at once after a paste, `delay` ms after typing stops, on blur,
+ * and on demand. A changed input cancels the pending and the in-flight check, so only the answer
+ * for the current input shows; the same input is never checked twice at the same time.
+ */
+export class InstantCheck<I, R> {
+  readonly #o: Required<InstantCheckOptions<I, R>>;
+  #timer: ReturnType<typeof setTimeout> | undefined;
+  #ctrl: AbortController | undefined;
+  #inflight: string | undefined;
+  #settled: string | undefined;
+  #shown: string | undefined;
+  #pasted = false;
+
+  constructor(o: InstantCheckOptions<I, R>) {
+    this.#o = { delay: 600, ...o };
+  }
+
+  /** The next input event comes from a paste: check it without waiting. */
+  paste(): void { this.#pasted = true; }
+
+  /** The input changed (typing or paste). */
+  input(i: I): void {
+    this.#clearTimer();
+    const sig = this.#o.sig(i);
+    if (sig !== this.#inflight) this.#abort();
+    if (sig !== this.#shown) this.#view(undefined, { status: 'idle' });
+    const pasted = this.#pasted;
+    this.#pasted = false;
+    if (!this.#o.ready(i)) return;
+    if (pasted) { this.#start(i, false); return; }
+    this.#timer = setTimeout(() => { this.#timer = undefined; this.#start(i, false); }, this.#o.delay);
+  }
+
+  /** The field lost focus: check now unless this input was already checked. */
+  blur(i: I): void {
+    this.#clearTimer();
+    if (this.#o.ready(i)) this.#start(i, false);
+  }
+
+  /** The Test button: check again even if this input was checked before. Returns false when not ready. */
+  test(i: I): boolean {
+    this.#clearTimer();
+    if (!this.#o.ready(i)) return false;
+    this.#start(i, true);
+    return true;
+  }
+
+  /** Stop everything (the field went away). */
+  cancel(): void {
+    this.#clearTimer();
+    this.#abort();
+  }
+
+  #start(i: I, force: boolean): void {
+    const sig = this.#o.sig(i);
+    if (sig === this.#inflight) return;
+    if (!force && sig === this.#settled) return;
+    this.#abort();
+    const ctrl = new AbortController();
+    this.#ctrl = ctrl;
+    this.#inflight = sig;
+    this.#view(sig, { status: 'checking' });
+    this.#o.run(i, ctrl.signal).then(
+      (result) => this.#finish(ctrl, sig, { status: 'done', result }),
+      (e: unknown) => this.#finish(ctrl, sig, { status: 'error', error: e instanceof Error ? e.message : String(e) }),
+    );
+  }
+
+  #finish(ctrl: AbortController, sig: string, v: CheckView<R>): void {
+    if (ctrl.signal.aborted || this.#ctrl !== ctrl) return;
+    this.#ctrl = this.#inflight = undefined;
+    this.#settled = sig;
+    this.#view(sig, v);
+  }
+
+  #view(sig: string | undefined, v: CheckView<R>): void {
+    this.#shown = sig;
+    this.#o.onview(v);
+  }
+
+  #abort(): void {
+    this.#ctrl?.abort();
+    this.#ctrl = this.#inflight = undefined;
+  }
+
+  #clearTimer(): void {
+    if (this.#timer !== undefined) clearTimeout(this.#timer);
+    this.#timer = undefined;
+  }
+}
+
+/** A source address corsarr can try: http(s) with a host. */
+export const addressReady = (url: string): boolean => {
+  try {
+    const u = new URL(url.trim());
+    return (u.protocol === 'http:' || u.protocol === 'https:') && !!u.hostname;
+  } catch {
+    return false;
+  }
+};
+
+/** An API key worth sending: present, no spaces inside. */
+export const keyReady = (key: string): boolean => /^\S+$/.test(key.trim());
+
+export type SourceCheckState = 'reachable' | 'keyNeeded' | 'unauthorised' | 'wrongApp' | 'unsupported' | 'unreachable';
+export interface SourceCheck { app: SourceApp; state: SourceCheckState; name?: string; version?: string; supported: string; reason?: string }
+
+/** One source check: the full check with the key, or the address alone. */
+export interface SourceCheckInput { app: SourceApp; url: string; apiKey: string; withKey: boolean }
+
+export const sourceCheckReady = (i: SourceCheckInput): boolean => addressReady(i.url) && (!i.withKey || keyReady(i.apiKey));
+
+/**
+ * Signature of a source check. The key itself is not kept: only its length and a short
+ * non-reversible digest, enough to tell one typed key from another.
+ */
+export function sourceCheckSig(i: SourceCheckInput): string {
+  let h = 0;
+  const key = i.withKey ? i.apiKey.trim() : '';
+  for (let n = 0; n < key.length; n++) h = (Math.imul(h, 31) + key.charCodeAt(n)) | 0;
+  return `${i.app}|${i.url.trim()}|${i.withKey ? `${key.length}:${(h >>> 0).toString(36)}` : '-'}`;
+}
+
+/** The request body of a source check (the key only when the check uses it). */
+export const sourceCheckBody = (i: SourceCheckInput): Record<string, string> =>
+  ({ app: i.app, url: i.url.trim(), ...(i.withKey ? { apiKey: i.apiKey.trim() } : {}) });
+
+/** Badge value and detail line of a source check. */
+export function sourceCheckView(v: CheckView<SourceCheck>): { value: string; detail?: string } | undefined {
+  if (v.status === 'idle') return undefined;
+  if (v.status === 'checking') return { value: 'checking' };
+  if (v.status === 'error' || !v.result) return { value: 'unreachable', detail: `corsarr could not run the check: ${v.error ?? 'no answer'}` };
+  const r = v.result;
+  const value = ({ keyNeeded: 'key-needed', wrongApp: 'wrong-app' } as Record<string, string>)[r.state] ?? r.state;
+  if (r.state === 'reachable') {
+    const name = r.name || (sourceApps.find((s) => s.app === r.app)?.label ?? r.app);
+    return { value, detail: `${[name, r.version].filter(Boolean).join(' ')} · supported ${r.supported}` };
+  }
+  return { value, detail: r.reason };
+}
+
+// ── Path rewrite checks ─────────────────────────────────────────────────────
+
+export interface Access { exists: boolean; readable: boolean; writable: boolean }
+export interface RootCheck extends Access { source: SourceApp; path: string; matched: boolean; rewritten: string }
+export interface PathCheck { roots: RootCheck[]; target?: Access & { path: string }; sources: { app: SourceApp; reason: string }[] }
+
+/** The path check input: the chosen sources and both prefixes. */
+export interface PathCheckInput { sources: SourceForm[]; fromPrefix: string; toPrefix: string }
+
+const prefixOk = (p: string) => !p.trim() || p.trim().startsWith('/');
+
+/** Chosen sources that hold root folders and are complete enough to read. */
+export const readableSources = (sources: SourceForm[]): SourceForm[] =>
+  sources.filter((s) => s.include && s.app !== 'prowlarr' && addressReady(s.url) && keyReady(s.apiKey));
+
+export const pathCheckReady = (i: PathCheckInput): boolean => prefixOk(i.fromPrefix) && prefixOk(i.toPrefix) && readableSources(i.sources).length > 0;
+
+export const pathCheckSig = (i: PathCheckInput): string =>
+  [i.fromPrefix.trim(), i.toPrefix.trim(), ...readableSources(i.sources).map((s) => sourceCheckSig({ ...s, withKey: true }))].join('\n');
+
+export const pathCheckBody = (i: PathCheckInput): Record<string, unknown> => ({
+  sources: readableSources(i.sources).map((s) => ({ app: s.app, url: s.url.trim(), apiKey: s.apiKey.trim() })),
+  fromPrefix: i.fromPrefix.trim(),
+  toPrefix: i.toPrefix.trim(),
+});
+
+/** One check line: a `check` badge value, a sentence and optional detail rows. */
+export interface CheckLine { value: 'pass' | 'warn' | 'fail'; detail: string; items?: string[] }
+
+/** What the source prefix field shows: which roots it matches and which stay unmapped. */
+export function fromPrefixView(c: PathCheck, fromPrefix: string): CheckLine {
+  if (!fromPrefix.trim()) return { value: 'pass', detail: 'No rewrite: corsarr uses the paths exactly as the sources report them.' };
+  const matched = c.roots.filter((r) => r.matched);
+  const unmapped = c.roots.filter((r) => !r.matched);
+  if (!c.roots.length) return { value: 'warn', detail: 'The sources report no root folders to compare with.' };
+  const items = [...matched.map((r) => `Matches ${r.path}`), ...unmapped.map((r) => `Unmapped ${r.path}`)];
+  if (!matched.length) return { value: 'fail', detail: 'No source root folder starts with this prefix.', items };
+  return {
+    value: unmapped.length ? 'warn' : 'pass',
+    detail: unmapped.length ? `Matches ${matched.length} of ${c.roots.length} root folders.` : `Matches every root folder (${matched.length}).`,
+    items,
+  };
+}
+
+/** What the corsarr prefix field shows: exists and readable decide; writable is information. */
+export function toPrefixView(c: PathCheck, toPrefix: string): CheckLine {
+  if (!toPrefix.trim() || !c.target) return { value: 'pass', detail: 'No rewrite.' };
+  const t = c.target;
+  if (!t.exists) return { value: 'fail', detail: `${t.path} does not exist for corsarr.` };
+  if (!t.readable) return { value: 'fail', detail: `corsarr cannot read ${t.path}.` };
+  return { value: 'pass', detail: t.writable ? 'Exists, readable and writable.' : 'Exists and readable. Read-only, which is fine for shadow mode.' };
+}
+
+/** The sample: each source root, the path it becomes and whether that exists for corsarr. */
+export function sampleView(c: PathCheck): CheckLine {
+  const items = c.roots.map((r) => `${r.path}${r.rewritten !== r.path ? ` → ${r.rewritten}` : ''}: ${!r.exists ? 'missing' : r.readable ? 'found' : 'found, not readable'}`);
+  for (const s of c.sources) items.push(`${sourceApps.find((a) => a.app === s.app)?.label ?? s.app}: ${s.reason}`);
+  if (!c.roots.length) return { value: 'warn', detail: 'No source root folders to check.', items };
+  const missing = c.roots.filter((r) => !r.exists || !r.readable).length;
+  let value: CheckLine['value'] = 'warn';
+  if (missing === c.roots.length) value = 'fail';
+  else if (missing === 0 && !c.sources.length) value = 'pass';
+  return {
+    value,
+    detail: missing ? `${missing} of ${c.roots.length} root folders are missing for corsarr.` : `All ${c.roots.length} root folders exist for corsarr.`,
+    items,
+  };
+}
+
+// ── Config-managed notice ───────────────────────────────────────────────────
+
+/** Categories that only produce a config snippet or a report: nothing reaches the database. */
+const configOnly = new Set(['rootFolders', 'indexers', 'clients', 'naming']);
+const appKind: Partial<Record<SourceApp, string>> = { sonarr: 'tv', radarr: 'movie', lidarr: 'music' };
+const kindLabel: Record<string, string> = { tv: 'TV', movie: 'Movies', music: 'Music', book: 'Books' };
+
+export interface ConfigNotice {
+  /** Media kinds whose mode the config file sets, with the snippet to put there instead. */
+  kinds: { kind: string; label: string; snippet: string }[];
+  /** Chosen categories that only become a config snippet or a report. */
+  snippetOnly: string[];
+  /** Chosen categories that import into the database as usual. */
+  importing: string[];
+  /** Every chosen category is config-only: the run writes nothing to the database. */
+  nothingWritten: boolean;
+}
+
+/** Which chosen categories and kinds the config file controls, and what still imports. */
+export function configNotice(f: RunForm, modes: KindState[]): ConfigNotice {
+  const mode = f.activate ? 'active' : 'shadow';
+  const chosenKinds = new Set(f.sources.filter((s) => s.include).map((s) => appKind[s.app]));
+  const kinds = f.scope.includes('library')
+    ? modes.filter((k) => k.managedByConfig && chosenKinds.has(k.kind))
+      .map((k) => ({ kind: k.kind, label: kindLabel[k.kind] ?? k.kind, snippet: `mediaKinds:\n  ${k.kind}:\n    mode: ${mode}\n` }))
+    : [];
+  const snippetOnly = f.scope.filter((c) => configOnly.has(c)).map(categoryLabel);
+  const importing = f.scope.filter((c) => !configOnly.has(c)).map(categoryLabel);
+  return { kinds, snippetOnly, importing, nothingWritten: f.scope.length > 0 && importing.length === 0 };
+}
+
+/** Whether the notice has anything to say. */
+export const hasConfigNotice = (n: ConfigNotice): boolean => n.kinds.length > 0 || n.snippetOnly.length > 0;

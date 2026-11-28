@@ -7,11 +7,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Button from '../../../lib/components/atoms/Button/Button.svelte';
+  import ManagedValue, { managedFrom } from '../../../lib/components/atoms/ManagedValue/ManagedValue.svelte';
   import StatusBadge from '../../../lib/components/atoms/StatusBadge/StatusBadge.svelte';
   import Timestamp from '../../../lib/components/atoms/Timestamp/Timestamp.svelte';
   import Banner from '../../../lib/components/molecules/Banner/Banner.svelte';
   import BoolField from '../../../lib/components/molecules/BoolField/BoolField.svelte';
   import CodeViewer from '../../../lib/components/molecules/CodeViewer/CodeViewer.svelte';
+  import InlineCheck from '../../../lib/components/molecules/InlineCheck/InlineCheck.svelte';
   import MultiselectField from '../../../lib/components/molecules/MultiselectField/MultiselectField.svelte';
   import NumberField from '../../../lib/components/molecules/NumberField/NumberField.svelte';
   import SecretField from '../../../lib/components/molecules/SecretField/SecretField.svelte';
@@ -29,11 +31,14 @@
   import { refetchOn } from '../../live.svelte';
   import { toApiError } from '../../api/client';
   import {
-    applyCount, categories, categoryLabel, countTiles, defaultForm, filterEntries, outcomeView, planFacets, progressOf, requestBody, scopeProblems, sourceApps,
-    sourceProblems, toggleExclude, writes, type KindState, type MigrationReport, type MigrationRun, type PlanEntry, type StreamLine,
+    applyCount, categories, categoryLabel, configNotice, countTiles, defaultForm, filterEntries, fromPrefixView, hasConfigNotice, InstantCheck, outcomeView,
+    pathCheckBody, pathCheckReady, pathCheckSig, planFacets, progressOf, requestBody, sampleView, scopeProblems, sourceApps, sourceCheckBody,
+    sourceCheckReady, sourceCheckSig, sourceCheckView, sourceProblems, toggleExclude, toPrefixView, writes, type CheckView, type KindState,
+    type MigrationReport, type MigrationRun, type PathCheck, type PathCheckInput, type PlanEntry, type SourceApp, type SourceCheck, type SourceCheckInput,
+    type SourceForm, type StreamLine,
   } from '../../migration';
 
-  const { api, live, toasts } = app();
+  const { api, live, toasts, status } = app();
   const steps = [
     { id: 'sources', label: 'Sources', description: 'corsarr only reads from them; nothing there changes.' },
     { id: 'scope', label: 'What comes across', description: 'Categories, path mapping and how the imported kinds start.' },
@@ -53,11 +58,54 @@
 
   const modes = new Resource((s) => api.list<KindState>('migration/modes', undefined, s));
   const runs = new Resource((s) => api.list<MigrationRun>('migration/runs', undefined, s));
+
+  // Instant checks: each source is tested as its address and key are entered, and the path
+  // rewrite as its prefixes are; a change cancels the check in flight.
+  let sourceViews = $state<Partial<Record<SourceApp, CheckView<SourceCheck>>>>({});
+  let pathView = $state<CheckView<PathCheck>>({ status: 'idle' });
+  const sourceChecks = Object.fromEntries(sourceApps.map(({ app: a }) => [a, new InstantCheck<SourceCheckInput, SourceCheck>({
+    run: (i, signal) => api.request<SourceCheck>('POST', 'migration/check/source', { body: sourceCheckBody(i), signal }),
+    sig: sourceCheckSig, ready: sourceCheckReady, onview: (v) => (sourceViews[a] = v),
+  })])) as Record<SourceApp, InstantCheck<SourceCheckInput, SourceCheck>>;
+  const pathCheck = new InstantCheck<PathCheckInput, PathCheck>({
+    run: (i, signal) => api.request<PathCheck>('POST', 'migration/check/paths', { body: pathCheckBody(i), signal }),
+    sig: pathCheckSig, ready: pathCheckReady, onview: (v) => (pathView = v),
+  });
+  const full = (s: SourceForm): SourceCheckInput => ({ app: s.app, url: s.url, apiKey: s.apiKey, withKey: true });
+  const pathInput = (): PathCheckInput => ({ sources: $state.snapshot(form.sources), fromPrefix: form.fromPrefix, toPrefix: form.toPrefix });
+
+  // Feed each check only when its own input changed, so editing one source leaves the others alone.
+  const seen = new Map<string, string>();
+  $effect(() => {
+    for (const s of form.sources) {
+      const sig = s.include ? sourceCheckSig(full(s)) : '';
+      if (seen.get(s.app) === sig) continue;
+      seen.set(s.app, sig);
+      if (s.include) sourceChecks[s.app].input(full(s));
+      else { sourceChecks[s.app].cancel(); sourceViews[s.app] = { status: 'idle' }; }
+    }
+    const p = pathInput();
+    const psig = pathCheckSig(p);
+    if (seen.get('paths') !== psig) {
+      seen.set('paths', psig);
+      pathCheck.input(p);
+    }
+  });
+
   onMount(() => {
     void modes.load();
     void runs.load();
-    return refetchOn(live, ['migration.run_completed', 'mediakind.mode_changed'], () => { void modes.load(true); void runs.load(true); });
+    if (!status.data) void status.load();
+    const off = refetchOn(live, ['migration.run_completed', 'mediakind.mode_changed'], () => { void modes.load(true); void runs.load(true); });
+    return () => {
+      off();
+      for (const c of Object.values(sourceChecks)) c.cancel();
+      pathCheck.cancel();
+    };
   });
+
+  const notice = $derived(configNotice(form, modes.data ?? []));
+  const pathResult = $derived(pathView.status === 'done' ? pathView.result : undefined);
 
   const chosen = $derived(form.sources.filter((s) => s.include).map((s) => s.app));
   const shown = $derived(plan ? filterEntries(result?.entries ?? plan.entries ?? [], filter) : []);
@@ -103,6 +151,7 @@
   }
 
   function onstep(step: string) {
+    if (step === 'scope') pathCheck.blur(pathInput());
     if (step === 'plan') void stream('plan');
   }
 
@@ -134,6 +183,8 @@
   ];
   const sourceName = (app: string) => sourceApps.find((s) => s.app === app)?.label ?? app;
   const kindName = (k: string) => ({ tv: 'TV', movie: 'Movies', music: 'Music', book: 'Books' } as Record<string, string>)[k] ?? k;
+  const modeName = (m: string) => m.charAt(0).toUpperCase() + m.slice(1);
+  const listed = (items: string[]) => items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 </script>
 
 {#snippet cell(e: PlanEntry, c: Column<PlanEntry>)}
@@ -143,6 +194,38 @@
     {:else}<StatusBadge family={v.family} value={v.value} label={v.label} size="sm" />{/if}
   {:else if c.id === 'name'}<span class="obj"><span class="oname">{e.name}</span><span class="why">{e.reason}</span></span>
   {:else}{c.value?.(e)}{/if}
+{/snippet}
+
+{#snippet pathTest(what: string)}
+  <Button size="sm" variant="secondary" disabled={!pathCheckReady(pathInput())} onclick={() => pathCheck.test(pathInput())}>
+    Test<span class="visually-hidden"> {what}</span>
+  </Button>
+{/snippet}
+
+{#snippet pathLine(view: (c: PathCheck) => { value: string; detail: string; items?: string[] })}
+  {#if pathView.status === 'checking'}<InlineCheck family="check" value="running" label="Checking…" />
+  {:else if pathView.status === 'error'}<InlineCheck family="check" value="fail" detail="corsarr could not run the check: {pathView.error}" />
+  {:else if pathResult}{@const l = view(pathResult)}<InlineCheck family="check" value={l.value} detail={l.detail} items={l.items} />{/if}
+{/snippet}
+
+{#snippet configBanner()}
+  {#if notice.nothingWritten}
+    <Banner tone="warn" icon="alert-triangle" title="This run imports nothing">
+      Every category you chose only becomes a config snippet. Nothing reaches the library until you add the snippet to the config.
+      Choose Library, Profiles, Blocklist, History or In-flight downloads to import something.
+    </Banner>
+  {:else if hasConfigNotice(notice)}
+    <Banner preset="managed" title="Some of this is set by the config">
+      <ul class="notice">
+        {#each notice.kinds as k (k.kind)}
+          <li>{k.label} mode is set by the config and stays as it is. To start it in {form.activate ? 'active' : 'shadow'} mode, put this in the config:
+            <CodeViewer code={k.snippet} language="yaml" maxHeight="6rem" /></li>
+        {/each}
+        {#if notice.snippetOnly.length}<li>{listed(notice.snippetOnly)} only become a config snippet. Nothing changes until you add it to the config.</li>{/if}
+        {#if notice.importing.length}<li>{listed(notice.importing)} import as usual.</li>{/if}
+      </ul>
+    </Banner>
+  {/if}
 {/snippet}
 
 {#snippet table()}
@@ -181,8 +264,23 @@
             <legend class="visually-hidden">{meta.label}</legend>
             <BoolField label="Read from {meta.label}" help={meta.note} bind:checked={s.include} />
             {#if s.include}
-              <UrlField label="{meta.label} address" placeholder="http://{s.app}:port" required bind:value={s.url} />
-              <SecretField label="{meta.label} API key" help="Shown in the app's own settings. Used for this run only, never stored." required bind:value={s.apiKey} />
+              {@const v = sourceCheckView(sourceViews[s.app] ?? { status: 'idle' })}
+              {@const check = sourceChecks[s.app]}
+              <UrlField label="{meta.label} address" placeholder="http://{s.app}:port" required bind:value={s.url}
+                onpaste={() => check.paste()} onblur={() => check.blur(full(s))}>
+                {#snippet action()}
+                  <Button size="sm" variant="secondary" disabled={!sourceCheckReady({ ...full(s), withKey: false })}
+                    onclick={() => check.test({ ...full(s), withKey: false })}>Test<span class="visually-hidden"> the {meta.label} address</span></Button>
+                {/snippet}
+              </UrlField>
+              <SecretField label="{meta.label} API key" help="Shown in the app's own settings. Used for this run only, never stored." required bind:value={s.apiKey}
+                onpaste={() => check.paste()} onblur={() => check.blur(full(s))}>
+                {#snippet action()}
+                  <Button size="sm" variant="secondary" disabled={!sourceCheckReady(full(s))}
+                    onclick={() => check.test(full(s))}>Test<span class="visually-hidden"> the {meta.label} address and key</span></Button>
+                {/snippet}
+                {#snippet result()}<InlineCheck family="sourceCheck" value={v?.value} detail={v?.detail} />{/snippet}
+              </SecretField>
             {/if}
           </fieldset>
         {/each}
@@ -192,12 +290,27 @@
       {#if form.scope.includes('history')}
         <NumberField label="History to keep" unit="days" min={1} max={365} bind:value={form.historyDays} help="Up to 365 days, newest first." />
       {/if}
+      {@render configBanner()}
       <TextField label="Source path prefix" mono placeholder="/data/media" bind:value={form.fromPrefix}
-        help="Only when the media folder is mounted elsewhere for corsarr. Files are checked on disk before they are linked." />
-      <TextField label="corsarr path prefix" mono placeholder="/media" bind:value={form.toPrefix} />
+        help="Only when the media folder is mounted elsewhere for corsarr. Files are checked on disk before they are linked."
+        onpaste={() => pathCheck.paste()} onblur={() => pathCheck.blur(pathInput())}>
+        {#snippet action()}{@render pathTest('the source path prefix')}{/snippet}
+        {#snippet result()}{@render pathLine((c) => fromPrefixView(c, form.fromPrefix))}{/snippet}
+      </TextField>
+      <TextField label="corsarr path prefix" mono placeholder="/media" bind:value={form.toPrefix}
+        onpaste={() => pathCheck.paste()} onblur={() => pathCheck.blur(pathInput())}>
+        {#snippet action()}{@render pathTest('the corsarr path prefix')}{/snippet}
+        {#snippet result()}{@render pathLine((c) => toPrefixView(c, form.toPrefix))}{/snippet}
+      </TextField>
+      <div class="sample" aria-live="polite">
+        <p class="note">{form.fromPrefix.trim() || form.toPrefix.trim() ? 'Source root folders as corsarr will see them:' : 'No rewrite. Source root folders as they are on corsarr\'s side:'}</p>
+        {#if pathCheckReady(pathInput())}{@render pathLine(sampleView)}
+        {:else}<p class="note">Enter a reachable Sonarr, Radarr or Lidarr with its key to check paths.</p>{/if}
+      </div>
       <BoolField label="Start imported kinds active" bind:checked={form.activate}
         help="Off: they start in shadow mode, so you can compare both side by side before corsarr grabs, imports or deletes anything." />
     {:else if step.id === 'plan'}
+      {@render configBanner()}
       <SourceProgressStrip sources={progressOf(chosen, lines)} label="Sources read" unit="objects" />
       {#if running}<p class="note">Reading the sources…</p>{:else}
         <div class="row"><Button variant="secondary" icon="refresh" onclick={() => stream('plan')}>Build the plan again</Button></div>
@@ -224,7 +337,7 @@
       {#each modes.data ?? [] as k (k.kind)}
         <div class="kind">
           <span class="kname">{kindName(k.kind)}</span>
-          {#if k.managedByConfig}<StatusBadge family="migration" value="managed" size="sm" />
+          {#if k.managedByConfig}<ManagedValue value={modeName(k.mode)} managed={k.managedBy ?? managedFrom(`mediaKinds.${k.kind}.mode`, status.data?.configSource)} />
           {:else if k.mode === 'disabled'}<StatusBadge family="kindMode" value="disabled" size="sm" />
           {:else}
             <SegmentedControl label="{kindName(k.kind)} mode" size="sm" value={k.mode}
@@ -259,4 +372,6 @@
   .kind { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
   .kname { color: var(--ink); }
   .run { font-size: var(--text-sm); display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+  .sample { display: grid; gap: var(--space-1-5); }
+  .notice { display: grid; gap: var(--space-2); margin: 0; padding-left: var(--space-4); }
 </style>
