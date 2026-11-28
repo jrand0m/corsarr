@@ -125,12 +125,15 @@ describe('validateField', () => {
     expect(validateField(f('duration', range), 20)).toBe('Use 10 or less');
     expect(validateField(f('size', range), 0.5)).toBe('Use 1 or more');
     expect(validateField(f('number'), 1e9)).toBeUndefined();
+    expect(validateField(f('number', range), 1)).toBeUndefined();
+    expect(validateField(f('number', range), 10)).toBeUndefined();
   });
 
   it('checks URL schemes, regex syntax and duplicate map keys', () => {
     expect(validateField(f('url', { validation: { schemes: ['http', 'https'] } }), 'ftp://box')).toMatch(/http/);
     expect(validateField(f('url'), 'http://box:8080')).toBeUndefined();
     expect(validateField(f('regex'), '(')).toMatch(/^This pattern does not compile: /);
+    expect(validateField(f('regex'), '(')).toContain('/(/: ');
     expect(validateField(f('regex'), 'a+')).toBeUndefined();
     expect(validateField(f('map'), [{ key: 'a', value: '1' }, { key: 'a', value: '2' }])).toBe('Each key can appear only once');
     expect(validateField(f('map'), [{ key: 'a', value: '1' }, { key: 'b', value: '2' }])).toBeUndefined();
@@ -149,5 +152,6 @@ describe('validateField', () => {
     expect(validateField(f('path', { validation: { pattern: '^/' } }), 'data')).toBe('Port is not in the expected form');
     expect(validateField(f('text', host), 'abc')).toBeUndefined();
     expect(validateField(f('text'), 'anything')).toBeUndefined();
+    expect(validateField(f('select', host), 5)).toBeUndefined();
   });
 });

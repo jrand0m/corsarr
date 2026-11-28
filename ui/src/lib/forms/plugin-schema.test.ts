@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   UnsupportedSchema, configSnippet, formatGoDuration, fromFormValues, parseGoDuration, permissionDiff, problemErrors,
-  sectionFor, toFormSchema, toFormValues,
+  instanceMeta, sectionFor, toFormSchema, toFormValues,
 } from './plugin-schema';
-import type { ModuleField, ModuleSchema } from './plugin-types';
+import type { ModuleField, ModulePermissions, ModuleSchema } from './plugin-types';
 
 const every: ModuleSchema = {
   fields: [
@@ -119,6 +119,12 @@ describe('permissionDiff', () => {
     expect(permissionDiff(undefined, { http: {} })).toEqual({ addedHosts: [], removedHosts: [], addedSecrets: [], removedSecrets: [] });
     expect(permissionDiff(undefined, { http: { hosts: ['a.example'] } }).addedHosts).toEqual(['a.example']);
   });
+  it('reads a set without an http part as no hosts', () => {
+    // Permissions decoded from a hand-written manifest may leave the http part out.
+    const noHttp = (p: object) => p as ModulePermissions;
+    expect(permissionDiff(noHttp({ secrets: ['k'] }), noHttp({ secrets: ['k'] }))).toEqual({ addedHosts: [], removedHosts: [], addedSecrets: [], removedSecrets: [] });
+    expect(permissionDiff({ http: { hosts: ['a.example'] } }, noHttp({})).removedHosts).toEqual(['a.example']);
+  });
 });
 
 describe('configSnippet', () => {
@@ -226,6 +232,32 @@ describe('toFormSchema edge cases', () => {
     expect(() => toFormSchema({ fields: [a], actions: [{ id: 'Bad id', label: 'Go' }] })).toThrow(/action id/);
     expect(() => toFormSchema({ fields: [a], groups: Array.from({ length: 11 }, () => ({ title: 'G', fields: [] })) })).toThrow(/groups/);
     expect(() => toFormSchema({ fields: {} as never })).toThrow(/field list/);
+  });
+
+  it('accepts exactly the most fields, groups and actions it allows', () => {
+    const fields: ModuleField[] = Array.from({ length: 50 }, (_, i) => ({ key: `f${i}`, type: 'bool', label: `F${i}` }));
+    const groups = Array.from({ length: 10 }, (_, i) => ({ title: `G${i}`, fields: [`f${i}`] }));
+    const actions = Array.from({ length: 3 }, (_, i) => ({ id: `a${i}`, label: `A${i}` }));
+    const r = toFormSchema({ fields, groups, actions });
+    expect([r.schema.fields.length, r.schema.groups?.length, r.actions.length]).toEqual([50, 10, 3]);
+    expect(() => toFormSchema({ fields: [...fields, { key: 'extra', type: 'bool', label: 'X' }] })).toThrow(/more than 50 fields/);
+    expect(() => toFormSchema({ fields, actions: [...actions, { id: 'more', label: 'M' }] })).toThrow(/more than 3 actions/);
+  });
+
+  it('keeps a zero duration default', () => {
+    const r = toFormSchema({ fields: [{ key: 'wait', type: 'duration', label: 'Wait', default: '0s' }] });
+    expect(r.schema.fields[0].default).toBe(0);
+  });
+});
+
+describe('instanceMeta', () => {
+  it('shows a secret as set by its reference, and locks other fields even with a reference of the same name', () => {
+    const fields: ModuleField[] = [{ key: 'apiKey', type: 'secret', label: 'K' }, { key: 'url', type: 'string', label: 'U' }, { key: 'token', type: 'secret', label: 'T' }];
+    expect(instanceMeta(fields, 'downloadClients', 'up', { apikey: 'REF_A', url: 'REF_U' })).toEqual({
+      apiKey: { managed: 'downloadClients.up.apiKey', isSet: true, ref: '${env:REF_A}' },
+      url: { managed: 'downloadClients.up.url' },
+      token: { managed: 'downloadClients.up.token' },
+    });
   });
 });
 

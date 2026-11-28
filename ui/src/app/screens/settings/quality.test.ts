@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ConditionKindInfo, ProfileRow, QualityChoice } from '../../api/types';
 import {
-  conditionSummary, cutoffOptions, formatSummary, groupsFromItems, kindsLabel, ladderItems, profileDoc, refusal, repairCutoff,
+  conditionSummary, cutoffOptions, formatSummary, groupsFromItems, kindsLabel, ladderItems, originLabel, profileDoc, refusal, repairCutoff,
 } from './quality';
 
 const ladder: QualityChoice[] = [
@@ -42,6 +42,12 @@ describe('profile ladder', () => {
     expect(repairCutoff('webdl-720p', groups)).toBe('webdl-720p');
     expect(repairCutoff('x', [])).toBe('');
   });
+
+  it('names a cutoff with its group only for a named group of several qualities', () => {
+    const label = (g: { name?: string; qualities: string[] }) => cutoffOptions([g], ladder).map((o) => o.label);
+    expect(label({ qualities: ['webrip-1080p', 'webdl-1080p'] })).toEqual(['WEBRip-1080p', 'WEBDL-1080p']);
+    expect(label({ name: 'Solo', qualities: ['webdl-720p'] })).toEqual(['WEBDL-720p']);
+  });
 });
 
 describe('summaries and refusals', () => {
@@ -53,12 +59,20 @@ describe('summaries and refusals', () => {
     expect(formatSummary({ key: 'f', name: 'F', conditions: [{ kind: 'title', pattern: 'a' }, { kind: 'title', pattern: 'b' }, { kind: 'title', pattern: 'c' }] }, kinds))
       .toBe('Release title does match a; Release title does match b (+1 more)');
     expect(kindsLabel(['tv', 'movie'])).toBe('TV and movies');
+    expect(formatSummary({ key: 'f', name: 'F', conditions: [{ kind: 'title', pattern: 'a' }, { kind: 'title', pattern: 'b' }] }, kinds))
+      .toBe('Release title does match a; Release title does match b');
   });
 
   it('routes server errors to conditions and fields', () => {
     const r = refusal({ fields: [{ field: 'conditions.1.pattern', message: 'bad' }, { field: 'groups.0.qualities.1', message: 'twice' }, { field: 'name', message: 'empty' }] });
     expect(r.conditions[1]).toEqual({ pattern: 'bad' });
     expect(r.fields).toEqual({ groups: 'twice', name: 'empty' });
+  });
+
+  it('names where a row comes from', () => {
+    expect(originLabel({ origin: 'builtin' })).toBe('Built-in');
+    expect(originLabel({ origin: 'config' })).toBe('Config file');
+    expect(originLabel({ origin: 'database' })).toBe('Added here');
   });
 
   it('strips read-only row facts from a profile', () => {

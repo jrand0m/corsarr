@@ -137,7 +137,7 @@ describe('sorting and automation outcome', () => {
 
   it('leaves lostTo empty when the verdict has no word on the release', () => {
     const b = decided('b', true, '1');
-    const lost = (verdict: unknown) => toPanel(b, 0, 1, { verdict: verdict as AutomationVerdict }).automation.lostTo;
+    const lost = (verdict: unknown) => toPanel(b, 0, 1, { verdict: verdict as AutomationVerdict }).automation?.lostTo;
     expect(lost({ mode: 'active', pick: 'a', outcomes: null })).toBeUndefined();
     expect(lost({ mode: 'active', pick: 'a', outcomes: { a: { status: 'grab' } } })).toBeUndefined();
     expect(lost({ mode: 'active', pick: 'b', outcomes: { b: { status: 'grab' } } })).toBeUndefined();
