@@ -121,7 +121,7 @@ lint target="all":
     set -euo pipefail
     case "{{target}}" in
       go)      test -z "$({{x}} gofmt -l cmd internal sdk plugins)" || { {{x}} gofmt -l cmd internal sdk plugins; exit 1; }; {{x}} go vet ./... ;;
-      ui)      cd ui && {{x}} npm run check ;;
+      ui)      scripts/lint-ui-html.sh ui/src; cd ui && {{x}} npm run check ;;
       docs)
         tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
         just docs config "$tmp"
