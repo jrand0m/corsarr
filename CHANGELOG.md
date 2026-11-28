@@ -2,6 +2,10 @@
 
 Short notes per release. Each release's assets, checksums and how to verify them are on its GitHub release page.
 
+## Unreleased
+
+- Rate limits are learned per service (announced limits first, then where it throttles) and requests are kept below them; observed limits are re-checked gently about once a week while there is demand. See them in System › Health; settings under `server.rateLearning`.
+
 ## v0.5.3 — 2026-11-27
 
 - Migration wizard: sources and path rewrites are checked as you type, each field has a Test button, and config-managed parts are flagged before the run.
