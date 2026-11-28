@@ -36,7 +36,7 @@ import (
 // A running server picks up load, unload and rollback within seconds.
 
 func init() {
-	for _, f := range []string{"settings", "sha256"} {
+	for _, f := range []string{"settings", "sha256", "start-budget"} {
 		commandFlags[f] = true
 	}
 }
@@ -369,16 +369,25 @@ func check(name string, took time.Duration, err error) conformance.Check {
 // startBudget is the longest a module instance may take to start.
 const startBudget = 200 * time.Millisecond
 
+// startBudget reads --start-budget (for slow or busy machines), else the default.
+func (c cli) startBudget() time.Duration {
+	if d, err := time.ParseDuration(c.flags["start-budget"]); err == nil && d > 0 {
+		return d
+	}
+	return startBudget
+}
+
 func (c cli) describe(mod *wasm.Module) []conformance.Check {
 	m := mod.Manifest
 	fmt.Fprintf(c.stdout, "%s %s (%s), sha256 %s\n", m.ID, m.Version, mod.Kind(), mod.SHA256)
 	printPermissions(c.stdout, m)
 	fmt.Fprintf(c.stdout, "operations: %s\n", strings.Join(mod.Caps.Ops, ", "))
+	budget := c.startBudget()
 	var err error
-	if mod.StartTime > startBudget {
-		err = fmt.Errorf("started in %s; the budget is %s", mod.StartTime.Round(time.Millisecond), startBudget)
+	if mod.StartTime > budget {
+		err = fmt.Errorf("started in %s; the budget is %s", mod.StartTime.Round(time.Millisecond), budget)
 	}
-	return []conformance.Check{check("start within "+startBudget.String(), mod.StartTime, err)}
+	return []conformance.Check{check("start within "+budget.String(), mod.StartTime, err)}
 }
 
 func (c cli) liveChecks(ctx context.Context, mod *wasm.Module) []conformance.Check {

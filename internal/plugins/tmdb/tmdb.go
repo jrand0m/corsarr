@@ -23,6 +23,7 @@ const (
 	defaultBase   = "https://api.themoviedb.org/3"
 	defaultImages = "https://image.tmdb.org/t/p/"
 	posterSize    = "w500"
+	backdropSize  = "w1280"
 	maxJSON       = 4 << 20
 	minInterval   = 50 * time.Millisecond // 20 requests per second, well under TMDB's limit
 	maxRetryAfter = 10 * time.Second

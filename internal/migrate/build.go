@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -14,7 +15,9 @@ import (
 // BuildPlan decides one outcome per source object without writing anything.
 // It is pure: the same snapshots, state and options give the same plan.
 func BuildPlan(snaps []Snapshot, st State, o Options) Report {
+	snaps = slices.Clone(snaps)
 	b := newBuilder(snaps, st, o)
+	b.planQuality(snaps)
 	r := Report{Mode: "plan", Started: st.Now}
 	for _, s := range snaps {
 		r.Sources = append(r.Sources, s.Source)
@@ -23,12 +26,14 @@ func BuildPlan(snaps []Snapshot, st State, o Options) Report {
 		}
 	}
 	b.modes()
+	b.qualityEntries()
 	r.Entries = b.entries
 	sortEntries(r.Entries)
 	r.PlanHash = r.hash() // before exclusions: leaving objects out does not change the reviewed plan
 	b.exclude(r.Entries)
 	r.count()
 	r.Config, r.Env = b.cfg.render()
+	r.Naming = b.tokens
 	r.Finished = st.Now
 	return r
 }
@@ -44,6 +49,10 @@ type builder struct {
 	sabHosts  map[string]bool // hosts of SABnzbd-type clients (bridge detection)
 	clientIDs map[string]string
 	indexers  map[string]string
+	quality   *qualityPlan
+	mgrRefs   map[string]string // manager host → the secret reference its routed indexers share
+	named     map[domain.MediaKind]App
+	tokens    []TokenMapping
 }
 
 func newBuilder(snaps []Snapshot, st State, o Options) *builder {
@@ -51,7 +60,8 @@ func newBuilder(snaps []Snapshot, st State, o Options) *builder {
 		o.Scope = DefaultScope()
 	}
 	b := &builder{st: st, o: o, kinds: map[domain.MediaKind]App{}, seen: map[store.ProvenanceKey]bool{}, cfg: newConfigDoc(),
-		managers: map[string]bool{}, sabHosts: map[string]bool{}, clientIDs: map[string]string{}, indexers: map[string]string{}}
+		managers: map[string]bool{}, sabHosts: map[string]bool{}, clientIDs: map[string]string{}, indexers: map[string]string{},
+		mgrRefs: map[string]string{}, named: map[domain.MediaKind]App{}}
 	for _, s := range snaps {
 		if s.Source.App == Prowlarr {
 			b.managers[hostOf(s.Source.URL)] = true
@@ -95,6 +105,9 @@ func (b *builder) profiles(s Snapshot) {
 	}
 	sort.Ints(ids)
 	for _, id := range ids {
+		if _, planned := s.ProfileKeys[id]; planned {
+			continue // a custom profile: planned across sources
+		}
 		p := s.Profiles[id]
 		m := mapProfile(p, s.Source.App.Kind())
 		out := OutApproximate
@@ -104,9 +117,12 @@ func (b *builder) profiles(s Snapshot) {
 		b.add(Entry{ID: entryID(s.Source.App, "profile", id), Category: CatProfiles, Source: s.Source.App, Name: p.Name,
 			Outcome: out, Reason: m.Reason, Target: "profile:" + m.Key})
 	}
-	for i, f := range s.CustomFormats {
-		b.add(Entry{ID: entryID(s.Source.App, "customformat", i), Category: CatProfiles, Source: s.Source.App, Name: f,
-			Outcome: OutUnsupported, Reason: "custom formats are not supported yet; listed so you can recreate it later"})
+	if mapsCustom(s.Source.App) {
+		return // formats are planned across sources
+	}
+	for _, f := range s.CustomFormats {
+		b.add(Entry{ID: entryID(s.Source.App, "customformat", f.ID), Category: CatProfiles, Source: s.Source.App, Name: f.Name,
+			Outcome: OutUnsupported, Reason: "custom formats from this app are not carried over; listed so you can recreate it"})
 	}
 }
 
@@ -142,12 +158,26 @@ func (b *builder) roots(s Snapshot) {
 }
 
 func (b *builder) naming(s Snapshot) {
-	if s.Rename == nil {
+	k := s.Source.App.Kind()
+	if s.Naming == nil || namingFields[k] == nil {
 		return
 	}
-	state := map[bool]string{true: "on", false: "off"}[*s.Rename]
-	b.add(Entry{ID: entryID(s.Source.App, "naming", "rename"), Category: CatNaming, Source: s.Source.App, Name: "Rename files",
-		Outcome: OutUnsupported, Reason: "renaming was " + state + " in the source; corsarr names files on import with its own format and has no switch for it yet"})
+	e := Entry{ID: entryID(s.Source.App, "naming", k), Category: CatNaming, Source: s.Source.App, Name: kindNames[k] + " naming",
+		Target: "naming." + string(k)}
+	first, taken := b.named[k]
+	switch {
+	case b.st.Config.Naming[string(k)]:
+		e.Outcome, e.Reason = OutManaged, "already in your config file"
+	case taken:
+		e.Outcome, e.Reason = OutSkip, "naming for "+kindNames[k]+" already taken from "+string(first)
+	default:
+		b.named[k] = s.Source.App
+		m := mapNaming(s.Source.App, *s.Naming)
+		b.cfg.naming(k, m.Scheme)
+		b.tokens = append(b.tokens, m.Tokens...)
+		e.Outcome, e.Reason = OutManaged, namingSummary(m)
+	}
+	b.add(e)
 }
 
 // ── download clients and indexers ───────────────────────────────────────────
@@ -209,10 +239,9 @@ func (b *builder) indexer(s Snapshot, ix SrcIndexer) (Outcome, string) {
 	case ix.Protocol == "usenet":
 		return b.usenet(ix)
 	case strings.EqualFold(ix.Impl, "torznab") && ix.BaseURL != "":
-		return b.torznab(ix, ix.BaseURL, ix.APIPath, ix.KeyMasked, "")
+		return b.torznab(ix, ix.BaseURL, ix.APIPath, ix.KeyMasked)
 	case s.Source.App == Prowlarr:
-		proxy := strings.TrimRight(s.Source.URL, "/") + "/" + fmt.Sprint(ix.ID)
-		return b.torznab(ix, proxy, "/api", true, "searches go through the indexer manager's Torznab feed for this indexer until a built-in definition replaces it; ")
+		return b.routed(s, ix)
 	}
 	return OutUnsupported, "no " + ix.Impl + " indexer plugin yet"
 }
@@ -230,22 +259,64 @@ func (b *builder) usenet(ix SrcIndexer) (Outcome, string) {
 	return OutUnsupported, "no usenet indexer plugin yet"
 }
 
-func (b *builder) torznab(ix SrcIndexer, u, apiPath string, needKey bool, note string) (Outcome, string) {
-	if b.st.Config.Indexers[u] {
-		return OutManaged, "already in your config file"
+func (b *builder) torznab(ix SrcIndexer, u, apiPath string, needKey bool) (Outcome, string) {
+	if out, why, done := b.seenIndexer(ix, u); done {
+		return out, why
 	}
-	if first, ok := b.indexers[u]; ok {
-		return OutUnchanged, "same indexer as " + first
-	}
-	b.indexers[u] = ix.Name
-	env := b.cfg.indexer(u, apiPath, ix, needKey)
-	switch {
-	case note != "":
-		return OutApproximate, note + "set " + env + " to the manager's API key"
-	case needKey:
+	env := b.cfg.indexerEnv(ix)
+	b.cfg.indexer(u, apiPath, ix, ref(env), ix.Enabled && !needKey)
+	if needKey {
 		return OutSecretNeeded, "the source hides the API key; set " + env + " and enable the instance (it starts disabled)"
 	}
 	return OutManaged, "add it to your config file (see the snippet)"
+}
+
+// routed maps an indexer the manager serves through its own Torznab feed;
+// every such feed uses the manager's one API key.
+func (b *builder) routed(s Snapshot, ix SrcIndexer) (Outcome, string) {
+	u := strings.TrimRight(s.Source.URL, "/") + "/" + fmt.Sprint(ix.ID)
+	if out, why, done := b.seenIndexer(ix, u); done {
+		return out, why
+	}
+	secret, existing := b.managerRef(s)
+	b.cfg.indexer(u, "/api", ix, secret, ix.Enabled)
+	note := "searches go through the indexer manager's Torznab feed for this indexer until a built-in definition replaces it; "
+	if existing {
+		return OutApproximate, note + "it uses the manager's API key your config file already references (" + secret + ")"
+	}
+	return OutApproximate, note + "set " + strings.TrimSuffix(strings.TrimPrefix(secret, "${env:"), "}") + " to the manager's API key"
+}
+
+// seenIndexer settles an indexer the config file or this run already has.
+func (b *builder) seenIndexer(ix SrcIndexer, u string) (Outcome, string, bool) {
+	if b.st.Config.Indexers[u] {
+		return OutManaged, "already in your config file", true
+	}
+	if first, ok := b.indexers[u]; ok {
+		return OutUnchanged, "same indexer as " + first, true
+	}
+	b.indexers[u] = ix.Name
+	return "", "", false
+}
+
+// managerRef is the secret reference shared by every indexer one manager
+// routes: the one the config file already uses for that manager's host, else
+// one new variable per manager. existing reports the former.
+func (b *builder) managerRef(s Snapshot) (secret string, existing bool) {
+	host := strings.ToLower(hostOf(s.Source.URL))
+	if r, ok := b.st.Config.ManagerRefs[host]; ok {
+		return r, true
+	}
+	if r, ok := b.mgrRefs[host]; ok {
+		return r, false
+	}
+	name := "CORSARR_SECRET_PROWLARR_APIKEY"
+	if len(b.mgrRefs) > 0 {
+		name = "CORSARR_SECRET_PROWLARR_" + strings.ToUpper(b.cfg.key(host)) + "_APIKEY"
+	}
+	b.cfg.useEnv(name)
+	b.mgrRefs[host] = ref(name)
+	return b.mgrRefs[host], false
 }
 
 func hostOf(raw string) string {
@@ -286,7 +357,7 @@ func (b *builder) kindMode(k domain.MediaKind) Entry {
 	}
 	switch cur, ok := b.st.Overrides["kind:"+string(k)]; {
 	case b.st.Config.KindExplicit[string(k)]:
-		e.Outcome, e.Reason = OutManaged, "your config file sets this kind's mode; set mediaKinds."+string(k)+".mode: shadow there to compare first"
+		e.Outcome, e.Reason = OutManaged, configModeReason(k, b.st.Config.KindMode[string(k)], mode)
 	case ok:
 		e.Outcome, e.Reason = OutUnchanged, "kept your choice: "+cur
 	default:
@@ -297,6 +368,22 @@ func (b *builder) kindMode(k domain.MediaKind) Entry {
 		}
 	}
 	return e
+}
+
+// configModeReason says whether the mode the config file sets is already
+// the one the run wants, or which line to change.
+func configModeReason(k domain.MediaKind, cur string, want domain.KindMode) string {
+	if cur == string(want) {
+		return "your config file already sets " + cur + "; nothing to change"
+	}
+	why := "to compare first"
+	if want == domain.ModeActive {
+		why = "to let corsarr act"
+	}
+	if cur == "" {
+		cur = "this kind's mode"
+	}
+	return "your config file sets " + cur + "; set mediaKinds." + string(k) + ".mode: " + string(want) + " there " + why
 }
 
 func (b *builder) ruleMode() Entry {

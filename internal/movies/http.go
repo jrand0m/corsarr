@@ -1,13 +1,13 @@
 package movies
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/jrand0m/corsarr/internal/api"
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/plugin"
 )
 
 // Mount registers the movie endpoints (search endpoints are mounted by automation).
@@ -19,7 +19,6 @@ func (s *Service) Mount(m api.Mounter) {
 	m.Handle("PUT /api/v1/movies/{id}", s.Enabled(s.update))
 	m.Handle("GET /api/v1/movies/{id}/move", s.Enabled(s.previewMove))
 	m.Handle("DELETE /api/v1/movies/{id}", s.Enabled(s.remove))
-	m.Handle("GET /api/v1/qualityprofiles", qualityProfiles)
 }
 
 // Enabled answers 409 while movies are disabled; the mode
@@ -72,7 +71,26 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
+	for i := range items {
+		items[i] = s.withArt(items[i])
+	}
 	api.WritePage(w, items, next)
+}
+
+// withArt points a movie's artwork at the artwork cache.
+func (s *Service) withArt(m domain.Movie) domain.Movie {
+	m.PosterURL, m.FanartURL = s.d.Art.Of(domain.ArtPoster, m.PosterURL), s.d.Art.Of(domain.ArtBackdrop, m.FanartURL)
+	return m
+}
+
+// recordsWithArt points lookup results' artwork at the artwork cache.
+func (s *Service) recordsWithArt(recs []plugin.MovieRecord) []plugin.MovieRecord {
+	out := make([]plugin.MovieRecord, len(recs))
+	for i, r := range recs {
+		r.PosterURL, r.FanartURL = s.d.Art.Of(domain.ArtPoster, r.PosterURL), s.d.Art.Of(domain.ArtBackdrop, r.FanartURL)
+		out[i] = r
+	}
+	return out
 }
 
 func (s *Service) lookup(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +104,7 @@ func (s *Service) lookup(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
-	api.WriteJSON(w, http.StatusOK, map[string]any{"items": recs})
+	api.WriteJSON(w, http.StatusOK, map[string]any{"items": s.recordsWithArt(recs)})
 }
 
 func (s *Service) add(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +121,7 @@ func (s *Service) add(w http.ResponseWriter, r *http.Request) {
 	if created {
 		status = http.StatusCreated
 	}
-	api.WriteJSON(w, status, m)
+	api.WriteJSON(w, status, s.withArt(m))
 }
 
 func (s *Service) get(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +134,7 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
-	api.WriteJSON(w, http.StatusOK, m)
+	api.WriteJSON(w, http.StatusOK, s.withArt(m))
 }
 
 func (s *Service) update(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +148,7 @@ func (s *Service) update(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
-	api.WriteJSON(w, http.StatusOK, m)
+	api.WriteJSON(w, http.StatusOK, s.withArt(m))
 }
 
 func (s *Service) previewMove(w http.ResponseWriter, r *http.Request) {
@@ -156,25 +174,4 @@ func (s *Service) remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-type profileView struct {
-	Key       string          `json:"key"`
-	Name      string          `json:"name"`
-	Kind      string          `json:"kind"`
-	Cutoff    string          `json:"cutoff"`
-	Upgrades  bool            `json:"upgrades"`
-	Groups    json.RawMessage `json:"groups"`
-	IsDefault bool            `json:"isDefault"`
-}
-
-func qualityProfiles(w http.ResponseWriter, _ *http.Request) {
-	var out []profileView
-	for _, p := range Profiles() {
-		spec := p.Profile.Spec()
-		groups, _ := json.Marshal(spec.Groups) // plain data
-		out = append(out, profileView{Key: p.Key, Name: spec.Name, Kind: string(spec.Kind), Cutoff: string(spec.Cutoff),
-			Upgrades: spec.Upgrades, Groups: groups, IsDefault: p.Key == DefaultProfileKey})
-	}
-	api.WriteJSON(w, http.StatusOK, map[string]any{"items": out})
 }

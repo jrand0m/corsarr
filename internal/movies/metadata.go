@@ -33,6 +33,26 @@ type MetaCache interface {
 	Put(ctx context.Context, e store.MetadataEntry) error
 	Get(ctx context.Context, source string, kind domain.MediaKind, id string) (store.MetadataEntry, bool, error)
 	Search(ctx context.Context, kind domain.MediaKind, term string, limit int) ([]store.MetadataEntry, error)
+	Bytes(ctx context.Context) (int64, error)
+	EvictUnused(ctx context.Context, want int64) (int, int64, error)
+}
+
+// MetadataBytes is the size of the stored provider records (counted toward
+// the artwork cache's cap).
+func (s *Service) MetadataBytes(ctx context.Context) (int64, error) {
+	if s.d.Cache == nil {
+		return 0, nil
+	}
+	return s.d.Cache.Bytes(ctx)
+}
+
+// EvictMetadata deletes the oldest records of movies not in the library
+// until want bytes are freed; library records stay, they drive refreshes.
+func (s *Service) EvictMetadata(ctx context.Context, want int64) (int, int64, error) {
+	if s.d.Cache == nil || want <= 0 {
+		return 0, 0, nil
+	}
+	return s.d.Cache.EvictUnused(ctx, want)
 }
 
 // NextRefresh staggers a record's next refresh by its id (pure).
@@ -57,6 +77,7 @@ func Merge(m domain.Movie, rec plugin.MovieRecord) (domain.Movie, []string) {
 	add("altTitles", !slices.Equal(next.AltTitles, m.AltTitles))
 	add("runtime", next.RuntimeMin != m.RuntimeMin)
 	add("imdbId", next.IMDBID != m.IMDBID)
+	add("artwork", next.PosterURL != m.PosterURL || next.FanartURL != m.FanartURL)
 	add("releaseDates", !sameTime(next.InCinemas, m.InCinemas) || !sameTime(next.Digital, m.Digital) || !sameTime(next.Physical, m.Physical))
 	return next, changed
 }

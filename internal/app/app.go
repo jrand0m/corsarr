@@ -19,6 +19,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/events"
 	"github.com/jrand0m/corsarr/internal/health"
+	"github.com/jrand0m/corsarr/internal/imagecache"
 	"github.com/jrand0m/corsarr/internal/importer"
 	"github.com/jrand0m/corsarr/internal/indexers"
 	"github.com/jrand0m/corsarr/internal/instances"
@@ -30,6 +31,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/musicauto"
 	"github.com/jrand0m/corsarr/internal/notify"
 	"github.com/jrand0m/corsarr/internal/plugin"
+	"github.com/jrand0m/corsarr/internal/profiles"
 	"github.com/jrand0m/corsarr/internal/queue"
 	"github.com/jrand0m/corsarr/internal/rootfolders"
 	"github.com/jrand0m/corsarr/internal/rules"
@@ -97,6 +99,11 @@ type App struct {
 	Legacy *legacy.Service
 	// MCP is the endpoint for AI assistants.
 	MCP *mcp.Service
+	// Profiles is the one writer of custom formats, custom profiles and the
+	// decision catalog.
+	Profiles *profiles.Service
+	// Images is the artwork cache.
+	Images *imagecache.Cache
 	// Plugins installs and manages plugin modules from the catalogue.
 	Plugins *PluginAdmin
 	wg      sync.WaitGroup
@@ -124,6 +131,9 @@ func New(ctx context.Context, d Deps) (*App, error) {
 	if err := a.newIndexerAdmin(ctx); err != nil {
 		return nil, err
 	}
+	if err := a.newProfiles(ctx); err != nil {
+		return nil, err
+	}
 	a.applyInstances(d.Config())
 	a.build()
 	if err := a.Importer.RegisterRules(a.Rules, d.Options.PurgeMode); err != nil {
@@ -135,16 +145,18 @@ func New(ctx context.Context, d Deps) (*App, error) {
 
 func (a *App) build() {
 	st, d, modes := a.d.Store, a.d, domain.Modes(a.mode)
+	a.Images = a.newImages()
 	a.Rules = rules.New(st.Rules(), d.Bus, nil)
 	a.Roots = rootfolders.New(rootfolders.Deps{Roots: a.roots, Repo: st.RootFolders(), Health: d.Health, Log: d.Log})
-	a.Movies = movies.New(movies.Deps{Repo: st.Movies(), Pub: d.Bus, Metadata: a.metadata, Cache: st.Metadata(), Folders: folders{a}, RootFolders: a.movieRoots, Modes: modes, Log: d.Log})
+	a.Movies = movies.New(movies.Deps{Repo: st.Movies(), Pub: d.Bus, Metadata: a.metadata, Cache: st.Metadata(), Folders: folders{a}, RootFolders: a.movieRoots,
+		Naming: a.namingOf(domain.KindMovie), Modes: modes, Art: a.art, Log: d.Log})
 	a.Queue = queue.New(queue.Deps{Repo: st.Queue(), Plugins: plugins{a}, Pub: d.Bus, Jobs: d.Jobs, UIClients: d.UIClients,
 		ItemTitles: a.itemTitles, Payload: decide.PayloadPolicy{}, Modes: modes, Clients: a.downloadClients, TestClient: a.testDownloader,
 		FastPoll: d.Options.FastPoll, SlowPoll: d.Options.SlowPoll, Log: d.Log})
 	a.TV = a.newTV()
 	a.Music = a.newMusic()
 	a.Importer = importer.New(importer.Deps{Queue: a.Queue, Movies: a.Movies, TV: a.TV, Music: a.Music, Library: st.Library(), Rules: a.Rules,
-		RuleStore: st.Rules(), Pub: d.Bus, DataDir: st.Dir(), NoSpace: a.recheckRoots, Files: a.Queue.PayloadFiles, Modes: modes, Log: d.Log})
+		RuleStore: st.Rules(), Pub: d.Bus, DataDir: st.Dir(), NoSpace: a.recheckRoots, Files: a.Queue.PayloadFiles, Naming: a.naming, Modes: modes, Log: d.Log})
 	a.Automation = automation.New(automation.Deps{Movies: a.Movies, Files: st.Library(), Queue: a.Queue, Blocklist: st.Blocklist(),
 		Cursors: st.FeedCursors(), Searches: st.Searches(), Recent: st.RecentReleases(), Indexers: a.indexers, Pub: d.Bus, Modes: modes, Log: d.Log})
 	a.TVAuto = a.newTVAuto()
@@ -202,6 +214,7 @@ func (a *App) registerJobs(ctx context.Context) error {
 		{Name: automation.BacklogJob, Interval: automation.BacklogInterval, Run: a.Automation.Backlog},
 		{Name: TestJob, Interval: a.d.Options.TestInterval, Run: a.Instances.TestAll},
 		{Name: rootfolders.CheckJob, Interval: rootfolders.CheckInterval, Run: a.Roots.Check},
+		{Name: imagecache.DegradeJob, Interval: imagecache.DegradeInterval, Heavy: true, Run: a.Images.Degrade},
 		{Name: AutoUpdateJob, Interval: 24 * time.Hour, Run: a.Plugins.AutoUpdate},
 		{Name: PurgeJob, Interval: 24 * time.Hour, Run: func(ctx context.Context) error {
 			_, err := a.Rules.Run(ctx, importer.RuleRecyclePurge)
@@ -284,6 +297,7 @@ func (a *App) recheckRoots(string) {
 func (a *App) OnConfig(cfg *config.Config) {
 	a.applyInstances(cfg)
 	a.applyRuleModes(cfg)
+	a.Profiles.OnConfig()
 	a.recheckRoots("")
 	a.publishModeChanges(cfg, "config")
 }
@@ -323,7 +337,7 @@ func (a *App) importWaiting(ctx context.Context, k domain.MediaKind) {
 func (a *App) Mounts() []func(api.Mounter) {
 	return []func(api.Mounter){a.Movies.Mount, a.Queue.Mount, a.Automation.Mount, a.Rules.Mount,
 		a.Roots.Mount, a.Notify.Mount, a.TV.Mount, a.TVAuto.Mount, a.IndexerAdmin.Mount, a.Migrate.Mount,
-		a.Music.Mount, a.MusicAuto.Mount, a.Legacy.Mount, a.MCP.Mount, a.Plugins.Mount}
+		a.Music.Mount, a.MusicAuto.Mount, a.Legacy.Mount, a.MCP.Mount, a.Images.Mount, a.Profiles.Mount, a.Plugins.Mount}
 }
 
 func typeIn(types ...domain.EventType) func(domain.EventType) bool {

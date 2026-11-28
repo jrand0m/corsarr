@@ -6,4 +6,7 @@ Every file here is compiled into the binary. With no key, corsarr refuses
 every catalogue. To rotate, add the new key one release before the index is
 signed with it, then remove the old one.
 
-    go run ./scripts/pluginindex keygen <dir>   # writes index-key.pem and <keyId>.pub
+    go run ./scripts/pluginindex keygen -o index-key.pem   # prints the key id and the .pub line
+
+The release signs the index with the matching private key and refuses to
+publish when it does not verify against a key in this folder.

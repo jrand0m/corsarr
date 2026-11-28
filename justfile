@@ -25,7 +25,8 @@ setup target="all":
 
 # ── build ────────────────────────────────────────────────────────────────────
 # just build [all|ui|go|storybook|image|release] [os/arch]   e.g. just build go linux/arm64
-# (release: the six archives and the OCI image in dist/, built in the pinned builder)
+# just build plugins [id|all]   reproducible plugin modules (<id>-<version>.wasm + manifest) in dist/plugins/
+# (release: the six archives, plugin modules and the OCI image in dist/, built in the pinned builder)
 build target="all" platform="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -44,6 +45,8 @@ build target="all" platform="":
         out="bin/corsarr-${os}-${arch}"
         {{x}} scripts/gobuild.sh "$os" "$arch" "$out"
         ls -lh "$out" ;;
+      plugins)
+        {{x}} scripts/plugins.sh build dist/plugins "${platform:-all}" ;;
       all)
         just build ui; just build go {{platform}} ;;
       image)
@@ -51,7 +54,7 @@ build target="all" platform="":
           --build-arg VERSION --build-arg COMMIT --build-arg TAG --build-arg DIRTY --build-arg SOURCE_DATE_EPOCH -t corsarr:dev . ;;
       release)
         PLATFORMS="${platform:-linux/amd64,linux/arm64}" scripts/release.sh build dist ;;
-      *) echo "unknown target {{target}} (all|ui|go|storybook|image|release)"; exit 2 ;;
+      *) echo "unknown target {{target}} (all|ui|go|storybook|image|release|plugins)"; exit 2 ;;
     esac
 
 # ── verify ───────────────────────────────────────────────────────────────────
@@ -129,8 +132,9 @@ lint target="all":
           diff -u "$f" "$tmp/$f" || { echo "$f is out of date: run just docs config"; exit 1; }
         done ;;
       quality) scripts/quality.sh ;;
-      all)     just lint go; just lint ui; just lint docs ;;
-      *) echo "unknown target {{target}} (all|go|ui|docs|quality)"; exit 2 ;;
+      docker)  {{x}} scripts/dockerfile-paths.sh ;;
+      all)     just lint go; just lint ui; just lint docs; just lint docker ;;
+      *) echo "unknown target {{target}} (all|go|ui|docs|quality|docker)"; exit 2 ;;
     esac
 
 # ── deploy ───────────────────────────────────────────────────────────────────

@@ -229,11 +229,21 @@ type Decision struct {
 	Quality     string    `json:"quality"`
 	Resolution  int       `json:"resolution"`
 	FormatScore int       `json:"formatScore"`
-	RankKey     string    `json:"rankKey"`
-	Override    Override  `json:"override"`
+	// Formats are the custom formats the release matched, with their scores.
+	Formats  []FormatMatch `json:"formats,omitempty"`
+	RankKey  string        `json:"rankKey"`
+	Override Override      `json:"override"`
 	// Desirability is how close the release is to the profile's target;
 	// nil when its quality is outside the profile.
 	Desirability *Desirability `json:"desirability,omitempty"`
+}
+
+// FormatMatch is a custom format a release matched under a profile.
+type FormatMatch struct {
+	Key    string `json:"key"`
+	Name   string `json:"name"`
+	Score  int    `json:"score"`
+	Reject bool   `json:"reject,omitempty"`
 }
 
 // Position says on which side of the profile's target a release lies.

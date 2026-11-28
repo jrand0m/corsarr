@@ -98,8 +98,8 @@ func TestPlanOutcomesPerObject(t *testing.T) {
 	want := map[string]Outcome{
 		"sonarr:series:1": OutCreate, "sonarr:series:2": OutUnsupported,
 		"sonarr:episodefile:501": OutCreate, "sonarr:episodefile:502": OutFileMissing,
-		"sonarr:profile:1": OutUnchanged, "sonarr:profile:2": OutApproximate, "sonarr:customformat:0": OutUnsupported,
-		"sonarr:naming:rename": OutUnsupported, "sonarr:downloadclient:1": OutSecretNeeded, "sonarr:downloadclient:2": OutUnsupported,
+		"sonarr:profile:1": OutCreate, "sonarr:profile:2": OutApproximate, "sonarr:customformat:1": OutUnsupported,
+		"sonarr:naming:tv": OutManaged, "radarr:naming:movie": OutManaged, "sonarr:downloadclient:1": OutSecretNeeded, "sonarr:downloadclient:2": OutUnsupported,
 		"radarr:downloadclient:1": OutUnchanged, "sonarr:indexer:3": OutSkip,
 		"prowlarr:indexer:4": OutApproximate, "prowlarr:indexer:5": OutSecretNeeded, "prowlarr:indexer:6": OutUnsupported,
 		"sonarr:download:aaaa": OutCreate, "sonarr:download:bbbb": OutGone,
@@ -330,5 +330,39 @@ func TestRunsAreListed(t *testing.T) {
 	runs, err := r.svc.Runs(context.Background())
 	if err != nil || len(runs) != 1 || runs[0].Mode != "plan" || runs[0].Status != "done" {
 		t.Fatalf("%+v %v", runs, err)
+	}
+}
+
+func TestApplyWritesCustomProfiles(t *testing.T) {
+	r := newRig(t, "aaaa")
+	r.apply()
+	ctx := context.Background()
+	rows, err := r.st.Quality().List(ctx, store.TableProfiles)
+	if err != nil || len(rows) != 1 || rows[0].Key != "hd1080psonarr" || rows[0].Name != "HD-1080p (Sonarr)" {
+		t.Fatalf("profiles %+v %v", rows, err)
+	}
+}
+
+func TestReportRecordsRealStartFinishAndReadTimes(t *testing.T) {
+	r := newRig(t, "aaaa")
+	clock := day
+	r.svc.d.Now = func() time.Time { clock = clock.Add(time.Second); return clock }
+	rep := r.plan()
+	if !rep.Started.Before(rep.Finished) {
+		t.Fatalf("started %s finished %s", rep.Started, rep.Finished)
+	}
+	var total int64
+	for _, s := range rep.Sources {
+		if s.ReadMs < 1000 {
+			t.Errorf("%s read in %d ms", s.App, s.ReadMs)
+		}
+		total += s.ReadMs
+	}
+	if rep.Finished.Sub(rep.Started).Milliseconds() <= total {
+		t.Fatalf("run %s shorter than its reads %d ms", rep.Finished.Sub(rep.Started), total)
+	}
+	stored, ok, err := r.svc.RunReport(context.Background(), rep.RunID)
+	if err != nil || !ok || !strings.Contains(string(stored), `"readMs":`) {
+		t.Fatalf("stored report %s %v", stored, err)
 	}
 }

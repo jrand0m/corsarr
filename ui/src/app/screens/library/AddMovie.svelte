@@ -4,6 +4,7 @@
   (Ctrl/Cmd+Enter).
 -->
 <script lang="ts">
+  import { artSrc } from '../../art';
   import { onMount } from 'svelte';
   import Artwork from '../../../lib/components/atoms/Artwork/Artwork.svelte';
   import Button from '../../../lib/components/atoms/Button/Button.svelte';
@@ -19,7 +20,7 @@
   import PathField from '../../../lib/components/molecules/PathField/PathField.svelte';
   import Dialog from '../../../lib/components/organisms/Dialog/Dialog.svelte';
   import { formatAbsolute } from '../../../lib/format/time';
-  import { app } from '../../context.svelte';
+  import { app, profilesFor, defaultProfile } from '../../context.svelte';
   import { Resource } from '../../resource.svelte';
   import { ApiError, toApiError } from '../../api/client';
   import type { Movie, MovieRecord, RootFolder } from '../../api/types';
@@ -51,7 +52,7 @@
     if (!rootFolder && roots.data) rootFolder = roots.data.find((r) => r.kind === 'movie' && r.accessible)?.path ?? roots.data.find((r) => r.kind === 'movie')?.path ?? '';
   });
   $effect(() => {
-    if (!profileKey && profiles.data?.length) profileKey = (profiles.data.find((p) => p.isDefault) ?? profiles.data[0]).key;
+    if (!profileKey && profiles.data?.length) profileKey = defaultProfile(profiles.data, 'movie')?.key ?? '';
   });
 
   // Look up 350 ms after typing stops; a newer term cancels the older request.
@@ -158,7 +159,7 @@
           <label class={['opt', { chosen: picked === idOf(m), dim: !!own }]}>
             <input type="radio" name="match" value={idOf(m)} bind:group={picked} disabled={!!own} />
             <span class="rank num" aria-hidden="true">{i + 1}</span>
-            <Artwork src={m.posterUrl ?? null} title={m.title} kind="movie" width={40} />
+            <Artwork src={artSrc(m.posterUrl, 40)} title={m.title} kind="movie" width={40} />
             <span class="text">
               <span class="top"><span class="name">{m.title}{#if m.year}{' '}<span class="year num">({m.year})</span>{/if}</span>
                 {#if own}<StatusBadge family="item" value="cutoff-met" size="sm" detail="in library" />{/if}</span>
@@ -174,7 +175,7 @@
       <div class="options">
         <PathField label="Root folder" locations={locations} bind:value={rootFolder} placeholder="/data/media/movies" error={fieldErrors.rootFolder} required
           help={locations.length ? undefined : 'No movie root folder is configured; add rootFolders to the config.'} />
-        <EnumField label="Quality profile" bind:value={profileKey} error={fieldErrors.profileKey} options={(profiles.data ?? []).map((p) => ({ value: p.key, label: p.name }))} />
+        <EnumField label="Quality profile" bind:value={profileKey} error={fieldErrors.profileKey} options={profilesFor(profiles.data, 'movie').map((p) => ({ value: p.key, label: p.name }))} />
         <EnumField label="Minimum availability" bind:value={minAvailability} error={fieldErrors.minAvailability} options={availOptions} />
         <div class="switch"><Switch label="Monitor for new releases and upgrades" bind:checked={monitored} /></div>
       </div>

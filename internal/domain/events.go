@@ -44,7 +44,8 @@ const (
 	EvCommandUpdated    EventType = "command.updated"
 	EvMigrationProgress EventType = "migration.progress"
 	EvMigrationComplete EventType = "migration.run_completed"
-	EvMCPCalled         EventType = "mcp.called" // an assistant called a tool over MCP (audit)
+	EvMCPCalled         EventType = "mcp.called"      // an assistant called a tool over MCP (audit)
+	EvQualityChanged    EventType = "quality.changed" // a custom format or quality profile was created, changed or deleted
 )
 
 // eventFlags records which events go to History (H) and SSE (S).
@@ -62,7 +63,7 @@ var eventFlags = map[EventType]struct{ History, Stream bool }{
 	EvConfigDrifted: {true, true}, EvMediaKindMode: {true, true}, EvPluginLoaded: {false, true}, EvPluginChanged: {true, true},
 	EvJobUpdated: {false, true}, EvCommandUpdated: {false, true},
 	EvMigrationProgress: {false, true}, EvMigrationComplete: {true, true},
-	EvMCPCalled: {true, false},
+	EvMCPCalled: {true, false}, EvQualityChanged: {true, true},
 }
 
 // Persisted reports whether the event belongs in History.
@@ -80,6 +81,14 @@ type EventItem struct {
 	Title  string   `json:"title"`
 	Tags   []string `json:"tags,omitempty"`
 	Series string   `json:"series,omitempty"` // TV: the show an episode belongs to
+}
+
+// QualityChange is the data of a quality.changed event.
+type QualityChange struct {
+	Object string `json:"object"` // format | profile
+	Key    string `json:"key"`
+	Name   string `json:"name"`
+	Action string `json:"action"` // created | updated | deleted
 }
 
 // Event is the envelope shared by History, SSE and the webhook notifier.

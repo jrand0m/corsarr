@@ -63,7 +63,7 @@ type facts struct {
 	rank      int
 	allowed   bool
 	score     int
-	formats   []string
+	formats   []MatchedFormat
 	bounds    SizeBounds
 	payload   PayloadVerdict
 }
@@ -72,8 +72,8 @@ func derive(in Input) facts {
 	f := facts{in: in}
 	f.quality, f.confident = qualityFor(in)
 	f.rank, f.allowed = in.Item.Profile.Rank(f.quality.ID)
-	f.score, f.formats = in.Item.Profile.Score(in.Release.Title)
-	f.bounds = Bounds(in.Context.Definitions.For(f.quality.ID), in.Item.Ref.Kind, in.Item.RuntimeMinutes)
+	f.score, f.formats = in.Item.Profile.Score(SubjectOf(in.Release, in.Parsed))
+	f.bounds = Bounds(in.Item.Profile.Definition(in.Context.Definitions, f.quality.ID), in.Item.Ref.Kind, in.Item.RuntimeMinutes)
 	files := in.Files
 	if files == nil {
 		files = FilesFromNames(in.Release.FileList)
@@ -95,7 +95,7 @@ var rules = []rule{
 	rulePayloadDangerous, rulePayloadNotVideo,
 	ruleBlocklisted, ruleGrabbedBefore, ruleProfileKind, ruleDiscImage, ruleThreeD,
 	ruleQualityAllowed, ruleSizeMax, ruleSizeMin,
-	ruleMaxResolution, ruleMinFormatScore, ruleUpgrade, ruleMonitored,
+	ruleMaxResolution, ruleRejectFormat, ruleMinFormatScore, ruleUpgrade, ruleMonitored,
 	ruleAvailable, ruleQueued, ruleTooNew, ruleSeeders,
 }
 
@@ -116,6 +116,7 @@ func Decide(in Input) domain.Decision {
 		Quality:     f.quality.Name,
 		Resolution:  int(in.Parsed.Resolution.Value),
 		FormatScore: f.score,
+		Formats:     formatsOrNil(f.formats),
 		RankKey:     rankKey(f),
 		Override:    domain.OverrideFor(reasons),
 
@@ -155,7 +156,7 @@ func ruleGrabbedBefore(f facts) *domain.Reason {
 
 func ruleProfileKind(f facts) *domain.Reason {
 	pk := f.in.Item.Profile.spec.Kind
-	if pk == f.in.Item.Ref.Kind {
+	if f.in.Item.Profile.Serves(f.in.Item.Ref.Kind) {
 		return nil
 	}
 	return brief(reason("profile.kind", domain.ReasonPermanent, map[string]any{"profileKind": pk, "itemKind": f.in.Item.Ref.Kind},
@@ -244,8 +245,49 @@ func ruleMinFormatScore(f facts) *domain.Reason {
 	if f.score >= min {
 		return nil
 	}
-	return brief(reason("format.min_score", domain.ReasonPreference, map[string]any{"score": f.score, "min": min, "formats": f.formats},
-		"format score %d is below the profile minimum %d", f.score, min), "Format score %d, needs %d", f.score, min)
+	return brief(reason("format.min_score", domain.ReasonPreference, map[string]any{"score": f.score, "min": min, "formats": formatNames(f.formats)},
+		"format score %d is below the profile minimum %d%s", f.score, min, scoredList(f.formats)), "Format score %d, needs %d", f.score, min)
+}
+
+func ruleRejectFormat(f facts) *domain.Reason {
+	var names []string
+	for _, m := range f.formats {
+		if m.Reject {
+			names = append(names, m.Name)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	return brief(reason("format.reject", domain.ReasonPermanent, map[string]any{"formats": names},
+		"matches %s, which this profile rejects", strings.Join(names, ", ")), "Rejected format: %s", firstPlus(names))
+}
+
+func formatNames(ms []MatchedFormat) []string {
+	out := make([]string, len(ms))
+	for i, m := range ms {
+		out[i] = m.Name
+	}
+	return out
+}
+
+// scoredList is " (Name +50, Other −10)" or "" when nothing matched.
+func scoredList(ms []MatchedFormat) string {
+	if len(ms) == 0 {
+		return ""
+	}
+	parts := make([]string, len(ms))
+	for i, m := range ms {
+		parts[i] = fmt.Sprintf("%s %+d", m.Name, m.Score)
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
+}
+
+func formatsOrNil(ms []MatchedFormat) []MatchedFormat {
+	if len(ms) == 0 {
+		return nil
+	}
+	return ms
 }
 
 func ruleUpgrade(f facts) *domain.Reason {

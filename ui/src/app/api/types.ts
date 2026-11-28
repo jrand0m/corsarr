@@ -23,6 +23,9 @@ export interface Movie {
   path: string;
   fileId?: number;
   addedAt: string;
+  /** Cached artwork path (relative, like every API path); absent when the provider has none. */
+  posterUrl?: string;
+  fanartUrl?: string;
 }
 
 export interface MovieRecord {
@@ -70,6 +73,7 @@ export interface Series {
   runtimeMin?: number;
   altTitles?: string[] | null;
   posterUrl?: string;
+  fanartUrl?: string;
   rootFolder: string;
   path: string;
   profileKey: string;
@@ -146,7 +150,7 @@ export interface WantedEpisode {
   available: boolean;
 }
 
-export interface QualityProfile { key: string; name: string; kind: string; cutoff: string; upgrades: boolean; isDefault: boolean }
+export interface QualityProfile { key: string; name: string; kinds?: MediaKind[]; default?: MediaKind[]; cutoff: string; upgrades: boolean; isDefault?: boolean }
 
 export interface RootFolder {
   path: string; kind: MediaKind; accessible: boolean; freeSpace: number;
@@ -472,7 +476,7 @@ export interface ArtistStats {
   lastRelease: string | null;
 }
 
-export interface ArtistSummary extends Artist { stats: ArtistStats }
+export interface ArtistSummary extends Artist { stats: ArtistStats; coverUrl?: string }
 
 export interface ArtistRecord {
   mbid: string;
@@ -509,6 +513,7 @@ export interface AlbumView extends Album {
   sizeOnDisk: number;
   quality?: string;
   cutoffMet: boolean;
+  coverUrl?: string;
 }
 
 export interface ArtistDetail { artist: ArtistSummary; albums: AlbumView[] | null }
@@ -626,3 +631,66 @@ export interface ProblemList { problems: Problem[] | null }
 
 /** DELETE answer: the configured instances that now report "module not installed". */
 export interface UninstallResult { usedBy?: InstanceRef[] | null; instances?: InstanceRef[] | null }
+
+// ── custom formats and quality profiles ─────────────────────────────────────
+
+export type ConditionKind =
+  | 'title' | 'group' | 'edition' | 'source' | 'resolution' | 'modifier' | 'codec' | 'audio' | 'channels' | 'hdr'
+  | 'language' | 'flag' | 'size' | 'releasetype' | 'year' | 'container' | 'bitdepth' | 'dvfallback';
+
+export interface ConditionDoc {
+  kind: ConditionKind; pattern?: string; values?: string[]; min?: number; max?: number;
+  negate?: boolean; required?: boolean; except?: boolean;
+}
+export interface FormatDoc { key: string; name: string; conditions: ConditionDoc[] }
+
+export interface ManagedRef { key: string; kind: string; file?: string; name?: string }
+
+export interface FormatRow extends FormatDoc { origin: 'database' | 'config'; managed?: ManagedRef; usedBy: string[] }
+
+export interface GroupDoc { name?: string; qualities: string[] }
+export interface ScoreDoc { format: string; score: number; reject?: boolean }
+export interface SizeDoc { quality: string; min: number; preferred?: number; max: number }
+export interface ProfileDoc {
+  key: string; name: string; kinds: MediaKind[]; groups: GroupDoc[]; cutoff: string; upgrades: boolean;
+  formats?: ScoreDoc[]; minFormatScore: number; cutoffFormatScore: number; minUpgradeFormatScore?: number;
+  sizes?: SizeDoc[]; allowDiscImage?: boolean; allow3D?: boolean;
+}
+export interface ProfileRow extends ProfileDoc {
+  builtin: boolean; origin: 'builtin' | 'database' | 'config'; managed?: ManagedRef; items: number; default?: MediaKind[];
+}
+
+export interface ConditionKindInfo {
+  kind: ConditionKind; label: string; input: 'pattern' | 'values' | 'range'; unit?: string;
+  values?: { value: string; label: string }[]; open?: boolean;
+}
+export interface QualityChoice { id: string; name: string; belowFloor?: boolean }
+export interface QualityChoices { conditionKinds: ConditionKindInfo[]; qualities: Partial<Record<MediaKind, QualityChoice[]>> }
+
+export interface FormatTestResult {
+  title: string;
+  parsed: Record<string, unknown>;
+  formats: { key: string; name: string; matched: boolean; conditions: boolean[] }[];
+}
+
+/** One run of the artwork cache's shrinking (counts and bytes freed). */
+export interface CacheRun { at: string; reencoded: number; resized: number; evicted: number; metadataEvicted: number; bytesFreed: number }
+
+/** GET system/cache: the artwork cache's usage. */
+export interface CacheStatus {
+  enabled: boolean;
+  dir: string;
+  maxSize: number;
+  usage: number;
+  imageBytes: number;
+  metadataBytes: number;
+  images: number;
+  variants: number;
+  misses: number;
+  requests: number;
+  hits: number;
+  hitRate: number;
+  highWater: number;
+  lowWater: number;
+  lastRun?: CacheRun;
+}

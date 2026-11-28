@@ -23,3 +23,22 @@ func TestReleaseSwarmAndPayloadAttributes(t *testing.T) {
 		t.Fatalf("silent item: %+v", rel)
 	}
 }
+
+func TestReleaseFlagsFromVolumeFactors(t *testing.T) {
+	cases := map[string][]string{
+		`<torznab:attr name="downloadvolumefactor" value="0"/>`:                                                      {"freeleech"},
+		`<torznab:attr name="downloadvolumefactor" value="0.5"/><torznab:attr name="uploadvolumefactor" value="2"/>`: {"halfleech", "doubleupload"},
+		`<torznab:attr name="downloadvolumefactor" value="0.25"/>`:                                                   {"freeleech75"},
+		`<torznab:attr name="downloadvolumefactor" value="1"/><torznab:attr name="uploadvolumefactor" value="1"/>`:   nil,
+	}
+	for attrs, want := range cases {
+		items, err := parseRSS([]byte(feedOf(item("1", "Flags", attrs))), "application/rss+xml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		rel, _, _ := (&Indexer{}).release(items[0])
+		if len(rel.Flags) != len(want) || (len(want) > 0 && (rel.Flags[0] != want[0] || rel.Flags[len(want)-1] != want[len(want)-1])) {
+			t.Errorf("%s: flags %v", attrs, rel.Flags)
+		}
+	}
+}

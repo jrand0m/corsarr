@@ -24,6 +24,47 @@ func TestMergeNamesChangedFields(t *testing.T) {
 	}
 }
 
+func TestMergeStoresArtwork(t *testing.T) {
+	m := domain.Movie{ID: 1, Title: "Old", Year: 1999}
+	rec := plugin.MovieRecord{Title: "Old", Year: 1999, PosterURL: "https://img.example/p.jpg", FanartURL: "https://img.example/b.jpg"}
+	next, changed := Merge(m, rec)
+	if next.PosterURL != rec.PosterURL || next.FanartURL != rec.FanartURL || len(changed) != 1 || changed[0] != "artwork" {
+		t.Fatalf("%+v %v", next, changed)
+	}
+	if _, changed := Merge(next, rec); len(changed) != 0 {
+		t.Fatal(changed)
+	}
+}
+
+func TestMetadataEvictionKeepsLibraryRecords(t *testing.T) {
+	e := newEnv(t)
+	if _, _, err := e.svc.Add(ctx, AddRequest{TMDBID: 603}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Lookup(ctx, "tmdb:700"); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := e.svc.MetadataBytes(ctx)
+	n, freed, err := e.svc.EvictMetadata(ctx, 1)
+	after, _ := e.svc.MetadataBytes(ctx)
+	if err != nil || n != 1 || freed == 0 || after != before-freed {
+		t.Fatal(n, freed, err, before, after)
+	}
+	if n, _, _ := e.svc.EvictMetadata(ctx, 1<<20); n != 0 {
+		t.Fatal("library record evicted")
+	}
+	if n, _, _ := e.svc.EvictMetadata(ctx, 0); n != 0 {
+		t.Fatal("nothing wanted")
+	}
+	none := New(Deps{})
+	if b, _ := none.MetadataBytes(ctx); b != 0 {
+		t.Fatal(b)
+	}
+	if n, _, _ := none.EvictMetadata(ctx, 5); n != 0 {
+		t.Fatal(n)
+	}
+}
+
 func TestNextRefreshIsStaggered(t *testing.T) {
 	at := time.Unix(0, 0)
 	if NextRefresh(at, 24).Sub(at) != RefreshEvery || NextRefresh(at, 5).Sub(at) != RefreshEvery+5*time.Hour {

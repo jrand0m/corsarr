@@ -15,6 +15,7 @@ import (
 
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/msgtemplate"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/plugin"
 )
 
@@ -64,7 +65,7 @@ type Schema struct {
 }
 
 // Bootstrap sections apply at start only.
-var bootstrapSections = map[string]bool{"server": true, "data": true, "log": true, "auth": true, "plugins": true}
+var bootstrapSections = map[string]bool{"server": true, "data": true, "cache": true, "log": true, "auth": true, "plugins": true}
 
 // instanceSections are the MVP plugin-instance sections, in export order.
 var instanceSections = []plugin.Kind{
@@ -95,6 +96,7 @@ func NewSchema(reg *plugin.Registry) *Schema {
 			Field{Name: "umask", Node: &Node{Kind: KindString, Default: "002", Check: checkUmask,
 				Doc: "Permission mask for every file corsarr creates, in octal; 002 lets a shared media group write, 022 keeps files writable by corsarr only."}},
 		)},
+		{Name: "cache", Node: cacheNode()},
 		{Name: "log", Node: obj("Logging (applies at start).",
 			Field{Name: "level", Node: enum("info", "How much is logged; use debug while tracking down a problem, warn or error to keep logs short.", "debug", "info", "warn", "error")},
 		)},
@@ -111,6 +113,9 @@ func NewSchema(reg *plugin.Registry) *Schema {
 			Field{Name: "kind", Node: &Node{Kind: KindEnum, Required: true, Enum: kindNames(), Doc: "Which kind of media lives in this folder."}},
 		)}},
 	}
+	fields = append(fields, Field{Name: "customFormats", Live: true, Node: customFormatsNode()},
+		Field{Name: "qualityProfiles", Live: true, Node: qualityProfilesNode()})
+	fields = append(fields, Field{Name: "naming", Live: true, Node: namingNode()})
 	fields = append(fields, Field{Name: "automation", Live: true, Node: obj("Automatic clean-up and upgrade rules.",
 		Field{Name: "rules", Node: &Node{Kind: KindMap, Doc: "One entry per rule, keyed by rule id (upgradereplace, itemdelete, recyclepurge, …).",
 			Elem: obj("", Field{Name: "mode", Node: &Node{Kind: KindEnum, Enum: RuleModes,
@@ -131,6 +136,50 @@ func NewSchema(reg *plugin.Registry) *Schema {
 		}})
 	}
 	return &Schema{Root: &Node{Kind: KindObject, Fields: fields}, Plugins: reg}
+}
+
+// namingTemplates are the template fields of each kind's naming, with the
+// built-in template as default.
+var namingTemplates = map[domain.MediaKind][]struct{ name, def, doc string }{
+	domain.KindTV: {
+		{"seriesFolder", naming.DefaultSeriesFolder, "Folder of a series added from now on, inside its root folder."},
+		{"seasonFolder", naming.DefaultSeasonFolder, "Season folder inside the series folder (series that use season folders)."},
+		{"episodeFile", naming.DefaultEpisodeFile, "Name of an imported episode file, without the extension."},
+	},
+	domain.KindMovie: {
+		{"movieFolder", naming.DefaultMovieFolder, "Folder of a movie added from now on, inside its root folder."},
+		{"movieFile", naming.DefaultMovieFile, "Name of an imported movie file, without the extension."},
+	},
+	domain.KindMusic: {
+		{"artistFolder", naming.DefaultArtistFolder, "Folder of an artist added from now on, inside its root folder."},
+		{"albumFolder", naming.DefaultAlbumFolder, "Album folder inside the artist folder."},
+		{"trackFile", naming.DefaultTrackFile, "Name of an imported track file, without the extension."},
+	},
+}
+
+// namingKinds are the kinds the naming section covers, in order.
+var namingKinds = []domain.MediaKind{domain.KindTV, domain.KindMovie, domain.KindMusic}
+
+func namingNode() *Node {
+	var kinds []Field
+	for _, k := range namingKinds {
+		fields := []Field{
+			{Name: "rename", Node: &Node{Kind: KindBool, Default: "true",
+				Doc: "Rename imported files with the file template; false keeps each file's own name inside the item's folder."}},
+			{Name: "colon", Node: enum(string(naming.ColonSmart), "What replaces a colon in names: delete drops it, dash writes -, spaceDash writes \" - \", smart writes \" - \" after a word and drops it between digits.",
+				string(naming.ColonDelete), string(naming.ColonDash), string(naming.ColonSpaceDash), string(naming.ColonSmart))},
+		}
+		for _, t := range namingTemplates[k] {
+			fields = append(fields, Field{Name: t.name, Node: &Node{Kind: KindString, Default: t.def, Doc: t.doc, Check: checkTemplate}})
+		}
+		kinds = append(kinds, Field{Name: string(k), Node: obj("How "+kindLabels[k]+" folders and files are named.", fields...)})
+	}
+	return obj("Folder and file names per kind of media; tokens in braces, e.g. {Movie Title}{ (Release Year)}, with text inside the braces written only when the token has a value.", kinds...)
+}
+
+func checkTemplate(s string) error {
+	_, err := naming.ParseTemplate(s)
+	return err
 }
 
 func obj(doc string, fields ...Field) *Node { return &Node{Kind: KindObject, Doc: doc, Fields: fields} }

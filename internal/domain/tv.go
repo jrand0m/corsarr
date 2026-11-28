@@ -91,6 +91,7 @@ type Series struct {
 	RuntimeMin    int        `json:"runtimeMin,omitempty"`
 	AltTitles     []string   `json:"altTitles"`
 	PosterURL     string     `json:"posterUrl,omitempty"`
+	FanartURL     string     `json:"fanartUrl,omitempty"`
 	RootFolder    string     `json:"rootFolder"`
 	Path          string     `json:"path"`
 	ProfileKey    string     `json:"profileKey"`

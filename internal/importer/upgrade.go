@@ -36,16 +36,15 @@ func (s *Service) candidate(ctx context.Context, d store.StoredDownload, video F
 	}
 	parsed := parse.ParseRelease(title)
 	q, _ := decide.QualityOf(parsed)
-	score, _ := p.Score(title)
+	score, _ := p.ScoreTitle(title)
 	return candidate{quality: q, parsed: parsed, score: score}
 }
 
-// FileName renders the movie file name from the default template.
-func FileName(m domain.Movie, c candidate, ext string) string {
-	name, _ := naming.Options{Extension: ext}.Preview(naming.DefaultMovieFile, naming.Values{MovieTitle: m.Title,
-		ReleaseYear: m.Year, QualityFull: c.quality.Name, Edition: c.parsed.Edition.Value, ReleaseGroup: c.parsed.Group.Value,
-		IMDbID: m.IMDBID})
-	return name
+// FileName renders the movie file name from the naming's file template (the
+// original file's own name when renaming is off).
+func FileName(m domain.Movie, c candidate, ext, original string, sch naming.Scheme) string {
+	return sch.FileName(naming.Values{MovieTitle: m.Title, ReleaseYear: m.Year, QualityFull: c.quality.Name,
+		Edition: c.parsed.Edition.Value, ReleaseGroup: c.parsed.Group.Value, IMDbID: m.IMDBID}, naming.DefaultMovieFile, ext, original)
 }
 
 func (s *Service) current(ctx context.Context, m domain.Movie) (domain.LibraryFile, bool) {
@@ -66,7 +65,7 @@ func (s *Service) place(ctx context.Context, d store.StoredDownload, m domain.Mo
 	if dest, _, ok, err := s.d.Library.ImportRecord(ctx, d.ID, video.Path); err == nil && ok {
 		return imported(d.ID, m, items, dest, nil, "imported", "") // already imported: same end state
 	}
-	profile, _ := movies.ProfileByKey(m.ProfileKey)
+	profile := movies.ProfileOrDefault(m.ProfileKey)
 	cand := s.candidate(ctx, d, video, profile)
 	cur, hasCur := s.current(ctx, m)
 	if hasCur {
@@ -74,7 +73,7 @@ func (s *Service) place(ctx context.Context, d store.StoredDownload, m domain.Mo
 			return blocked(d.ID, "not-upgrade", items, why)
 		}
 	}
-	dest := filepath.Join(m.Path, FileName(m, cand, filepath.Ext(video.Path)))
+	dest := filepath.Join(m.Path, FileName(m, cand, filepath.Ext(video.Path), video.Path, s.naming(domain.KindMovie)))
 	err := s.room(rootOf(m))
 	if err == nil {
 		var replaced []string

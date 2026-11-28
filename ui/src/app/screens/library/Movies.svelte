@@ -11,7 +11,7 @@
   import type { Column, SortState } from '../../../lib/components/organisms/DataTable/DataTable.svelte';
   import { emptyFilter, type FilterFacet, type FilterState } from '../../../lib/filters/url';
   import type { ListView } from '../../../lib/route/hash';
-  import { app, profileName } from '../../context.svelte';
+  import { app, profileName, profilesFor } from '../../context.svelte';
   import { Resource } from '../../resource.svelte';
   import { refetchOn } from '../../live.svelte';
   import { toApiError } from '../../api/client';
@@ -20,6 +20,7 @@
   import { applyList, facetCounts } from '../../list';
   import AddMovie from './AddMovie.svelte';
   import type { ScreenProps } from '../../screen';
+  import { artSrc } from '../../art';
 
   let { screen }: ScreenProps = $props();
   const { api, live, movies, profiles, toasts, navigate } = app();
@@ -50,7 +51,7 @@
   const facets = $derived<FilterFacet[]>([
     { id: 'status', label: 'Status', options: (Object.keys(statusLabels) as ItemStatus[]).map((v) => ({ value: v, label: statusLabels[v], count: counts[v] ?? 0 })) },
     { id: 'monitored', label: 'Monitoring', multiple: false, options: [{ value: 'yes', label: 'Monitored' }, { value: 'no', label: 'Unmonitored' }] },
-    { id: 'profile', label: 'Profile', options: (profiles.data ?? []).map((p) => ({ value: p.key, label: p.name })) },
+    { id: 'profile', label: 'Profile', options: profilesFor(profiles.data, 'movie').map((p) => ({ value: p.key, label: p.name })) },
   ]);
   const rows = $derived(applyList(movies.rows, filter, sort, {
     text: (m) => `${m.title} ${m.originalTitle ?? ''} ${m.year}`,
@@ -66,7 +67,7 @@
     { id: 'profile', label: 'Profile', width: '7rem', phone: 'meta', value: (r) => profileName(profiles.data, r.profileKey) },
     { id: 'added', label: 'Added', width: '7rem', sortable: true, phone: 'hidden', value: (r) => r.addedAt },
   ];
-  const poster = (r: Movie) => ({ id: String(r.id), title: r.title, kind: 'movie' as const, year: r.year || undefined, status: { family: 'item' as const, value: statusOf(r) } });
+  const poster = (r: Movie) => ({ id: String(r.id), title: r.title, kind: 'movie' as const, src: artSrc(r.posterUrl, 240), year: r.year || undefined, status: { family: 'item' as const, value: statusOf(r) } });
 
   async function setMonitored(m: Movie, on: boolean) {
     try {

@@ -41,6 +41,7 @@ export { default as SetupFlow } from './SetupFlow/SetupFlow.svelte';
 export { default as OrderedListEditor } from './OrderedListEditor/OrderedListEditor.svelte';
 export { default as ToggleMatrix } from './ToggleMatrix/ToggleMatrix.svelte';
 export { default as LiveTestBox } from './LiveTestBox/LiveTestBox.svelte';
+export { default as ConditionRow } from './ConditionRow/ConditionRow.svelte';
 export { default as FilterBar } from './FilterBar/FilterBar.svelte';
 export { default as DataTable } from './DataTable/DataTable.svelte';
 export { default as PosterGrid } from './PosterGrid/PosterGrid.svelte';
@@ -53,6 +54,7 @@ export type {
 export type { OrderedItem } from './OrderedListEditor/OrderedListEditor.svelte';
 export type { MatrixColumn, MatrixRow, MatrixValue, MatrixCell } from './ToggleMatrix/ToggleMatrix.svelte';
 export type { TestResult, TestField, TestCondition } from './LiveTestBox/LiveTestBox.svelte';
+export type { ConditionValue, ConditionKindOption } from './ConditionRow/ConditionRow.svelte';
 export type { FilterFacet, FilterOption, FilterState } from '../../filters/url';
 export { filterToParams, filterFromParams, emptyFilter } from '../../filters/url';
 export type { Column, SortState } from './DataTable/DataTable.svelte';

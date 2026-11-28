@@ -150,7 +150,7 @@ func artistTarget(a SrcArtist, snap Snapshot, rw Rewrite) (domain.Artist, []stor
 		sortName = sortTitle(a.Name)
 	}
 	ar := domain.Artist{MBID: a.MBID, Name: a.Name, SortName: sortName, Disambiguation: a.Disambiguation, Type: a.Type,
-		RootFolder: rw.Apply(a.Root), Path: rw.Apply(a.Path), ProfileKey: profileKey(snap.Profiles, a.ProfileID, domain.KindMusic),
+		RootFolder: rw.Apply(a.Root), Path: rw.Apply(a.Path), ProfileKey: profileKey(snap, a.ProfileID, domain.KindMusic),
 		MetadataProfile: metaProfileKey(snap.MetaProfiles, a.MetaProfileID), MonitorNew: mn, Monitored: a.Monitored,
 		Tags: tagLabels(snap.Tags, a.Tags)}
 	meta, _ := domain.MetadataProfileByKey(ar.MetadataProfile)

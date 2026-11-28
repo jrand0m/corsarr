@@ -28,6 +28,7 @@
   import { actorLabel, availableAt, eventDetail, eventView, isActiveDownload, movieStatus, parseEnvExport, queuedMovieIds, toQueueCard } from '../../model';
   import { actionDone, pausedIds, queueAction } from '../../queue.svelte';
   import type { ScreenProps } from '../../screen';
+  import { artSrc } from '../../art';
 
   let { params = {} }: ScreenProps = $props();
   const { api, live, movies, profiles, toasts, navigate } = app();
@@ -74,7 +75,7 @@
   });
 
   const entity = $derived(m ? {
-    title: m.title, kind: 'movie' as const, art: null,
+    title: m.title, kind: 'movie' as const, art: artSrc(m.posterUrl, 128),
     meta: [m.year || undefined, m.runtimeMin ? `${Math.floor(m.runtimeMin / 60)}h ${m.runtimeMin % 60}m` : undefined].filter(Boolean).join(' · '),
     monitor: (m.monitored ? 'monitored' : 'unmonitored') as MonitorState,
     status: [{ family: 'item' as const, value: status, detail: downloads[0] ? downloads[0].state : undefined }],

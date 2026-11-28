@@ -74,7 +74,7 @@ func (s *Service) loadTV(ctx context.Context, d store.StoredDownload) (tvImport,
 	if in.all, err = s.d.TV.Episodes(ctx, in.series.ID); err != nil {
 		return in, err
 	}
-	in.profile, _ = tv.ProfileByKey(in.series.ProfileKey)
+	in.profile = tv.ProfileOrDefault(in.series.ProfileKey)
 	for _, e := range in.linked {
 		in.items = append(in.items, e.EventItem(in.series.Title))
 	}
@@ -190,7 +190,7 @@ func (s *Service) placeEpisodes(ctx context.Context, in tvImport, p placement) (
 	if why, ok := s.upgradesAll(in.profile, curs, cand); !ok {
 		return episodeItems(p.episodes, "skipped", why, "", nil, nil), "", nil
 	}
-	dest := tv.FilePath(in.series, p.episodes, cand.quality.Name, filepath.Ext(p.video.Path))
+	dest := tv.FilePath(in.series, p.episodes, cand.quality.Name, filepath.Ext(p.video.Path), p.video.Path, s.naming(domain.KindTV))
 	replaced, err := s.putTV(ctx, in, p, dest, curs)
 	if err != nil {
 		r := placeFailure(in.d.ID, in.items, err)

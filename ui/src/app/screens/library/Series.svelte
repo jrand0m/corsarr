@@ -12,7 +12,7 @@
   import type { Column, SortState } from '../../../lib/components/organisms/DataTable/DataTable.svelte';
   import { emptyFilter, type FilterFacet, type FilterState } from '../../../lib/filters/url';
   import type { ListView } from '../../../lib/route/hash';
-  import { app, profileName } from '../../context.svelte';
+  import { app, profileName, profilesFor } from '../../context.svelte';
   import { Resource } from '../../resource.svelte';
   import { refetchOn } from '../../live.svelte';
   import { toApiError } from '../../api/client';
@@ -21,6 +21,7 @@
   import { count, seriesItemStatus, seriesStatusLabel } from '../../tv';
   import AddSeries from './AddSeries.svelte';
   import type { ScreenProps } from '../../screen';
+  import { artSrc } from '../../art';
 
   let { screen }: ScreenProps = $props();
   const { api, live, profiles, toasts, navigate } = app();
@@ -47,7 +48,7 @@
   const facets = $derived<FilterFacet[]>([
     { id: 'status', label: 'Status', options: (['continuing', 'ended', 'upcoming'] as const).map((v) => ({ value: v, label: seriesStatusLabel[v], count: counts[v] ?? 0 })) },
     { id: 'monitored', label: 'Monitoring', multiple: false, options: [{ value: 'yes', label: 'Monitored' }, { value: 'no', label: 'Unmonitored' }] },
-    { id: 'profile', label: 'Profile', options: (profiles.data ?? []).map((p) => ({ value: p.key, label: p.name })) },
+    { id: 'profile', label: 'Profile', options: profilesFor(profiles.data, 'tv').map((p) => ({ value: p.key, label: p.name })) },
   ]);
   const ratio = (s: SeriesSummary) => (s.stats?.episodeCount ? s.stats.episodeFileCount / s.stats.episodeCount : 1);
   const airing = (s: SeriesSummary) => (s.stats?.nextAiring ? Date.parse(s.stats.nextAiring) : Infinity);
@@ -72,7 +73,7 @@
     { id: 'next', label: 'Next airing', width: '8rem', sortable: true, phone: 'meta', value: (r) => r.stats?.nextAiring ?? '—' },
   ];
   const poster = (r: SeriesSummary) => ({
-    id: String(r.id), title: r.title, kind: 'tv' as const, src: r.posterUrl || null, year: r.year || undefined,
+    id: String(r.id), title: r.title, kind: 'tv' as const, src: artSrc(r.posterUrl, 240), year: r.year || undefined,
     detail: `${r.stats?.episodeFileCount ?? 0} of ${count(r.stats?.episodeCount ?? 0, 'episode')}`,
     status: { family: 'item' as const, value: seriesItemStatus(r) },
   });

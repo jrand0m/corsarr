@@ -99,18 +99,16 @@ type wProfileItem struct {
 	Allowed bool
 }
 
-type wFormatItem struct {
-	Name  string
-	Score int
-}
-
 type wProfile struct {
-	ID             int
-	Name           string
-	UpgradeAllowed bool
-	Cutoff         int
-	Items          []wProfileItem
-	FormatItems    []wFormatItem
+	ID                    int
+	Name                  string
+	UpgradeAllowed        bool
+	Cutoff                int
+	Items                 []wProfileItem
+	FormatItems           []wFormatScore
+	MinFormatScore        int
+	CutoffFormatScore     int
+	MinUpgradeFormatScore int
 }
 
 type wNamed struct {
@@ -146,9 +144,21 @@ type wProvider struct {
 }
 
 type wNaming struct {
-	RenameEpisodes *bool
-	RenameMovies   *bool
-	RenameTracks   *bool
+	RenameEpisodes         *bool
+	RenameMovies           *bool
+	RenameTracks           *bool
+	ColonReplacementFormat json.RawMessage
+	StandardEpisodeFormat  string
+	DailyEpisodeFormat     string
+	AnimeEpisodeFormat     string
+	SeriesFolderFormat     string
+	SeasonFolderFormat     string
+	SpecialsFolderFormat   string
+	StandardMovieFormat    string
+	MovieFolderFormat      string
+	StandardTrackFormat    string
+	MultiDiscTrackFormat   string
+	ArtistFolderFormat     string
 }
 
 type wPage[T any] struct {

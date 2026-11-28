@@ -15,6 +15,7 @@ type SourceInfo struct {
 	Version  string `json:"version,omitempty"`
 	Range    string `json:"supported"`
 	Error    string `json:"error,omitempty"`
+	ReadMs   int64  `json:"readMs"` // how long reading this source took
 }
 
 // Snapshot is everything read from one source, parsed once at the boundary.
@@ -25,15 +26,19 @@ type Snapshot struct {
 	Artists       []SrcArtist
 	Profiles      map[int]SrcProfile
 	MetaProfiles  map[int]SrcMetaProfile
-	CustomFormats []string
-	RootFolders   []string
-	Tags          map[int]string
-	Clients       []SrcClient
-	Indexers      []SrcIndexer
-	Rename        *bool // nil = not read
-	Queue         []SrcQueue
-	Blocklist     []SrcBlock
-	History       []SrcHistory
+	CustomFormats []SrcFormat
+	Sizes         map[string]SrcSize // quality definitions by source quality name
+	// ProfileKeys maps a source profile id onto the corsarr profile key the
+	// plan gives it (set while planning).
+	ProfileKeys map[int]string
+	RootFolders []string
+	Tags        map[int]string
+	Clients     []SrcClient
+	Indexers    []SrcIndexer
+	Naming      *SrcNaming // nil = not read
+	Queue       []SrcQueue
+	Blocklist   []SrcBlock
+	History     []SrcHistory
 }
 
 // SrcSeries is a source series with its episodes and files.
@@ -102,6 +107,13 @@ type SrcProfile struct {
 	Upgrades bool
 	Scored   int      // custom formats with a non-zero score
 	Allowed  []string // names of the allowed qualities
+	// The full profile, for custom profiles.
+	CutoffID    int
+	Items       []SrcQualityItem
+	Scores      []SrcScore
+	MinScore    int
+	CutoffScore int
+	StepScore   int
 }
 
 // SrcClient is a source download client.

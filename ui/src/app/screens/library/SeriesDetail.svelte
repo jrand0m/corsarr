@@ -30,7 +30,7 @@
   import type { TimelineEntry } from '../../../lib/components/organisms/Timeline/Timeline.svelte';
   import { formatAbsolute } from '../../../lib/format/time';
   import { formatBytes } from '../../../lib/format/quantity';
-  import { app, profileName } from '../../context.svelte';
+  import { app, profileName, profilesFor } from '../../context.svelte';
   import { Resource } from '../../resource.svelte';
   import { refetchOn } from '../../live.svelte';
   import { ApiError, toApiError } from '../../api/client';
@@ -41,6 +41,7 @@
     count, episodeCode, episodeRange, episodeState, itemStatusOf, monitorModes, queuedEpisodes, seasonName, seasonOrder, seriesItemStatus, seriesStatusLabel,
   } from '../../tv';
   import type { ScreenProps } from '../../screen';
+  import { artSrc } from '../../art';
 
   let { params = {} }: ScreenProps = $props();
   const { api, live, profiles, toasts, navigate } = app();
@@ -87,7 +88,7 @@
   const runtime = (min?: number) => (min ? (min >= 60 ? `${Math.floor(min / 60)}h ${min % 60}m` : `${min}m`) : undefined);
 
   const entity = $derived(show ? {
-    title: show.title, kind: 'tv' as const, art: show.posterUrl || null,
+    title: show.title, kind: 'tv' as const, art: artSrc(show.posterUrl, 128),
     meta: [show.year || undefined, show.network, seriesStatusLabel[show.status || ''], runtime(show.runtimeMin)].filter(Boolean).join(' · '),
     monitor: (show.monitored ? 'monitored' : 'unmonitored') as MonitorState,
     status: [{ family: 'item' as const, value: downloads.length ? 'queued' : seriesItemStatus(show), detail: downloads.length ? count(downloads.length, 'download') : undefined }],
@@ -496,7 +497,7 @@
   <Drawer bind:open={editOpen} title="Edit {show?.title ?? 'series'}" size="md">
     <div class="edit">
       <BoolField label="Monitored" help="Off: corsarr leaves the whole series alone." bind:checked={edit.monitored} />
-      <EnumField label="Quality profile" bind:value={edit.profileKey} options={(profiles.data ?? []).map((p) => ({ value: p.key, label: p.name }))} />
+      <EnumField label="Quality profile" bind:value={edit.profileKey} options={profilesFor(profiles.data, 'tv').map((p) => ({ value: p.key, label: p.name }))} />
       <EnumField label="Apply a monitoring mode" bind:value={edit.monitor} placeholder="Keep the current episode choices" options={monitorModes}
         help={edit.monitor ? `${monitorModes.find((o) => o.value === edit.monitor)?.description} Applied once, to the episodes that exist now.` : 'Pick a mode to reset which episodes are monitored.'} />
       <EnumField label="New seasons" bind:value={edit.monitorNew} options={[{ value: 'all', label: 'Monitor them as they appear' }, { value: 'none', label: 'Leave them unmonitored' }]} />

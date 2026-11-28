@@ -8,7 +8,6 @@ import (
 	"github.com/jrand0m/corsarr/internal/api"
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
-	"github.com/jrand0m/corsarr/internal/movies"
 )
 
 // Mount registers the artist and album endpoints (search endpoints are
@@ -75,6 +74,9 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
+	for i := range items {
+		items[i].CoverURL = s.d.Art.Of(domain.ArtPoster, items[i].CoverURL)
+	}
 	api.WritePage(w, items, next)
 }
 
@@ -120,6 +122,10 @@ func (s *Service) writeDetail(w http.ResponseWriter, r *http.Request, id int64) 
 	if err != nil {
 		WriteErr(w, err)
 		return
+	}
+	d.Artist.CoverURL = s.d.Art.Of(domain.ArtPoster, d.Artist.CoverURL)
+	for i := range d.Albums {
+		d.Albums[i].CoverURL = s.d.Art.Of(domain.ArtPoster, d.Albums[i].CoverURL)
 	}
 	api.WriteJSON(w, http.StatusOK, d)
 }
@@ -172,6 +178,7 @@ func (s *Service) album(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
+	d.Album.CoverURL = s.d.Art.Of(domain.ArtPoster, d.Album.CoverURL)
 	api.WriteJSON(w, http.StatusOK, d)
 }
 
@@ -207,8 +214,8 @@ type profileView struct {
 // profiles lists the music quality profiles and the metadata profiles.
 func profiles(w http.ResponseWriter, _ *http.Request) {
 	quality := []profileView{}
-	for _, p := range decide.DefaultProfiles(domain.KindMusic) {
-		key := movies.ProfileKey(p.Spec().Name)
+	for _, p := range decide.ProfilesFor(domain.KindMusic) {
+		key := p.Key()
 		quality = append(quality, profileView{Key: key, Name: p.Spec().Name, Cutoff: string(p.Spec().Cutoff), IsDefault: key == DefaultProfileKey})
 	}
 	api.WriteJSON(w, http.StatusOK, map[string]any{"quality": quality, "metadata": domain.MetadataProfiles})

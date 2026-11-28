@@ -113,6 +113,7 @@ type Report struct {
 	Counts   map[Outcome]int `json:"counts"`
 	Config   string          `json:"config,omitempty"` // YAML for config-managed objects
 	Env      []string        `json:"env,omitempty"`    // variables the YAML references
+	Naming   []TokenMapping  `json:"naming,omitempty"` // how each source naming token maps
 	PlanHash string          `json:"planHash"`
 	Started  time.Time       `json:"startedAt"`
 	Finished time.Time       `json:"finishedAt"`
@@ -185,15 +186,19 @@ type State struct {
 	Stat      func(path string) (size int64, ok bool)
 	Config    ConfigView
 	Overrides map[string]string // "kind:tv" | "rule:*" → mode already chosen
+	Quality   QualityState
 	Now       time.Time
 }
 
 // ConfigView is what the active config already sets.
 type ConfigView struct {
-	RootFolders  map[string]bool // path
-	Indexers     map[string]bool // url
-	Clients      map[string]bool // url
-	KindExplicit map[string]bool // media kind whose mode the config sets
+	RootFolders  map[string]bool   // path
+	Indexers     map[string]bool   // url
+	ManagerRefs  map[string]string // indexer host → the API key reference an indexer there uses
+	Clients      map[string]bool   // url
+	KindExplicit map[string]bool   // media kind whose mode the config sets
+	KindMode     map[string]string // effective mode of each kind the config sets
+	Naming       map[string]bool   // media kind whose naming the config sets
 }
 
 // hashOf fingerprints any value through its JSON form.

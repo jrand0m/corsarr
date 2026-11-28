@@ -8,6 +8,7 @@
   "runtime": 136,
   "status": "Released",
   "poster_path": "/poster.jpg",
+  "backdrop_path": "/backdrop.jpg",
   "genres": [{"id": 28, "name": "Action"}, {"id": 878, "name": "Science Fiction"}],
   "external_ids": {"imdb_id": "tt0133093", "tvdb_id": null},
   "alternative_titles": {"titles": [

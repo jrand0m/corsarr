@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -109,12 +110,13 @@ func (s *Service) run(ctx context.Context, req Request, mode, reviewed string, p
 	}
 	defer s.mu.Unlock()
 	progress = s.progress(progress)
-	id, err := s.d.Store.Migration().StartRun(ctx, mode, appsOf(req.Sources), s.d.Now())
+	start := s.d.Now()
+	id, err := s.d.Store.Migration().StartRun(ctx, mode, appsOf(req.Sources), start)
 	if err != nil {
 		return Report{}, err
 	}
 	r, err := s.execute(ctx, req, mode, reviewed, progress)
-	r.RunID = id
+	r.RunID, r.Started, r.Finished = id, start, s.d.Now()
 	s.finish(ctx, &r, err)
 	return r, err
 }
@@ -136,7 +138,6 @@ func (s *Service) execute(ctx context.Context, req Request, mode, reviewed strin
 		return r, ErrPlanChanged
 	}
 	err = Apply(ctx, &r, storeTarget{s.d.Store}, s.d.Now(), progress)
-	r.Finished = s.d.Now()
 	if s.d.AfterApply != nil {
 		s.d.AfterApply(context.WithoutCancel(ctx))
 	}
@@ -153,7 +154,9 @@ func (s *Service) read(ctx context.Context, req Request, progress func(Progress)
 	since := s.d.Now().Add(-time.Duration(min(days, MaxHistoryDays)) * 24 * time.Hour)
 	var out []Snapshot
 	for _, ep := range req.Sources {
+		began := s.d.Now()
 		snap, err := Read(ctx, NewClient(ep, s.d.HTTP), ReadOptions{Scope: req.Options.scope(), HistorySince: since}, progress)
+		snap.Source.ReadMs = s.d.Now().Sub(began).Milliseconds()
 		if err != nil {
 			s.d.Log.Warn("migration source failed", "source", ep.App, "url", ep.URL.String(), "err", err)
 		}
@@ -247,7 +250,7 @@ func (s *Service) state(ctx context.Context, snaps []Snapshot, o Options) (State
 	if st.Index, err = s.d.Store.Migration().Index(ctx); err != nil {
 		return st, err
 	}
-	for _, step := range []func(context.Context, *State, []Snapshot) error{s.provenance, s.overrides, s.live, s.clients} {
+	for _, step := range []func(context.Context, *State, []Snapshot) error{s.provenance, s.overrides, s.live, s.clients, s.quality} {
 		if err := step(ctx, &st, snaps); err != nil {
 			return st, err
 		}
@@ -361,23 +364,54 @@ func anyQueue(snaps []Snapshot) bool {
 
 // configView extracts what the active config sets.
 func configView(cfg *config.Config) ConfigView {
-	v := ConfigView{RootFolders: map[string]bool{}, Indexers: map[string]bool{}, Clients: map[string]bool{}, KindExplicit: map[string]bool{}}
+	v := ConfigView{RootFolders: map[string]bool{}, Indexers: map[string]bool{}, Clients: map[string]bool{}, KindExplicit: map[string]bool{},
+		KindMode: map[string]string{}, ManagerRefs: map[string]string{}, Naming: map[string]bool{}}
 	if cfg == nil {
 		return v
 	}
 	for _, f := range cfg.RootFolders {
 		v.RootFolders[cleanPath(f.Path)] = true
 	}
-	for _, inst := range cfg.Instances[plugin.KindIndexer.Section()] {
-		v.Indexers[inst.Settings.String("url")] = true
+	for _, key := range sortedKeys(cfg.Instances[plugin.KindIndexer.Section()]) {
+		inst := cfg.Instances[plugin.KindIndexer.Section()][key]
+		u := inst.Settings.String("url")
+		v.Indexers[u] = true
+		host := strings.ToLower(hostOf(u))
+		if r := inst.Refs["apiKey"]; r != "" && v.ManagerRefs[host] == "" {
+			v.ManagerRefs[host] = r
+		}
 	}
 	for _, inst := range cfg.Instances[plugin.KindDownloader.Section()] {
 		v.Clients[strings.TrimRight(inst.Settings.String("url"), "/")] = true
 	}
 	for _, k := range []domain.MediaKind{domain.KindTV, domain.KindMovie, domain.KindMusic, domain.KindBook} {
 		v.KindExplicit[string(k)] = ConfigSetsKind(cfg, k)
+		v.Naming[string(k)] = configSetsNaming(cfg, k)
+		if v.KindExplicit[string(k)] {
+			v.KindMode[string(k)] = string(cfg.MediaKinds[k])
+		}
 	}
 	return v
+}
+
+func sortedKeys[V any](m map[domain.ObjectKey]V) []domain.ObjectKey {
+	out := make([]domain.ObjectKey, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// configSetsNaming reports whether the config source sets any of the kind's
+// naming settings (defaults do not count).
+func configSetsNaming(cfg *config.Config, k domain.MediaKind) bool {
+	for _, f := range append([]string{"rename", "colon"}, namingFields[k]...) {
+		if f != "" && cfg.ManagedBy("naming."+string(k)+"."+f) != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // ConfigSetsKind reports whether the config source sets the kind's mode
@@ -392,6 +426,10 @@ func kindModeKey(k domain.MediaKind) string { return "mediaKinds." + string(k) +
 // ── store target ─────────────────────────────────────────────────────────────
 
 type storeTarget struct{ st *store.Store }
+
+func (t storeTarget) SaveQuality(ctx context.Context, tbl store.QualityTable, o store.QualityObject, now time.Time) error {
+	return t.st.Quality().Save(ctx, tbl, o, now)
+}
 
 func (t storeTarget) AdoptSeries(ctx context.Context, s domain.Series, seasons []domain.Season, eps []domain.Episode,
 	files []store.EpisodeFile, p store.Provenance) (int64, error) {

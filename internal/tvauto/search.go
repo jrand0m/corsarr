@@ -68,7 +68,7 @@ func (sc scope) byID(id int64) (domain.Episode, bool) {
 
 // targets gathers what the decision needs about each covered episode.
 func (s *Service) targets(ctx context.Context, sc scope, covered []domain.Episode, rel domain.Release) []tv.Target {
-	profile, _ := tv.ProfileByKey(sc.series.ProfileKey)
+	profile := tv.ProfileOrDefault(sc.series.ProfileKey)
 	out := make([]tv.Target, len(covered))
 	for i, e := range covered {
 		cur, ok := sc.files[e.ID]
@@ -109,7 +109,7 @@ func (s *Service) queuedEqualOrBetter(ctx context.Context, e domain.Episode, p d
 // decideOne decides a release for the episodes of the scope it covers.
 func (s *Service) decideOne(ctx context.Context, sc scope, rel domain.Release) automation.Decided {
 	covered := tv.Covered(parse.ParseRelease(rel.Title).Episode, sc.episodes)
-	profile, _ := tv.ProfileByKey(sc.series.ProfileKey)
+	profile := tv.ProfileOrDefault(sc.series.ProfileKey)
 	return automation.NewDecided(rel, tv.Decide(sc.series, profile, rel, s.targets(ctx, sc, covered, rel), nil))
 }
 

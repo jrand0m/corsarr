@@ -22,6 +22,8 @@ describe('resolve', () => {
     expect(resolve('/system/about')).toMatchObject({ area: 'system', screen: 'about' });
     expect(resolve('/settings/general')).toMatchObject({ area: 'settings', screen: 'general' });
     expect(resolve('/settings/plugins')).toMatchObject({ area: 'settings', screen: 'plugins' });
+    expect(resolve('/settings/profiles')).toMatchObject({ area: 'settings', screen: 'profiles' });
+    expect(resolve('/settings/custom-formats')).toMatchObject({ area: 'settings', screen: 'custom-formats' });
   });
 
   it('reads path params and tolerates a trailing slash', () => {

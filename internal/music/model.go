@@ -25,12 +25,13 @@ const DefaultAlbumMinutes = 45
 
 // ProfileByKey finds a music quality profile by the key of its name.
 func ProfileByKey(key string) (decide.QualityProfile, bool) {
-	for _, p := range decide.DefaultProfiles(domain.KindMusic) {
-		if movies.ProfileKey(p.Spec().Name) == key {
-			return p, true
-		}
-	}
-	return decide.QualityProfile{}, false
+	return decide.Lookup(domain.KindMusic, key)
+}
+
+// ProfileOrDefault is the artist's profile, or the default one when its key
+// no longer names a profile.
+func ProfileOrDefault(key string) decide.QualityProfile {
+	return movies.OrDefault(domain.KindMusic, key, DefaultProfileKey)
 }
 
 // IsReleased reports whether an album has come out by now; an album without

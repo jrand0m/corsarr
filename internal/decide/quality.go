@@ -55,6 +55,7 @@ var ladder = func() []Quality {
 		{"webrip-480p", "WEBRip-480p", parse.SourceWEBRip, TierSD},
 		{"webdl-480p", "WEBDL-480p", parse.SourceWEBDL, TierSD},
 		{"bluray-480p", "Bluray-480p", parse.SourceBluray, TierSD},
+		{"bluray-576p", "Bluray-576p", parse.SourceBluray, TierSD},
 		{"hdtv-720p", "HDTV-720p", parse.SourceHDTV, Tier720},
 		{"webrip-720p", "WEBRip-720p", parse.SourceWEBRip, Tier720},
 		{"webdl-720p", "WEBDL-720p", parse.SourceWEBDL, Tier720},
@@ -84,6 +85,15 @@ type srcTier struct {
 	tier Tier
 }
 
+// exactRes names rungs that sit inside a tier and are picked only when the
+// release states that exact resolution.
+var exactRes = map[srcRes]QualityID{{parse.SourceBluray, parse.R576}: "bluray-576p"}
+
+type srcRes struct {
+	src parse.Source
+	res parse.Resolution
+}
+
 var (
 	byID       = map[QualityID]Quality{}
 	bySrcTier  = map[srcTier]Quality{}
@@ -93,7 +103,9 @@ var (
 func init() {
 	for _, q := range ladder {
 		byID[q.ID] = q
-		bySrcTier[srcTier{q.Source, q.Tier}] = q
+		if _, taken := bySrcTier[srcTier{q.Source, q.Tier}]; !taken {
+			bySrcTier[srcTier{q.Source, q.Tier}] = q
+		}
 		if _, ok := lowestTier[q.Source]; !ok {
 			lowestTier[q.Source] = q
 		}
@@ -136,6 +148,9 @@ func QualityOf(p parse.ParsedRelease) (Quality, bool) {
 			return QualityUnknown, false
 		}
 		src = parse.SourceHDTV // the lowest source that exists at every tier
+	}
+	if id, ok := exactRes[srcRes{src, p.Resolution.Value}]; ok && srcKnown && p.Resolution.Known {
+		return byID[id], true
 	}
 	if q, ok := bySrcTier[srcTier{src, tier}]; ok {
 		return q, srcKnown && tier != TierUnknown

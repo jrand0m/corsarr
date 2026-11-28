@@ -43,6 +43,8 @@ const routes: [pattern: string, area: Area, screen: string][] = [
   ['/settings/plugins/catalogue', 'settings', 'catalogue'],
   ['/settings/plugins/:id', 'settings', 'plugins'],
   ['/settings/indexers', 'settings', 'indexers'],
+  ['/settings/profiles', 'settings', 'profiles'],
+  ['/settings/custom-formats', 'settings', 'custom-formats'],
 ];
 
 const redirects: Record<string, string> = {

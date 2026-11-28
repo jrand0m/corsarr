@@ -17,7 +17,7 @@ import (
 
 func (a *App) newMusic() *music.Service {
 	return music.New(music.Deps{Repo: a.d.Store.Music(), Files: a.d.Store.Library(), Pub: a.d.Bus, Metadata: a.musicMetadata,
-		RootFolders: a.musicRoots, Modes: a.mode, Log: a.d.Log})
+		RootFolders: a.musicRoots, Naming: a.namingOf(domain.KindMusic), Modes: a.mode, Art: a.art, Log: a.d.Log})
 }
 
 func (a *App) newMusicAuto() *musicauto.Service {
