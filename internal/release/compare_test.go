@@ -44,14 +44,17 @@ func TestCompareArchives(t *testing.T) {
 
 func TestComparePackages(t *testing.T) {
 	a, b := t.TempDir(), t.TempDir()
-	for _, n := range []string{"corsarr_1.0.0_amd64.deb", "corsarr-1.0.0-1.x86_64.rpm", "corsarr_1.0.0_x86_64.apk", "notes.txt"} {
+	for _, n := range []string{"corsarr_1.0.0_amd64.deb", "corsarr-1.0.0-1.x86_64.rpm", "corsarr_1.0.0_x86_64.apk", "notes.txt",
+		"transmission-1.0.0.wasm", "plugins-index.json"} {
 		must(t, os.WriteFile(filepath.Join(a, n), []byte("same"), 0o644))
 		must(t, os.WriteFile(filepath.Join(b, n), []byte("same"), 0o644))
 	}
 	must(t, os.WriteFile(filepath.Join(b, "corsarr_1.0.0_amd64.deb"), []byte("other!"), 0o644))
+	must(t, os.WriteFile(filepath.Join(b, "transmission-1.0.0.wasm"), []byte("changed"), 0o644))
 	got, err := CompareArchives(a, b)
 	must(t, err)
-	if len(got) != 3 || !got[0].Same || !got[2].Same || got[1].Detail != "package bytes differ (4 vs 6 bytes); diffoscope shows where" {
+	if len(got) != 5 || !got[0].Same || !got[2].Same || !got[3].Same || got[1].Detail != "bytes differ (4 vs 6 bytes); diffoscope shows where" ||
+		got[4].Name != "transmission-1.0.0.wasm" || got[4].Same {
 		t.Fatalf("%v", got)
 	}
 }
