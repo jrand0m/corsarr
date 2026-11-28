@@ -214,4 +214,7 @@ func TestStartBudgetFlag(t *testing.T) {
 			t.Errorf("--start-budget=%q: %+v", flag, checks)
 		}
 	}
+	if checks := (cli{flags: map[string]string{}, stdout: io.Discard}).describe(&wasm.Module{StartTime: startBudget}); !checks[0].Passed {
+		t.Errorf("a start of exactly the budget is within it: %+v", checks)
+	}
 }
