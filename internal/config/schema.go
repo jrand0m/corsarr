@@ -81,6 +81,14 @@ func NewSchema(reg *plugin.Registry) *Schema {
 			Field{Name: "basePath", Node: &Node{Kind: KindString, Doc: "Path prefix when a reverse proxy serves corsarr under a sub-path, for example /corsarr; leave empty when it has its own host name.", Check: checkBasePath}},
 			Field{Name: "egressAllow", Node: &Node{Kind: KindList, Elem: &Node{Kind: KindString, Check: checkEgressHost},
 				Doc: "Hosts corsarr may contact (exact name, *.domain or an IP range); leave empty to allow every host, or list hosts to lock outgoing traffic down."}},
+			Field{Name: "rateLearning", Node: obj("How corsarr finds each service's rate limit and stays below it.",
+				Field{Name: "enabled", Node: &Node{Kind: KindBool, Default: "true",
+					Doc: "Learn where each service starts throttling and keep requests below it; turn off to use only the configured limits."}},
+				Field{Name: "headroom", Node: &Node{Kind: KindNumber, Default: "0.85", Check: checkHeadroom,
+					Doc: "Share of a learned limit corsarr uses, between 0.1 and 1; lower it to stay further from the limit."}},
+				Field{Name: "probeEvery", Node: &Node{Kind: KindDuration, Default: "168h", Check: nonNegative,
+					Doc: "How often a limit found by throttling is gently re-checked while requests are waiting; 0 never re-checks."}},
+			)},
 		)},
 		{Name: "data", Node: obj("Data folder (applies at start).",
 			Field{Name: "dir", Node: &Node{Kind: KindString, Default: "/data", Doc: "Folder for the database, the secret key, backups and logs; point it at storage that survives restarts and upgrades."}},
@@ -284,6 +292,13 @@ func checkBasePath(s string) error {
 	}
 	if !strings.HasPrefix(s, "/") || strings.HasSuffix(s, "/") {
 		return fmt.Errorf("must start with / and not end with /, e.g. /corsarr")
+	}
+	return nil
+}
+
+func checkHeadroom(s string) error {
+	if v, err := strconv.ParseFloat(s, 64); err != nil || v < 0.1 || v > 1 {
+		return fmt.Errorf("must be a number between 0.1 and 1")
 	}
 	return nil
 }

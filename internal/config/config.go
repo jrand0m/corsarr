@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/plugin"
@@ -64,9 +65,10 @@ type Instance struct {
 // the full tree is kept for export and live-change detection.
 type Config struct {
 	Server struct {
-		Address     string
-		BasePath    string
-		EgressAllow []string
+		Address      string
+		BasePath     string
+		EgressAllow  []string
+		RateLearning RateLearning
 	}
 	Data struct {
 		Dir   string
@@ -272,6 +274,7 @@ func build(s *Schema, t tree) *Config {
 	for _, h := range t["server"].(tree)["egressAllow"].([]any) {
 		c.Server.EgressAllow = append(c.Server.EgressAllow, h.(string))
 	}
+	c.Server.RateLearning = rateLearningOf(t["server"].(tree))
 	c.Log.Level = str(t, "log", "level")
 	c.Auth.Mode = str(t, "auth", "mode")
 	for k, v := range t["mediaKinds"].(tree) {
@@ -307,6 +310,25 @@ func legacyApps(t tree) map[string]bool {
 	for app, v := range apps {
 		on, _ := v.(tree)["enabled"].(bool)
 		out[app] = on
+	}
+	return out
+}
+
+// RateLearning is server.rateLearning: per-service rate-limit learning.
+type RateLearning struct {
+	Enabled    bool
+	Headroom   float64
+	ProbeEvery time.Duration
+}
+
+func rateLearningOf(server tree) RateLearning {
+	t, _ := server["rateLearning"].(tree)
+	var out RateLearning
+	out.Enabled, _ = t["enabled"].(bool)
+	out.Headroom, _ = t["headroom"].(float64)
+	out.ProbeEvery, _ = t["probeEvery"].(time.Duration)
+	if out.ProbeEvery == 0 {
+		out.ProbeEvery = -1 // 0 in the file means never; the client reads 0 as its default
 	}
 	return out
 }

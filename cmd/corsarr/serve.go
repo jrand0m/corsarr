@@ -134,7 +134,7 @@ func startKernel(ctx context.Context, cfg *config.Config, log *slog.Logger) (*ke
 	if list, err := st.Health().List(ctx); err == nil {
 		k.health.Load(list)
 	}
-	k.http = httpx.New(httpx.Options{Version: version, Reporter: k.health, Allow: cfg.Server.EgressAllow})
+	k.http = newOutbound(ctx, cfg, st, k.health, log)
 	k.health.OK(configRef)
 	k.jobs = scheduler.New(scheduler.Options{Store: st.Jobs(), Events: k.bus,
 		OnError: func(job string, err error) { log.Warn("job failed", "job", job, "err", err) }})
@@ -154,6 +154,18 @@ func startKernel(ctx context.Context, cfg *config.Config, log *slog.Logger) (*ke
 		return nil, err
 	}
 	return k, nil
+}
+
+// newOutbound builds the shared outbound client and loads the rate limits
+// it learned before the last restart.
+func newOutbound(ctx context.Context, cfg *config.Config, st *store.Store, rep httpx.Reporter, log *slog.Logger) *httpx.Client {
+	rl := cfg.Server.RateLearning
+	c := httpx.New(httpx.Options{Version: version, Reporter: rep, Allow: cfg.Server.EgressAllow,
+		Learning: httpx.Learning{Enabled: rl.Enabled, Headroom: rl.Headroom, ProbeEvery: rl.ProbeEvery, Store: st.RateLimits()}})
+	if err := c.RestoreLimits(ctx); err != nil {
+		log.Warn("learned rate limits not loaded; they are learned again", "err", err)
+	}
+	return c
 }
 
 // registerJobs adds the kernel's own idempotent housekeeping jobs.
@@ -182,7 +194,7 @@ func (k *kernel) listen(ctx context.Context, cfg *config.Config) (*http.Server, 
 		Version: version, Started: time.Now(), BasePath: cfg.Server.BasePath, AuthMode: cfg.Auth.Mode,
 		Auth: k.store.Auth(), History: k.store.History(), Jobs: k.jobs, Health: k.health, Plugins: plugin.Default,
 		Config: k.cfg.Load, Events: k.hub, UI: web.Assets(),
-		DBSize: k.store.Size, Ready: k.ready, Log: k.log, Mounts: k.app.Mounts(),
+		DBSize: k.store.Size, Ready: k.ready, Log: k.log, Mounts: append(k.app.Mounts(), k.mountRateLimits),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -193,6 +205,14 @@ func (k *kernel) listen(ctx context.Context, cfg *config.Config) (*http.Server, 
 	}
 	srv := &http.Server{Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 120 * time.Second}
 	return srv, ln, nil
+}
+
+// mountRateLimits serves what the outbound client learned about each
+// service's rate limit, read-only.
+func (k *kernel) mountRateLimits(m api.Mounter) {
+	m.Handle("GET /api/v1/system/ratelimits", func(w http.ResponseWriter, _ *http.Request) {
+		api.WriteJSON(w, http.StatusOK, map[string]any{"enabled": k.http.LearningEnabled(), "items": k.http.RateLimits()})
+	})
 }
 
 // ready is the readiness probe: the database answers.
