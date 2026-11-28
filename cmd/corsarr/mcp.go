@@ -127,10 +127,11 @@ func (r *relay) listen(ctx context.Context) {
 		return
 	}
 	r.listening = true
+	session := r.session // read here: send may replace r.session while the stream runs
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
-		r.notifications(ctx, r.session)
+		r.notifications(ctx, session)
 	}()
 }
 
