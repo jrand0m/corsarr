@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError, type Client } from './api/client';
 import type { Decided, ReleaseLine } from './api/types';
-import { grabFailure, InteractiveSearch, rank, toPanel } from './interactive.svelte';
+import { grabFailure, InteractiveSearch, nothingAcceptedNote, outcomeFor, rank, readSort, sortReleases, toPanel, writeSort, type SortKey } from './interactive.svelte';
 
 const decided = (id: string, accepted: boolean, rankKey: string, protocol: 'torrent' | 'source' = 'torrent'): Decided => ({
   release: { id, title: id, protocol, size: 1, publishedAt: '2026-01-01T00:00:00Z', indexers: [{ key: 'ix', name: 'Indexer' }], seeders: 9, peers: 0 },
@@ -61,5 +61,59 @@ describe('interactive search', () => {
     expect(grabFailure(new ApiError(403, { code: 'refused', message: 'no' })).refused).toBe(true);
     expect(grabFailure(new ApiError(404, { code: 'not_found', message: 'gone' })).message).toContain('expired');
     expect(grabFailure(new ApiError(409, { code: 'shadowed', message: 'shadow' })).confirm).toBe(false);
+  });
+});
+
+describe('sorting and automation outcome', () => {
+  const des = (id: string, score: number | undefined, position: 'above' | 'on_target' | 'below', rankKey: string, extra: Partial<Decided['release']> = {}): Decided => {
+    const d = decided(id, true, rankKey);
+    return { ...d, release: { ...d.release, ...extra }, decision: { ...d.decision, desirability: score === undefined ? undefined : { score, position, qualitySteps: position === 'above' ? 1 : position === 'below' ? -1 : 0, cutoff: 'X' } } };
+  };
+  const list = [
+    des('below75', 75, 'below', '5', { seeders: 3, size: 3, publishedAt: '2026-01-03T00:00:00Z' }),
+    des('outside', undefined, 'below', '9', { seeders: 50, size: 9 }),
+    des('above75', 75, 'above', '4', { seeders: 1, size: 5 }),
+    des('on', 100, 'on_target', '1', { seeders: 7, size: 4, publishedAt: '2026-01-02T00:00:00Z' }),
+  ];
+  const ids = (key: SortKey) => sortReleases(list, key).map((d) => d.release.id);
+
+  it('orders by every key, ties in automation order', () => {
+    expect(ids('automation')).toEqual(['outside', 'below75', 'above75', 'on']);
+    expect(ids('desirability')).toEqual(['on', 'above75', 'below75', 'outside']);
+    expect(ids('seeders')).toEqual(['outside', 'on', 'below75', 'above75']);
+    expect(ids('size')).toEqual(['outside', 'above75', 'on', 'below75']);
+    expect(ids('newest')).toEqual(['below75', 'on', 'outside', 'above75']);
+    expect(ids('quality')).toEqual(['above75', 'on', 'below75', 'outside']);
+  });
+
+  it('reads the sort from the URL, defaulting to automation', () => {
+    expect(readSort(new URLSearchParams('sort=desirability'))).toBe('desirability');
+    expect(readSort(new URLSearchParams('sort=bogus'))).toBe('automation');
+    expect(readSort(new URLSearchParams(''))).toBe('automation');
+  });
+
+  it('keeps the sort in the URL hash, leaving out the default', () => {
+    location.hash = '#/library/movies/1?tab=files';
+    writeSort('seeders');
+    expect(location.hash).toBe('#/library/movies/1?tab=files&sort=seeders');
+    writeSort('automation');
+    expect(location.hash).toBe('#/library/movies/1?tab=files');
+  });
+
+  it('names the automation outcome: pending, from the verdict, or unavailable', () => {
+    const a = decided('a', true, '2');
+    const r = decided('r', false, '1');
+    const verdict = { mode: 'active' as const, pick: 'a', outcomes: { a: { status: 'grab' as const } } };
+    expect(outcomeFor(a, undefined, true)).toBe('pending');
+    expect(outcomeFor(r, undefined, true)).toBe('declined');
+    expect(outcomeFor(a, verdict, false)).toBe('grab');
+    expect(outcomeFor(a, undefined, false)).toBe('unavailable');
+    const p = toPanel(decided('b', true, '1'), 1, 2, { verdict: { mode: 'active', pick: 'a', outcomes: { b: { status: 'outranked', lostTo: { criterion: 'quality', message: 'lower quality than the pick' } } } } });
+    expect(p.automation).toEqual({ outcome: 'outranked', lostTo: 'lower quality than the pick' });
+    expect(p.desirability).toBeNull();
+  });
+
+  it('explains when automation would grab nothing', () => {
+    expect(nothingAcceptedNote(4, [{ message: 'too big', count: 3 }])).toContain('Automatic search would grab nothing: none of the 4 releases passed the profile. Most common reasons: too big (3).');
   });
 });

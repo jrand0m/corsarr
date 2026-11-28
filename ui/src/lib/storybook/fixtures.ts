@@ -59,28 +59,37 @@ export const movies: MovieRow[] = Array.from({ length: 120 }, (_, i) => {
 // Item detail and interactive search
 export const docksideDecisions: Decision[] = [
   {
-    release: { title: 'Dockside.2026.1080p.WEB-DL.DDP5.1.H.264-HARBOUR', indexer: 'Harbour Tracker', protocol: 'torrent', size: 6.2e9, publishedAt: NOW - 2 * hour, seeders: 1240, quality: 'WEB-DL 1080p', runtimeSeconds: 6720 },
+    release: { title: 'Dockside.2026.1080p.WEB-DL.DDP5.1.H.264-HARBOUR', indexer: 'Harbour Tracker', protocol: 'torrent', size: 6.2e9, publishedAt: NOW - 2 * hour, seeders: 1240, quality: 'WEB-DL 1080p', runtimeSeconds: 6720,
+      swarm: { seeders: 1240, leechers: 86, reported: true, health: 'good' }, availability: { status: 'complete', grabs: 4120, files: 1 } },
     verdict: 'accept', rank: 1, candidates: 9, score: { total: 1250, formats: [{ name: 'DD+ 5.1', score: 250 }, { name: 'Trusted group', score: 1000 }] }, reasons: [],
+    automation: { outcome: 'grab' }, desirability: { score: 100, position: 'on_target', qualitySteps: 0, cutoff: 'WEBDL-1080p', sizeDelta: 0.04, preferredSize: 5.96e9 },
   },
   {
-    release: { title: 'Dockside.2026.1080p.BluRay.x264-QUAY', indexer: 'Dock Feeds', protocol: 'usenet', size: 9.8e9, publishedAt: NOW - 20 * hour, quality: 'Bluray 1080p', runtimeSeconds: 6720 },
+    release: { title: 'Dockside.2026.1080p.BluRay.x264-QUAY', indexer: 'Dock Feeds', protocol: 'usenet', size: 9.8e9, publishedAt: NOW - 20 * hour, quality: 'Bluray 1080p', runtimeSeconds: 6720,
+      availability: { status: 'unknown', grabs: 310 } },
     verdict: 'accept', rank: 2, candidates: 9, score: { total: 750, formats: [{ name: 'Trusted group', score: 750 }] }, reasons: [],
+    automation: { outcome: 'outranked', lostTo: 'lower custom-format score than the pick' },
+    desirability: { score: 61, position: 'above', qualitySteps: 1, cutoff: 'WEBDL-1080p', sizeDelta: 0.64, preferredSize: 5.96e9 },
   },
   {
-    release: { title: 'Dockside.2026.2160p.UHD.BluRay.REMUX.HDR.TrueHD.7.1-DOCKYARD', indexer: 'Harbour Tracker', protocol: 'torrent', size: 58.2e9, publishedAt: NOW - 3 * day, seeders: 0, quality: 'Remux 2160p', runtimeSeconds: 6720 },
+    release: { title: 'Dockside.2026.2160p.UHD.BluRay.REMUX.HDR.TrueHD.7.1-DOCKYARD', indexer: 'Harbour Tracker', protocol: 'torrent', size: 58.2e9, publishedAt: NOW - 3 * day, seeders: 0, quality: 'Remux 2160p', runtimeSeconds: 6720,
+      swarm: { seeders: 0, leechers: 14, reported: true, health: 'none' }, availability: { status: 'may_be_incomplete', grabs: 12 } },
     verdict: 'reject', rank: 6, candidates: 9, score: { total: 1500, formats: [{ name: 'TrueHD Atmos', score: 500 }, { name: 'HDR10', score: 1000 }] },
     reasons: [
-      { rule: 'size.max', category: 'preference', message: '58.2 GB is over the 40 GB per-movie cap' },
-      { rule: 'seeders.min', category: 'temporary', message: '0 seeders, below the minimum of 1' },
+      { rule: 'size.max', category: 'preference', message: '58.2 GB is over the 40 GB per-movie cap', summary: 'Too large: 58.2 GB, max 40.0 GB' },
+      { rule: 'seeders.min', category: 'temporary', message: '0 seeders, below the minimum of 1', summary: 'Too few seeders: 0, needs 1' },
     ],
+    automation: { outcome: 'declined' }, desirability: null,
   },
   {
-    release: { title: 'Dockside.2026.1080p.WEB.x264-FREE.RAR', indexer: 'Usenet Pier', protocol: 'usenet', size: 1.1e9, publishedAt: NOW - 5 * hour, quality: 'WEB 1080p' },
+    release: { title: 'Dockside.2026.1080p.WEB.x264-FREE.RAR', indexer: 'Usenet Pier', protocol: 'usenet', size: 1.1e9, publishedAt: NOW - 5 * hour, quality: 'WEB 1080p', availability: { status: 'unknown' } },
     verdict: 'reject', rank: 9, candidates: 9, score: { total: -500, formats: [{ name: 'Unknown group', score: -500 }] },
     reasons: [
-      { rule: 'payload.executable', category: 'safety', message: 'Archive contains an executable (setup.exe)' },
-      { rule: 'blocklist', category: 'permanent', message: 'On the blocklist since 20 Nov (fake release)', blocklist: true },
+      { rule: 'payload.executable', category: 'safety', message: 'Archive contains an executable (setup.exe)', summary: 'Unsafe file inside: setup.exe' },
+      { rule: 'blocklist', category: 'permanent', message: 'On the blocklist since 20 Nov (fake release)', summary: 'Blocklisted', blocklist: true },
     ],
+    automation: { outcome: 'declined' },
+    desirability: { score: 55, position: 'below', qualitySteps: -1, cutoff: 'WEBDL-1080p', sizeDelta: -0.82, preferredSize: 5.96e9 },
   },
 ];
 export const searchSources: SourceProgress[] = [

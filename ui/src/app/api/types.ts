@@ -180,7 +180,7 @@ export interface Download {
 }
 
 export type ReasonCategory = 'safety' | 'permanent' | 'preference' | 'temporary';
-export interface Reason { ruleId: string; category: ReasonCategory; message: string }
+export interface Reason { ruleId: string; category: ReasonCategory; message: string; summary?: string }
 
 export interface Release {
   id: string;
@@ -193,7 +193,37 @@ export interface Release {
   guid?: string;
   seeders: number;
   peers: number;
+  grabs?: number;
+  /** The indexer sent seeders or peers (absent: zero may mean "not reported"). */
+  swarmReported?: boolean;
+  files?: number;
+  minimumRatio?: number;
 }
+
+export type Position = 'above' | 'on_target' | 'below';
+
+/** How close a release is to the profile's target; absent when its quality is outside the profile. */
+export interface Desirability {
+  score: number;
+  position: Position;
+  qualitySteps: number;
+  cutoff: string;
+  sizeDelta?: number;
+  preferredSize?: number;
+  formatShortfall?: number;
+  formatTarget?: number;
+}
+
+export type SwarmHealth = 'unknown' | 'none' | 'few' | 'some' | 'good';
+export interface Swarm { seeders: number; leechers?: number; reported: boolean; health: SwarmHealth }
+
+export type AvailabilityStatus = 'complete' | 'may_be_incomplete' | 'no_peers' | 'unknown';
+export interface Availability { status: AvailabilityStatus; grabs?: number; files?: number; minimumRatio?: number }
+
+export type OutcomeStatus = 'grab' | 'shadow' | 'outranked' | 'declined';
+export interface Outcome { status: OutcomeStatus; lostTo?: { criterion: string; message: string } }
+/** What automatic search would do with a result set. */
+export interface AutomationVerdict { mode: 'active' | 'shadow'; pick?: string; outcomes: Record<string, Outcome> }
 
 export interface Decision {
   releaseId: string;
@@ -204,15 +234,17 @@ export interface Decision {
   formatScore: number;
   rankKey: string;
   override: 'allowed' | 'confirm' | 'never';
+  desirability?: Desirability;
 }
 
-export interface Decided { release: Release; decision: Decision }
+export interface Decided { release: Release; decision: Decision; swarm?: Swarm; availability?: Availability }
 
 /** One line of GET /movies/{id}/releases (NDJSON). */
 export type ReleaseLine =
   | { record: Decided }
   | { error: { source: string; message: string } }
-  | { summary: { done: true; count: number; errors: number; indexers: number; failed: number; releases: number; accepted: number } };
+  | { summary: { done: true; count: number; errors: number; indexers: number; failed: number; releases: number; accepted: number;
+      automation?: AutomationVerdict | null; rejections?: ReasonCount[] | null } };
 
 export interface SearchSummary { searches?: number; indexers: number; failed: number; releases: number; accepted: number; grabbed?: string; shadowed?: string }
 

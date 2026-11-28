@@ -281,6 +281,9 @@ func TestInteractiveSearchAndManualGrab(t *testing.T) {
 	if err != nil || sum.Releases != 2 || sum.Accepted != 1 {
 		t.Fatalf("%+v %v", sum, err)
 	}
+	if a := sum.Automation; a == nil || a.Pick == "" || len(a.Outcomes) != 2 || a.Outcomes["Example Artist - First Album [MP3 320kbps]"].Status != automation.OutcomeDeclined {
+		t.Fatalf("automation verdict %+v", a)
+	}
 	mp3 := "Example Artist - First Album [MP3 320kbps]"
 	if _, _, err := f.svc.GrabRelease(ctx, id, mp3, false); !errors.Is(err, automation.ErrNeedsConfirm) {
 		t.Fatalf("a rejected quality needs confirmation: %v", err)

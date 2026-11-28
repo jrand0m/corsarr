@@ -24,6 +24,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/preflight"
 	"github.com/jrand0m/corsarr/internal/scheduler"
 	"github.com/jrand0m/corsarr/internal/store"
+	"github.com/jrand0m/corsarr/internal/wasm"
 	"github.com/jrand0m/corsarr/internal/web"
 )
 
@@ -60,12 +61,15 @@ func (c cli) serve(ctx context.Context, ready func(addr string)) int {
 		fmt.Fprintln(c.stderr, "corsarr:", err)
 		return 1
 	}
+	c.prepareModules(log)
+	defer c.closeModules()
 	k, err := startKernel(ctx, cfg, log)
 	if err != nil {
 		fmt.Fprintln(c.stderr, "corsarr:", err)
 		return 1
 	}
 	defer k.close()
+	c.runModules(ctx, k.bus)
 	srv, ln, err := k.listen(ctx, cfg)
 	if err != nil {
 		k.log.Error("cannot start HTTP server", "err", err)
@@ -161,7 +165,10 @@ func startKernel(ctx context.Context, cfg *config.Config, log *slog.Logger) (*ke
 func newOutbound(ctx context.Context, cfg *config.Config, st *store.Store, rep httpx.Reporter, log *slog.Logger) *httpx.Client {
 	rl := cfg.Server.RateLearning
 	c := httpx.New(httpx.Options{Version: version, Reporter: rep, Allow: cfg.Server.EgressAllow,
-		Learning: httpx.Learning{Enabled: rl.Enabled, Headroom: rl.Headroom, ProbeEvery: rl.ProbeEvery, Store: st.RateLimits()}})
+		Learning: httpx.Learning{Enabled: rl.Enabled, Headroom: rl.Headroom, ProbeEvery: rl.ProbeEvery, Store: st.RateLimits()},
+		// Checks every dialled address again, so a name that resolves to a private address cannot
+		// reach it unless a plugin setting names that host.
+		Transport: wasm.GuardedTransport()})
 	if err := c.RestoreLimits(ctx); err != nil {
 		log.Warn("learned rate limits not loaded; they are learned again", "err", err)
 	}

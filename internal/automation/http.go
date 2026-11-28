@@ -75,7 +75,7 @@ func (s *Service) releases(w http.ResponseWriter, r *http.Request) {
 	}
 	nd := api.NewNDJSON(w)
 	sum, _ := s.Interactive(r.Context(), id, nd) // the movie exists: no error left
-	_ = nd.Done(map[string]any{"indexers": sum.Indexers, "failed": sum.Failed, "releases": sum.Releases, "accepted": sum.Accepted})
+	_ = nd.Done(DoneFields(sum))
 }
 
 type grabBody struct {

@@ -15,6 +15,16 @@ import (
 type Decided struct {
 	Release  domain.Release  `json:"release"`
 	Decision domain.Decision `json:"decision"`
+	// Swarm (torrents only) and Availability describe the payload for a
+	// result card.
+	Swarm        *decide.Swarm        `json:"swarm,omitempty"`
+	Availability *decide.Availability `json:"availability,omitempty"`
+}
+
+// NewDecided pairs a release with its decision and payload facts.
+func NewDecided(rel domain.Release, d domain.Decision) Decided {
+	a := decide.AvailabilityOf(rel)
+	return Decided{Release: rel, Decision: d, Swarm: decide.SwarmOf(rel), Availability: &a}
 }
 
 // Summary is the result of one search.
@@ -26,6 +36,25 @@ type Summary struct {
 	Skipped  int    `json:"skipped,omitempty"` // indexers skipped at their query limit
 	Grabbed  string `json:"grabbed,omitempty"`
 	Shadowed string `json:"shadowed,omitempty"` // would have been grabbed (shadow mode)
+	// Automation is what automatic search would do with these results and
+	// Rejections the most frequent rejection rules (interactive search).
+	Automation *Verdict             `json:"automation,omitempty"`
+	Rejections []domain.ReasonCount `json:"rejections,omitempty"`
+}
+
+// Explain adds to an interactive search's summary what automatic search
+// would do with the same results.
+func Explain(sum Summary, ds []Decided, mode domain.KindMode) Summary {
+	_, sum.Accepted, _ = best(ds)
+	v := Outcomes(ds, mode)
+	sum.Automation, sum.Rejections = &v, Rejections(ds)
+	return sum
+}
+
+// DoneFields is the interactive stream's closing summary.
+func DoneFields(sum Summary) map[string]any {
+	return map[string]any{"indexers": sum.Indexers, "failed": sum.Failed, "releases": sum.Releases, "accepted": sum.Accepted,
+		"automation": sum.Automation, "rejections": sum.Rejections}
 }
 
 // Emitter receives search progress (interactive search streams it).
@@ -114,7 +143,7 @@ func (s *Service) collect(ctx context.Context, m domain.Movie, origin domain.Sea
 }
 
 func (s *Service) decided(ctx context.Context, m domain.Movie, rel domain.Release, em Emitter) Decided {
-	d := Decided{Release: rel, Decision: s.decideOne(ctx, m, rel)}
+	d := NewDecided(rel, s.decideOne(ctx, m, rel))
 	_ = em.Record(d)
 	return d
 }
@@ -216,8 +245,7 @@ func (s *Service) Interactive(ctx context.Context, movieID int64, em Emitter) (S
 		return Summary{}, err
 	}
 	ds, sum := s.collect(ctx, m, domain.OriginInteractive, em)
-	_, sum.Accepted, _ = best(ds)
-	return sum, nil
+	return Explain(sum, ds, s.d.Modes.Of(domain.KindMovie)), nil
 }
 
 // Errors of a manual grab.
@@ -248,7 +276,7 @@ func (s *Service) GrabReleaseTo(ctx context.Context, movieID int64, releaseID st
 	if !ok {
 		return domain.Grab{}, Decided{}, ErrUnknownRelease
 	}
-	d := Decided{Release: rel, Decision: s.decideOne(ctx, m, rel)}
+	d := NewDecided(rel, s.decideOne(ctx, m, rel))
 	if err := overrideAllowed(d.Decision, confirm); err != nil {
 		return domain.Grab{}, d, err
 	}

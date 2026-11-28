@@ -133,11 +133,6 @@ func cacheOf(t tree) Cache {
 	return out
 }
 
-func intOf(v any) int {
-	n, _ := v.(int64)
-	return int(n)
-}
-
 func floatOf(v any) float64 {
 	f, _ := v.(float64)
 	return f

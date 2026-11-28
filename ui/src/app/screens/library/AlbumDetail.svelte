@@ -16,7 +16,7 @@
   import SourceProgressStrip from '../../../lib/components/molecules/SourceProgressStrip/SourceProgressStrip.svelte';
   import ConfirmDialog from '../../../lib/components/organisms/ConfirmDialog/ConfirmDialog.svelte';
   import DataTable, { type Column } from '../../../lib/components/organisms/DataTable/DataTable.svelte';
-  import DecisionPanel from '../../../lib/components/organisms/DecisionPanel/DecisionPanel.svelte';
+  import ReleaseResults from '../../../lib/components/organisms/ReleaseResults/ReleaseResults.svelte';
   import Drawer from '../../../lib/components/organisms/Drawer/Drawer.svelte';
   import { formatBytes } from '../../../lib/format/quantity';
   import { app } from '../../context.svelte';
@@ -24,7 +24,7 @@
   import { refetchOn } from '../../live.svelte';
   import { toApiError } from '../../api/client';
   import type { AlbumDetail, Decided, SearchSummary, Track } from '../../api/types';
-  import { grabFailure, InteractiveSearch, toPanel } from '../../interactive.svelte';
+  import { grabFailure, InteractiveSearch, nothingAcceptedNote, sortOptions, type SortKey } from '../../interactive.svelte';
   import { albumItemStatus, albumTypes, albumYear, duration, trackPosition } from '../../music';
   import type { ScreenProps } from '../../screen';
 
@@ -94,6 +94,10 @@
   let confirmGrab = $state<{ d: Decided; reasons: string[] } | undefined>();
   let confirmOpen = $state(false);
   let grabbing = $state(false);
+  function grabKey(key: string, over: unknown[]) {
+    const d = search.decided.find((x) => x.release.id === key);
+    if (d) void grab(d, over.length > 0);
+  }
   async function grab(d: Decided, confirm: boolean) {
     grabbing = true;
     try {
@@ -157,15 +161,11 @@
         <EmptyState size="sm" title={search.summary.indexers ? 'No releases found' : 'No indexers are configured'} icon="search" level={3}>
           {search.summary.indexers ? 'None of the indexers or sources had a release of this album.' : 'Add an indexer or a music source to the config, then search again.'}
         </EmptyState>
-      {:else if search.summary && !search.accepted}
-        <p class="note" role="status">None of the {search.ranked.length} releases passed the profile. The reasons are listed on each; you can grab one anyway where the rules allow it.</p>
       {/if}
       {#if search.ranked.length}
-        <ol class="results" aria-label="Releases, best first">
-          {#each search.ranked as d, i (d.release.id)}
-            <li><DecisionPanel decision={toPanel(d, i, search.accepted, al?.durationSec || undefined)} ongrab={(over) => grab(d, over.length > 0)} /></li>
-          {/each}
-        </ol>
+        <ReleaseResults items={search.sorted.map((d) => ({ key: d.release.id, decision: search.panel(d, al?.durationSec || undefined) }))}
+          sort={search.sort} {sortOptions} onsort={(v) => search.setSort(v as SortKey)} ongrab={grabKey}
+          note={search.summary && !search.accepted ? nothingAcceptedNote(search.ranked.length, search.summary.rejections) : undefined} />
       {/if}
       {#if search.streaming}
         <div class="pending" aria-busy="true" aria-label="Waiting for indexers"><Skeleton shape="block" height="6.5rem" /></div>
@@ -185,6 +185,4 @@
 
 <style>
   .search { display: grid; gap: var(--space-4); }
-  .results { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
-  .note { color: var(--ink-muted); font-size: var(--text-md); }
 </style>

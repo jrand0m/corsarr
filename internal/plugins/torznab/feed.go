@@ -2,6 +2,7 @@ package torznab
 
 import (
 	"context"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -97,6 +98,20 @@ func atoi64(s string) int64 {
 	return n
 }
 
+func atoi(s string) int {
+	n, _ := strconv.Atoi(strings.TrimSpace(s))
+	return n
+}
+
+// ratio reads a seed ratio; anything unparsable or negative is "not reported".
+func ratio(s string) float64 {
+	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil || f < 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0
+	}
+	return f
+}
+
 func firstNonEmpty(ss ...string) string {
 	for _, s := range ss {
 		if s != "" {
@@ -167,6 +182,8 @@ func (ix *Indexer) release(it rssItem) (domain.Release, target, bool) {
 		Size: it.size(), PublishedAt: parseDate(it.PubDate), Indexers: []domain.IndexerRef{ix.ref},
 		Categories: it.categories(), InfoHash: strings.ToLower(it.attr("infohash")), DetailsURL: it.Comments,
 		Seeders: seeders, Peers: peers, Grabs: grabs, Flags: it.flags(), ExternalIDs: it.externalIDs(),
+		SwarmReported: it.attr("seeders") != "" || it.attr("peers") != "",
+		Files:         max(0, atoi(it.attr("files"))), MinimumRatio: ratio(it.attr("minimumratio")),
 	}
 	tg := target{link: firstNonEmpty(it.Link, it.Enclosure.URL), magnet: it.attr("magneturl")}
 	rel.DownloadURL = firstNonEmpty(magnetOf(tg), tg.link)

@@ -92,7 +92,7 @@ func (s *Service) Client(ctx context.Context, key domain.ObjectKey) (ClientView,
 
 func (s *Service) view(ctx context.Context, c ClientInfo) ClientView {
 	v := ClientView{Key: c.Key, Name: c.Name, Type: c.Type, Health: c.Health, Protocols: c.Impl.Protocols(), Capabilities: Capabilities(c.Impl)}
-	if st, ok := c.Impl.(plugin.ClientStats); ok {
+	if st, ok := plugin.As[plugin.ClientStats](c.Impl); ok {
 		stats, err := st.Stats(ctx)
 		if err != nil {
 			v.StatsError = err.Error()
@@ -130,7 +130,7 @@ func capable[T any](key domain.ObjectKey, s *Service, what string) (T, error) {
 	if err != nil {
 		return zero, err
 	}
-	t, ok := c.Impl.(T)
+	t, ok := plugin.As[T](c.Impl)
 	if !ok {
 		return zero, unsupported(what)
 	}
@@ -234,11 +234,11 @@ func (s *Service) Detail(ctx context.Context, id int64) (Detail, error) {
 		return out, nil
 	}
 	out.Capabilities = Capabilities(dl)
-	if fl, ok := dl.(plugin.FileLister); ok {
+	if fl, ok := plugin.As[plugin.FileLister](dl); ok {
 		out.Files, err = fl.Files(ctx, d.DownloadID)
 		out.FilesError = errText(err)
 	}
-	if tl, ok := dl.(plugin.TrackerLister); ok {
+	if tl, ok := plugin.As[plugin.TrackerLister](dl); ok {
 		out.Trackers, err = tl.Trackers(ctx, d.DownloadID)
 		out.TrackersError = errText(err)
 	}

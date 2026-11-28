@@ -85,6 +85,8 @@ type Config struct {
 	Legacy map[string]bool
 	// MCP is the assistant endpoint's settings.
 	MCP MCP
+	// Plugins is the plugin-module section.
+	Plugins Plugins
 	// Instances maps section (indexers, downloadClients, …) → key → instance.
 	Instances map[string]map[domain.ObjectKey]Instance
 	Source    Source
@@ -295,6 +297,7 @@ func build(s *Schema, t tree) *Config {
 	c.Legacy = legacyApps(t)
 	c.MCP = mcpOf(t)
 	c.Cache = cacheOf(t)
+	c.Plugins = pluginsOf(t)
 	return c
 }
 

@@ -4,7 +4,25 @@ Short notes per release. Each release's assets, checksums and how to verify them
 
 ## Unreleased
 
+- Migration plan: copy the shown rows as text or JSON, or download them.
+- Migration plan: the config-file snippet folds away as optional, and the environment variables for API keys are listed one per line with a copy button.
+- Interactive search leads with the decision: each result says what automatic search would do (the single pick, accepted but outranked and why, or rejected with the main reason in one line); the full reason list folds under "Why it was rejected?", and the separate override notice is gone.
+- Interactive search shows seeders against leechers with a ratio bar and health word, whether the whole payload is available (with file count, times downloaded and the tracker's seed ratio when the indexer reports them), and how close each release is to the profile, above or below target.
+- Interactive search can sort by automation order, closest to profile, seeders, size, newest or quality; the choice stays in the page link.
+- Indexers: a missing seeders/peers count is no longer read as zero; Torznab `files` and `minimumratio` are carried through.
+- Plugin modules: add download clients as sandboxed WebAssembly files without a new corsarr build; drop them into the plugins folder or use `corsarr plugin load`, hot-swapped on upgrade with rollback to the previous version. See `docs/plugins.md`.
+- `corsarr plugin list|test|load|unload|rollback`; `plugin test` verifies a module and runs the download-client conformance suite against it.
+- Go SDK for modules (`sdk/go`) with a test harness and an example download client.
+- New `plugins` settings: plugins folder, built-ins to switch off, and memory, time, concurrency and size limits for modules.
+- Plugin settings forms are typed data checked on the server: a closed set of field types, plain text with a small emoji set, per-field errors.
+
+## v0.5.4 — 2026-11-28
+
 - Rate limits are learned per service (announced limits first, then where it throttles) and requests are kept below them; observed limits are re-checked gently about once a week while there is demand. See them in System › Health; settings under `server.rateLearning`.
+- Media-type mode badges explain Disabled, Shadow and Active on hover.
+- Config-managed fields show only a lock; hover names the key and where it is set.
+- Add movie, series and artist forms line up on a two-column grid.
+- Groundwork for Transmission and rTorrent download clients (protocol clients; installable modules come later).
 
 ## v0.5.3 — 2026-11-27
 

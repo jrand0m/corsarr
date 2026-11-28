@@ -12,7 +12,8 @@
   import SourceProgressStrip, { type SourceProgress } from '../lib/components/molecules/SourceProgressStrip/SourceProgressStrip.svelte';
   import EmptyState from '../lib/components/molecules/EmptyState/EmptyState.svelte';
   import Drawer from '../lib/components/organisms/Drawer/Drawer.svelte';
-  import DecisionPanel from '../lib/components/organisms/DecisionPanel/DecisionPanel.svelte';
+  import ReleaseResults from '../lib/components/organisms/ReleaseResults/ReleaseResults.svelte';
+  import { sortOptions } from '../app/interactive.svelte';
   import { ToastQueue } from '../lib/toast/toasts.svelte';
   import { docksideDecisions, docksideHistory, downloads, NOW, nowDate, searchSources } from '../lib/storybook/fixtures';
 
@@ -32,7 +33,12 @@
     const done = shown >= (answeredAt[i] ?? 9);
     return done ? { ...s, state: 'ok', count: i === 2 ? 1 : s.count } : { ...s, state: 'running', count: undefined, ms: undefined };
   }));
-  const decisions = $derived(docksideDecisions.slice(0, shown).sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0)));
+  let sort = $state('automation');
+  const done = $derived(shown >= docksideDecisions.length);
+  // Automation's pick is known only when every indexer answered; until then accepted releases are pending.
+  const decisions = $derived(docksideDecisions.slice(0, shown)
+    .map((d) => (done || d.verdict === 'reject' ? d : { ...d, automation: { outcome: 'pending' as const } }))
+    .sort((a, b) => sort === 'desirability' ? (b.desirability?.score ?? -1) - (a.desirability?.score ?? -1) : (a.rank ?? 0) - (b.rank ?? 0)));
   $effect(() => {
     if (!open || !stream) return;
     shown = 0;
@@ -86,11 +92,8 @@
     <div class="search">
       <SourceProgressStrip sources={sources} label="Indexers" />
       {#if decisions.length}
-        <ol class="results" aria-label="Releases, best first">
-          {#each decisions as d (d.release.title)}
-            <li><DecisionPanel decision={d} now={NOW} ongrab={() => toasts.push({ message: `Grab sent: ${d.release.title}`, detail: 'Watch it in the queue.', actionLabel: 'Open queue', onaction: () => {} })} /></li>
-          {/each}
-        </ol>
+        <ReleaseResults items={decisions.map((d) => ({ key: d.release.title, decision: d }))} {sort} {sortOptions} onsort={(v) => (sort = v)} now={NOW}
+          ongrab={(key) => toasts.push({ message: `Grab sent: ${key}`, detail: 'Watch it in the queue.', actionLabel: 'Open queue', onaction: () => {} })} />
       {/if}
       {#if shown < docksideDecisions.length}
         <div class="pending" aria-hidden="true"><Skeleton shape="block" height="6.5rem" /></div>
@@ -108,5 +111,4 @@
   .side { display: grid; gap: var(--space-3); }
   h2 { font-size: var(--text-lg); }
   .search { display: grid; gap: var(--space-4); }
-  .results { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
 </style>

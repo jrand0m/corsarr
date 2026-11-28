@@ -90,6 +90,26 @@ auth:
   # of: password, local, proxy.
   mode: password
 
+# Plugin modules: WebAssembly plugins installed into the plugins folder (applies at start).
+plugins:
+  # Folder for plugin modules; leave empty for the plugins folder inside data.dir. Drop a .wasm
+  # file here to install it.
+  # dir:
+  # Built-in plugin ids to switch off, so a plugin module with the same id can replace them;
+  # leave empty to keep every built-in.
+  # disabledBuiltins:
+  #   -
+  # Most memory one running module instance may use, in MiB; a module may ask for less, never
+  # more.
+  memoryMiB: 64
+  # Longest one call into a module may run before it is stopped; a module may ask for less,
+  # never more. A duration such as 90s, 15m or 2h.
+  callTimeout: 10s
+  # Most calls one plugin instance runs at the same time; each runs in its own module instance.
+  concurrency: 4
+  # Largest module file accepted, in MiB.
+  maxModuleMiB: 32
+
 # What corsarr does for each kind of media.
 mediaKinds:
   tv:

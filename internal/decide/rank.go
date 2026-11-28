@@ -2,6 +2,7 @@ package decide
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/jrand0m/corsarr/internal/domain"
 )
@@ -73,4 +74,36 @@ func closeness(size, preferred int64) int {
 		d = -d
 	}
 	return 99999 - int(min(d/1_000_000, 99999))
+}
+
+// RankCriterion names the first ranking step on which a release lost.
+type RankCriterion struct {
+	Criterion string `json:"criterion"`
+	Message   string `json:"message"`
+}
+
+// rankSteps names the rank key's segments in order, with the plain reason a
+// release that is lower on that segment lost.
+var rankSteps = []RankCriterion{
+	{"quality", "lower quality than the pick"},
+	{"format_score", "lower custom-format score than the pick"},
+	{"revision", "older revision than the pick (the pick is a proper or repack)"},
+	{"protocol", "not the preferred protocol"},
+	{"indexer_priority", "found on a lower-priority indexer"},
+	{"seeders", "fewer seeders than the pick"},
+	{"size", "size further from the preferred size"},
+	{"age", "uploaded earlier than the pick"},
+}
+
+var rankTie = RankCriterion{"tie", "ranks equal to the pick; the order between them is fixed by release id"}
+
+// LostTo names the first rank-key segment on which loser ranks below winner.
+func LostTo(loser, winner domain.Decision) RankCriterion {
+	a, b := strings.Split(loser.RankKey, "."), strings.Split(winner.RankKey, ".")
+	for i, step := range rankSteps {
+		if i < len(a) && i < len(b) && a[i] != b[i] {
+			return step
+		}
+	}
+	return rankTie
 }

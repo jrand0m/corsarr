@@ -7,6 +7,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Button from '../../../lib/components/atoms/Button/Button.svelte';
+  import CopyableValue from '../../../lib/components/atoms/CopyableValue/CopyableValue.svelte';
   import ManagedValue, { managedFrom } from '../../../lib/components/atoms/ManagedValue/ManagedValue.svelte';
   import StatusBadge from '../../../lib/components/atoms/StatusBadge/StatusBadge.svelte';
   import Timestamp from '../../../lib/components/atoms/Timestamp/Timestamp.svelte';
@@ -31,7 +32,7 @@
   import { refetchOn } from '../../live.svelte';
   import { toApiError } from '../../api/client';
   import {
-    applyCount, categories, categoryLabel, configNotice, countTiles, defaultForm, filterEntries, fromPrefixView, hasConfigNotice, InstantCheck, outcomeView,
+    applyCount, categories, planAsJSON, planAsText, categoryLabel, configNotice, countTiles, defaultForm, filterEntries, fromPrefixView, hasConfigNotice, InstantCheck, outcomeView,
     pathCheckBody, pathCheckReady, pathCheckSig, planFacets, progressOf, requestBody, sampleView, scopeProblems, sourceApps, sourceCheckBody,
     sourceCheckReady, sourceCheckSig, sourceCheckView, sourceProblems, toggleExclude, toPrefixView, writes, type CheckView, type KindState,
     type MigrationReport, type MigrationRun, type PathCheck, type PathCheckInput, type PlanEntry, type SourceApp, type SourceCheck, type SourceCheckInput,
@@ -111,6 +112,23 @@
   const shown = $derived(plan ? filterEntries(result?.entries ?? plan.entries ?? [], filter) : []);
   const facets = $derived(planFacets(result?.entries ?? plan?.entries ?? []));
   const report = $derived(result ?? plan);
+
+  // Copies or downloads exactly the rows the filters show.
+  async function copyPlan(text: string, how: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toasts.push({ tone: 'ok', message: `Copied ${shown.length} ${shown.length === 1 ? 'object' : 'objects'} ${how}` });
+    } catch {
+      toasts.push({ tone: 'warn', message: 'The browser blocked the clipboard; use Download JSON instead.' });
+    }
+  }
+
+  function downloadPlan(text: string) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: 'migration-plan.json' });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   async function stream(mode: 'plan' | 'apply') {
     running = mode;
@@ -234,6 +252,11 @@
       {#each countTiles(report.counts) as t (t.outcome)}<StatTile label={t.label} value={t.n} />{/each}
     </div>
     <FilterBar {facets} bind:value={filter} searchLabel="Filter the plan" placeholder="Filter by name or reason" shortcut={false} />
+    <div class="copyrow">
+      <Button variant="secondary" size="sm" icon="copy" disabled={!shown.length} onclick={() => copyPlan(planAsText(shown), 'as text')}>Copy {shown.length} as text</Button>
+      <Button variant="secondary" size="sm" icon="copy" disabled={!shown.length} onclick={() => copyPlan(planAsJSON(shown), 'as JSON')}>Copy as JSON</Button>
+      <Button variant="ghost" size="sm" icon="download" disabled={!shown.length} onclick={() => downloadPlan(planAsJSON(shown))}>Download JSON</Button>
+    </div>
     <DataTable rows={shown} {columns} {cell} rowKey={(e) => e.id} label="Migration plan" noun="object" height="28rem"
       rowActions={(e) => (result || !writes(e) ? [] : [{ id: 'toggle', label: excluded(e) ? 'Include again' : 'Leave out', icon: excluded(e) ? 'undo' : 'minus' }])}
       onaction={(_, e) => (form.exclude = toggleExclude(form.exclude, e.id))}>
@@ -245,8 +268,18 @@
       {/snippet}
     </DataTable>
     {#if report.config}
-      <p class="note">These objects live in the config file. Add the snippet to it and set {report.env?.join(', ')} in the environment; secrets are never copied.</p>
-      <CodeViewer code={report.config} language="yaml" filename="migrated.yaml" download maxHeight="18rem" />
+      <!-- Optional: settings that live in the config file. Closed by default so it doesn't crowd the plan. -->
+      <details class="cfg">
+        <summary>Settings for the config file <span class="count">(optional)</span></summary>
+        <p class="note">Indexers, download clients and root folders are not imported; add this snippet to the config file only if you want them in corsarr.</p>
+        <CodeViewer code={report.config} language="yaml" filename="migrated.yaml" download maxHeight="18rem" />
+        {#if report.env?.length}
+          <p class="note">API keys are never copied from the source. Set these environment variables with the keys:</p>
+          <ul class="envs">
+            {#each report.env as name (name)}<li><CopyableValue value={name} label="Environment variable" /></li>{/each}
+          </ul>
+        {/if}
+      </details>
     {/if}
   {/if}
 {/snippet}
@@ -357,6 +390,11 @@
 </WizardPage>
 
 <style>
+  .cfg summary { cursor: pointer; font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--ink-muted); }
+  .cfg[open] summary { margin-bottom: var(--space-2); }
+  .cfg .count { font-weight: var(--weight-regular); color: var(--ink-subtle); }
+  .envs { list-style: none; padding: 0; margin: var(--space-2) 0 0; display: grid; gap: var(--space-1); }
+  .copyrow { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }
   .sources { display: grid; gap: var(--space-5); }
   fieldset { display: grid; gap: var(--space-3); border: 0; padding: 0; margin: 0; }
   .tiles { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); margin-block: var(--space-4); }

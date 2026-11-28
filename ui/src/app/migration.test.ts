@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
+import { planAsJSON, planAsText,
   addressReady, applyCount, configNotice, countTiles, defaultForm, fromPrefixView, hasConfigNotice, InstantCheck, keyReady, pathCheckBody, pathCheckReady,
   pathCheckSig, sampleView, sourceCheckBody, sourceCheckReady, sourceCheckSig, sourceCheckView, toPrefixView, type CheckView, type KindState, type PathCheck,
   type SourceCheck, filterEntries, outcomeView, planFacets, progressOf, requestBody, scopeProblems, sourceProblems, toggleExclude,
@@ -348,5 +348,22 @@ describe('config-managed notice', () => {
     const quiet = configNotice(f, [{ kind: 'tv', mode: 'shadow', managedByConfig: false }]);
     expect(hasConfigNotice(quiet)).toBe(false);
     expect(configNotice({ ...f, scope: [] }, modes).nothingWritten).toBe(false);
+  });
+});
+
+describe('plan export', () => {
+  const rows = [
+    { id: 'a', category: 'library', source: 'sonarr', name: 'Severance', outcome: 'create' as const, reason: 'new\tseries', target: 'tv:1' },
+    { id: 'b', category: 'profiles', source: 'radarr', name: 'HD-1080p', outcome: 'approximate' as const, reason: 'mapped to hd' },
+  ];
+  it('copies the shown rows as tab-separated text with a header', () => {
+    const lines = planAsText(rows).trimEnd().split('\n');
+    expect(lines[0]).toBe('Outcome\tCategory\tSource\tObject\tReason\tTarget');
+    expect(lines).toHaveLength(3);
+    expect(lines[1].split('\t')).toHaveLength(6);
+    expect(lines[1]).toContain('new series');
+  });
+  it('copies the shown rows as JSON', () => {
+    expect(JSON.parse(planAsJSON(rows))).toEqual(rows);
   });
 });

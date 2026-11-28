@@ -98,7 +98,7 @@ func (s *Service) stream(w http.ResponseWriter, run func(automation.Emitter) (au
 	}
 	nd := api.NewNDJSON(w)
 	sum, _ := run(nd) // the target exists and the mode was checked: no error left
-	_ = nd.Done(map[string]any{"indexers": sum.Indexers, "failed": sum.Failed, "releases": sum.Releases, "accepted": sum.Accepted})
+	_ = nd.Done(automation.DoneFields(sum))
 }
 
 type grabBody struct {
