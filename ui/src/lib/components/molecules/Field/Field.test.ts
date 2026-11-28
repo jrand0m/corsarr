@@ -30,7 +30,8 @@ describe('Field (via TextField)', () => {
       label: 'Mode', managed: { key: 'mediaKinds.tv.mode', kind: 'env', name: 'CORSARR_MEDIAKINDS_TV_MODE' },
     });
     expect(container.querySelector('.mv')!.getAttribute('title')).toBe('Managed by mediaKinds.tv.mode via environment variable CORSARR_MEDIAKINDS_TV_MODE');
-    expect(container.querySelector('.note')!.textContent).toContain('via environment variable CORSARR_MEDIAKINDS_TV_MODE.');
+    expect(container.querySelector('[id$="-lock"]')!.textContent).toContain('via environment variable CORSARR_MEDIAKINDS_TV_MODE.');
+    expect(container.querySelector('[id$="-lock"]')!.classList.contains('visually-hidden')).toBe(true);
   });
 
   it('marks required fields visibly and on the control', () => {

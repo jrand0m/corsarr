@@ -83,9 +83,10 @@
 {#snippet notes()}
   {#if error}<p class="error" id="{id}-err"><Icon name="alert-octagon" size="sm" /><span>{error}</span></p>{/if}
   {#if managed}
-    <p class="note" id="{id}-lock">
-      {#if typeof managed === 'object'}{managedText(managed)}.{:else}Set in the config file{#if source}{' at '}<code>{source}</code>{/if}.{/if} Change it there; the form shows what is running.
-    </p>
+    <!-- The lock and its tooltip say this on screen; the sentence stays for screen readers only. -->
+    <span class="visually-hidden" id="{id}-lock">
+      {#if typeof managed === 'object'}{managedText(managed)}.{:else}Set in the config file{#if source}{' at '}{source}{/if}.{/if} Change it there; the form shows what is running.
+    </span>
   {/if}
   {#if drift}<p class="note drift" id="{id}-drift"><Icon name="diff" size="sm" /><span>{drift}</span></p>{/if}
   {#if help}<p class="help" id="{id}-help">{help}</p>{/if}
