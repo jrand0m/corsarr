@@ -2,7 +2,7 @@
 
 Short notes per release. Each release's assets, checksums and how to verify them are on its GitHub release page.
 
-## Unreleased
+## v0.5.3 — 2026-11-27
 
 - Migration wizard: sources and path rewrites are checked as you type, each field has a Test button, and config-managed parts are flagged before the run.
 - Config-managed values show as the value with a lock; hover names the key and where it is set (file, arguments or environment).
