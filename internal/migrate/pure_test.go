@@ -522,3 +522,38 @@ func TestKindModeReasonExplainsShadowOnlyInShadow(t *testing.T) {
 		t.Errorf("active: %s", active.Reason)
 	}
 }
+
+func TestTorznabIndexersWithoutAPluginOrSeenTwice(t *testing.T) {
+	s := torznabSnap(
+		SrcIndexer{ID: 1, Name: "One", Impl: "Torznab", Protocol: "torrent", Enabled: true, BaseURL: "http://one/torznab"},
+		SrcIndexer{ID: 2, Name: "Again", Impl: "Torznab", Protocol: "torrent", Enabled: true, BaseURL: "http://one/torznab"},
+		SrcIndexer{ID: 3, Name: "Site", Impl: "IPTorrents", Protocol: "torrent", Enabled: true})
+	rep := BuildPlan([]Snapshot{s}, State{}, Options{})
+	if e := entry(t, rep, "sonarr:indexer:1"); e.Outcome != OutManaged {
+		t.Errorf("%+v", e)
+	}
+	if e := entry(t, rep, "sonarr:indexer:2"); e.Outcome != OutUnchanged || e.Reason != "same indexer as One" {
+		t.Errorf("%+v", e)
+	}
+	if e := entry(t, rep, "sonarr:indexer:3"); e.Outcome != OutUnsupported || e.Reason != "no IPTorrents indexer plugin yet" {
+		t.Errorf("%+v", e)
+	}
+}
+
+func TestMovieTagsLeaveANoteOnlyWhenThereAreTags(t *testing.T) {
+	m := SrcMovie{TMDB: 1, Title: "Film", MinAvailability: "released"}
+	if _, notes := movieTarget(m, Snapshot{}, Rewrite{}); len(notes) != 0 {
+		t.Fatalf("no tags: %v", notes)
+	}
+	m.Tags = []int{1}
+	if _, notes := movieTarget(m, Snapshot{}, Rewrite{}); len(notes) != 1 || notes[0] != "movie tags are not kept yet" {
+		t.Fatalf("one tag: %v", notes)
+	}
+}
+
+func TestSeriesEpisodesComeFromTheMetadata(t *testing.T) {
+	s := SrcSeries{TMDB: 1, Title: "Show", Episodes: []SrcEpisode{{Season: 1, Number: 1}}}
+	if _, _, eps := seriesTarget(s, Snapshot{}, Rewrite{}); len(eps) != 1 || !eps[0].InMetadata {
+		t.Fatalf("%+v", eps)
+	}
+}

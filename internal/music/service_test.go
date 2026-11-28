@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -307,6 +308,21 @@ func TestHTTPEndpoints(t *testing.T) {
 		"/api/v1/albums/1": 200, "/api/v1/artists/x": 400, "/api/v1/music/profiles": 200} {
 		if code, body := call("GET", path, ""); code != want {
 			t.Errorf("%s: %d %s", path, code, body)
+		}
+	}
+	_, body := call("GET", "/api/v1/music/profiles", "")
+	var profiles struct {
+		Quality []struct {
+			Key       string `json:"key"`
+			IsDefault bool   `json:"isDefault"`
+		} `json:"quality"`
+	}
+	if err := json.Unmarshal([]byte(body), &profiles); err != nil || len(profiles.Quality) < 2 {
+		t.Fatalf("profiles %s %v", body, err)
+	}
+	for _, p := range profiles.Quality {
+		if p.IsDefault != (p.Key == DefaultProfileKey) {
+			t.Errorf("profile %s default %t", p.Key, p.IsDefault)
 		}
 	}
 	if code, _ := call("PUT", "/api/v1/albums/monitor", `{"ids":[2],"monitored":true}`); code != 200 {

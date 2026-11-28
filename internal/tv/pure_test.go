@@ -299,3 +299,12 @@ func TestFilePathFollowsTheNaming(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestFilePathCarriesTheAirDate(t *testing.T) {
+	show := domain.Series{Title: "Example Show", Path: "/tv/Example Show"}
+	air := time.Date(2024, 3, 9, 20, 0, 0, 0, time.UTC)
+	sch := naming.Scheme{Rename: true, File: "{Series Title} {Air Date}"}
+	if got := FilePath(show, []domain.Episode{{Season: 1, Number: 1, AirAt: &air}}, "", ".mkv", "", sch); got != "/tv/Example Show/Example Show 2024-03-09.mkv" {
+		t.Fatal(got)
+	}
+}
