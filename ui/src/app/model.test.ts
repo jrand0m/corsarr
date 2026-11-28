@@ -92,6 +92,13 @@ describe('parseEnvExport', () => {
     expect(k.secrets).toEqual({ apikey: 'CORSARR_SECRET_INDEXERS_KNABEN_APIKEY' });
     expect(v.instances.find((i) => i.key === 'ntfy')!.values.urls).toEqual(['ntfy://a', 'ntfy://b']);
     expect(v.instances.find((i) => i.key === 'qbit')!.values.categories).toEqual({ movie: 'movies' });
+    expect(v.mcp).toEqual({ enabled: false, scope: 'read', tools: [] });
+  });
+
+  it('reads the assistant endpoint settings', () => {
+    const v = parseEnvExport(['CORSARR_MCP_ENABLED=true', 'CORSARR_MCP_SCOPE=write', 'CORSARR_MCP_RATELIMIT=30',
+      'CORSARR_MCP_TOOLS_0=find_media', 'CORSARR_MCP_TOOLS_1=request_status', 'CORSARR_MCP_TOOLS=', 'CORSARR_MCP_ALLOWEDORIGINS_0=http://x'].join('\n'));
+    expect(v.mcp).toEqual({ enabled: true, scope: 'write', rateLimit: 30, tools: ['find_media', 'request_status'] });
   });
 });
 

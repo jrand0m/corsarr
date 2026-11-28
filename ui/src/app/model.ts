@@ -187,6 +187,23 @@ export interface ExportView {
   rootFolders: { path: string; kind: string }[];
   instances: ConfiguredInstance[];
   server: Record<string, string>;
+  /** The assistant (MCP) endpoint settings. */
+  mcp: McpView;
+}
+
+export interface McpView {
+  enabled: boolean;
+  scope: string;
+  /** Tools exposed by name; empty exposes every tool the scope allows. */
+  tools: string[];
+  rateLimit?: number;
+}
+
+function readMcp(view: ExportView, field: string, index: string | undefined, value: string) {
+  if (field === 'ENABLED') view.mcp.enabled = value === 'true';
+  else if (field === 'SCOPE') view.mcp.scope = value;
+  else if (field === 'RATELIMIT') view.mcp.rateLimit = Number(value);
+  else if (field === 'TOOLS' && index !== undefined && value) view.mcp.tools[Number(index)] = value;
 }
 
 /** Config sections as the env export spells them → their YAML names. */
@@ -200,7 +217,7 @@ export const instanceSections: Record<string, string> = {
  * root folders and plugin instances. Secrets export empty; their reference is CORSARR_SECRET_<rest>.
  */
 export function parseEnvExport(text: string): ExportView {
-  const view: ExportView = { kinds: {}, rootFolders: [], instances: [], server: {} };
+  const view: ExportView = { kinds: {}, rootFolders: [], instances: [], server: {}, mcp: { enabled: false, scope: 'read', tools: [] } };
   const byKey = new Map<string, ConfiguredInstance>();
   for (const raw of text.split('\n')) {
     const line = raw.trim();
@@ -212,6 +229,7 @@ export function parseEnvExport(text: string): ExportView {
     const parts = name.split('_');
     const [head, a, b, ...rest] = parts;
     if (head === 'MEDIAKINDS' && b === 'MODE') view.kinds[a.toLowerCase() as MediaKind] = value;
+    else if (head === 'MCP') readMcp(view, a, b, value);
     else if (head === 'ROOTFOLDERS') {
       const i = Number(a);
       view.rootFolders[i] ??= { path: '', kind: '' };
@@ -243,5 +261,6 @@ export function parseEnvExport(text: string): ExportView {
     }
   }
   view.rootFolders = view.rootFolders.filter(Boolean);
+  view.mcp.tools = view.mcp.tools.filter(Boolean);
   return view;
 }
