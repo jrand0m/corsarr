@@ -13,9 +13,10 @@ export type { WizardStep } from './Wizard/Wizard.svelte';
 
 // Lane B: explanation and decision.
 export { default as EvidencePanel } from './EvidencePanel/EvidencePanel.svelte';
-export { default as DecisionPanel, overrideLevel } from './DecisionPanel/DecisionPanel.svelte';
+export { default as DecisionPanel, overrideLevel, mainReason } from './DecisionPanel/DecisionPanel.svelte';
+export { default as ReleaseResults } from './ReleaseResults/ReleaseResults.svelte';
 export type { Evidence, Threshold, ReasonCategory } from './EvidencePanel/EvidencePanel.svelte';
-export type { Decision, DecisionReason, OverrideLevel } from './DecisionPanel/DecisionPanel.svelte';
+export type { AutomationOutcome, Decision, DecisionReason, OverrideLevel } from './DecisionPanel/DecisionPanel.svelte';
 
 // Lane B: headers, navigation and picking.
 export { default as EntityHeader } from './EntityHeader/EntityHeader.svelte';

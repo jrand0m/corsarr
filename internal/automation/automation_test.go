@@ -3,6 +3,7 @@ package automation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -437,5 +438,42 @@ func TestDisabledModeDoesNothing(t *testing.T) {
 	e.svc.Wait()
 	if e.ix.searches != 0 || len(e.ix.seen) != 0 || len(e.q.grabs) != 0 || len(e.rec.Of(domain.EvDecisionShadowed)) != 0 {
 		t.Fatalf("disabled kind touched indexers: searches %d feeds %d", e.ix.searches, len(e.ix.seen))
+	}
+}
+
+// The interactive pick is the release automatic search grabs (or, in shadow
+// mode, records) for the same results.
+func TestInteractivePickMatchesAutomaticSearch(t *testing.T) {
+	for _, mode := range []domain.KindMode{domain.ModeActive, domain.ModeShadow} {
+		t.Run(string(mode), func(t *testing.T) {
+			e := newEnv(t)
+			e.svc.d.Modes = modeIs(mode)
+			e.ix.rels = []domain.Release{rel(good, 4e9, 10), rel(better, 6e9, 10), rel(other, 4e9, 10)}
+			var out rows
+			isum, err := e.svc.Interactive(ctx, 1, &out)
+			if err != nil || isum.Automation == nil {
+				t.Fatalf("interactive %+v %v", isum, err)
+			}
+			asum, _ := e.svc.Search(ctx, 1, domain.OriginAutomatic)
+			chosen := asum.Grabbed + asum.Shadowed
+			if isum.Automation.Pick != rel(chosen, 0, 0).ID {
+				t.Fatalf("pick %q, automatic chose %q", isum.Automation.Pick, chosen)
+			}
+			want := map[OutcomeStatus]int{OutcomeGrab: 1, OutcomeOutranked: 1, OutcomeDeclined: 1}
+			if mode == domain.ModeShadow {
+				want = map[OutcomeStatus]int{OutcomeShadow: 1, OutcomeOutranked: 1, OutcomeDeclined: 1}
+			}
+			got := map[OutcomeStatus]int{}
+			for _, o := range isum.Automation.Outcomes {
+				got[o.Status]++
+			}
+			if fmt.Sprint(got) != fmt.Sprint(want) || len(isum.Rejections) == 0 {
+				t.Fatalf("outcomes %v rejections %v", got, isum.Rejections)
+			}
+			rec := out.recs[0].(Decided)
+			if rec.Swarm == nil || rec.Swarm.Seeders != 10 || rec.Availability == nil || rec.Availability.Status != "complete" {
+				t.Fatalf("record payload facts %+v %+v", rec.Swarm, rec.Availability)
+			}
+		})
 	}
 }

@@ -230,7 +230,7 @@ func (d *Definition) Release(r Row, base *url.URL, now time.Time) (domain.Releas
 		ID: id, Title: r[FieldTitle], Protocol: domain.ProtoTorrent, Size: ParseSize(r[FieldSize]), InfoHash: hash,
 		DetailsURL: link.Details, Seeders: ParseInt(r[FieldSeeders]), Peers: peers(r), Grabs: ParseInt(r[FieldGrabs]),
 		Categories: d.standardCategories(r[FieldCategory]), ExternalIDs: imdb(r[FieldIMDB]),
-		DownloadURL: firstOf(link.Magnet, link.Download),
+		DownloadURL: firstOf(link.Magnet, link.Download), SwarmReported: swarmReported(r), Files: ParseInt(r[FieldFiles]),
 	}
 	rel.PublishedAt, rel.Flags = publishDate(r[FieldDate], d.Search.Response.Fields[FieldDate].Formats, now)
 	if ParseFloat(r[FieldDLFactor], 1) == 0 {
@@ -277,6 +277,11 @@ func peers(r Row) int {
 		return ParseInt(r[FieldSeeders]) + ParseInt(v)
 	}
 	return 0
+}
+
+// swarmReported is true when the row carried any seeder or peer count.
+func swarmReported(r Row) bool {
+	return r[FieldSeeders] != "" || r[FieldPeers] != "" || r[FieldLeechers] != ""
 }
 
 func imdb(v string) map[string]string {

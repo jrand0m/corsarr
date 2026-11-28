@@ -25,6 +25,9 @@ export { default as ItemRefSummary } from './ItemRefSummary/ItemRefSummary.svelt
 export { default as PropertyList } from './PropertyList/PropertyList.svelte';
 export { default as CodeViewer } from './CodeViewer/CodeViewer.svelte';
 export { default as StatTile } from './StatTile/StatTile.svelte';
+export { default as SwarmHealth } from './SwarmHealth/SwarmHealth.svelte';
+export { default as AvailabilityLine } from './AvailabilityLine/AvailabilityLine.svelte';
+export { default as DesirabilityGauge, desirabilityParts } from './DesirabilityGauge/DesirabilityGauge.svelte';
 export { default as CheckResults } from './CheckResults/CheckResults.svelte';
 export { default as SourceProgressStrip } from './SourceProgressStrip/SourceProgressStrip.svelte';
 export { default as Banner } from './Banner/Banner.svelte';

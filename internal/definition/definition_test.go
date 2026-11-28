@@ -346,11 +346,15 @@ func TestReleaseVariants(t *testing.T) {
 	base, _ := url.Parse("https://site.test/")
 	now := time.Now()
 	rel, link, ok := d.Release(Row{"title": "T", "download": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567", "peers": "4", "downloadFactor": "0", "imdb": "0"}, base, now)
-	if !ok || rel.InfoHash == "" || link.Download != "" || rel.Peers != 4 || rel.Flags[0] != "freeleech" || rel.ExternalIDs != nil {
+	if !ok || rel.InfoHash == "" || link.Download != "" || rel.Peers != 4 || rel.Flags[0] != "freeleech" || rel.ExternalIDs != nil || !rel.SwarmReported {
 		t.Errorf("%+v %+v", rel, link)
 	}
+	rel, _, _ = d.Release(Row{"title": "T", "details": "/t/1", "files": "7"}, base, now)
+	if rel.Files != 7 {
+		t.Errorf("files %d", rel.Files)
+	}
 	rel, link, ok = d.Release(Row{"title": "T", "details": "/t/1"}, base, now)
-	if !ok || link.Details != "https://site.test/t/1" || rel.DownloadURL != "" {
+	if !ok || link.Details != "https://site.test/t/1" || rel.DownloadURL != "" || rel.SwarmReported {
 		t.Errorf("details-only %+v", link)
 	}
 	if magnetHash("http://x") != "" || magnetHash("magnet:?xt=urn:btih:short") != "" || resolveURL(base, "%zz") != "" {

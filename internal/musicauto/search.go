@@ -83,7 +83,7 @@ func (s *Service) decideOne(ctx context.Context, sc scope, rel domain.Release) a
 	p, _ := music.ProfileByKey(sc.artist.ProfileKey)
 	t := music.Target{Artist: sc.artist, Album: sc.album, Current: sc.cur, Context: s.context(ctx, sc, p, rel),
 		Released: music.IsReleased(sc.album, s.d.Now())}
-	return automation.Decided{Release: rel, Decision: music.Decide(t, p, rel)}
+	return automation.NewDecided(rel, music.Decide(t, p, rel))
 }
 
 // collect queries every indexer, dedupes, decides each release and streams it.
@@ -201,8 +201,7 @@ func (s *Service) Interactive(ctx context.Context, albumID int64, em automation.
 		return automation.Summary{}, err
 	}
 	ds, sum := s.collect(ctx, sc, music.AlbumRequest(sc.artist, sc.album, domain.OriginInteractive), em)
-	_, sum.Accepted, _ = automation.Best(ds)
-	return sum, nil
+	return automation.Explain(sum, ds, s.d.Modes.Of(domain.KindMusic)), nil
 }
 
 // GrabRelease grabs a release from a recent search by hand for an album:
