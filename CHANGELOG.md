@@ -15,6 +15,10 @@ Short notes per release. Each release's assets, checksums and how to verify them
 - Go SDK for modules (`sdk/go`) with a test harness and an example download client.
 - New `plugins` settings: plugins folder, built-ins to switch off, and memory, time, concurrency and size limits for modules.
 - Plugin settings forms are typed data checked on the server: a closed set of field types, plain text with a small emoji set, per-field errors.
+- Transmission (3.x, 4.x) and rTorrent (0.9.8, 0.10, XML-RPC over HTTP) download clients as installable plugin modules, with every optional capability; see `plugins/transmission` and `plugins/rtorrent`.
+- `just build plugins [id|all]` builds plugin modules reproducibly; the SDK gains a request adapter for protocol clients.
+- Releases include the plugin modules (`<id>-<version>.wasm`) and `plugins-index.json` with its Ed25519 signature; modules are rebuilt on both release runners and compared, listed in `SHA256SUMS`, and attested with provenance and an SBOM.
+- Release builds include the plugin SDK sources the binary needs.
 
 ## v0.5.4 — 2026-11-28
 

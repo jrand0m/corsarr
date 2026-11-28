@@ -16,15 +16,18 @@ digest and the source date used for that build.
 | --- | --- |
 | `corsarr-{linux,darwin}-{amd64,arm64}.tar.gz`, `corsarr-windows-{amd64,arm64}.zip` | the binary with `README.md`, `LICENSE` and an example config |
 | `corsarr_<version>_{amd64,arm64}.deb`, `corsarr-<version>-1.{x86_64,aarch64}.rpm`, `corsarr_<version>_{x86_64,aarch64}.apk` | Linux packages ([`deploy/packages`](deploy/packages)) |
-| `SHA256SUMS` | SHA-256 of the archives and packages |
-| `*.spdx.json` | an SPDX SBOM per archive, package and image platform |
+| `<id>-<version>.wasm` | the official plugin modules ([`plugins/`](plugins)), one file for every platform, manifest embedded |
+| `plugins-index.json`, `plugins-index.json.sig` | the plugin catalogue of this release and its Ed25519 signature |
+| `SHA256SUMS` | SHA-256 of the archives, packages, plugin modules and plugin index |
+| `*.spdx.json` | an SPDX SBOM per archive, package, plugin module and image platform |
 | `ghcr.io/jrand0m/corsarr:<tag>` | the multi-arch image (`linux/amd64`, `linux/arm64`) |
 | `oci://ghcr.io/jrand0m/charts/corsarr` | the Helm chart (releases only, not `-rc.N`) |
 
-Every archive, package, the image and the chart have a build-provenance attestation
-(SLSA); archives, packages and the image also have an SBOM attestation. All are signed
-with the workflow's short-lived identity, and the image also has a keyless cosign
-signature. Nothing is signed with a long-lived key.
+Every archive, package, plugin module, the image and the chart have a build-provenance
+attestation (SLSA); archives, packages, plugin modules and the image also have an SBOM
+attestation. All are signed with the workflow's short-lived identity, and the image also
+has a keyless cosign signature. The one long-lived key signs the plugin index, because
+corsarr checks the catalogue offline: its public half ships inside corsarr.
 
 ## 1. Check what you downloaded
 
@@ -73,6 +76,22 @@ docker run --rm ghcr.io/jrand0m/corsarr:v1.2.3 version --json
 }
 ```
 
+For a plugin module, the same checks apply; the SBOM lists the Go modules linked into it:
+
+```bash
+gh attestation verify transmission-1.0.0.wasm --repo jrand0m/corsarr
+gh attestation verify transmission-1.0.0.wasm --repo jrand0m/corsarr --predicate-type https://spdx.dev/Document/v2.3
+```
+
+The plugin index is what corsarr's catalogue trusts. Its signature covers the line
+`corsarr-plugin-index-v1` and the exact bytes of `plugins-index.json`; each entry names a
+module's size and SHA-256. To check it by hand with the public key `<keyId>.pub` from
+`internal/catalogue/trusted/` at that tag:
+
+```bash
+go run ./scripts/pluginindex verify -pub <keyId>.pub plugins-index.json plugins-index.json.sig
+```
+
 The web UI shows the same under System › About. `buildDate` is the commit time, not the
 time the build ran: that is what makes two builds identical.
 
@@ -117,6 +136,9 @@ corsarr-linux-amd64.tar.gz         identical
 corsarr-linux-arm64.tar.gz         identical
 corsarr-windows-amd64.zip          identical
 corsarr-windows-arm64.zip          identical
+plugins-index.json                 identical
+rtorrent-1.0.0.wasm                identical
+transmission-1.0.0.wasm            identical
 image sha256:0d4b5c1e2f3a          identical
 ```
 
@@ -149,7 +171,7 @@ docker buildx create --name corsarr-repro --driver docker-container \
   --driver-opt image=moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
 args="--build-arg VERSION --build-arg COMMIT --build-arg TAG --build-arg DIRTY --build-arg SOURCE_DATE_EPOCH"
 
-# the archives, the Linux packages and their SHA256SUMS
+# the archives, the Linux packages, the plugin modules, the plugin index and their SHA256SUMS
 docker buildx build --builder corsarr-repro $args --target archives \
   --output type=local,dest=rebuilt .
 curl -fsSLO https://github.com/jrand0m/corsarr/releases/download/v1.2.3/SHA256SUMS

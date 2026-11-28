@@ -36,12 +36,16 @@ FROM uideps AS ui
 COPY ui/ ./
 RUN npm run build
 
-# Go sources with the UI embedded, ready to cross-compile
+# Go sources with the UI embedded, ready to cross-compile; the plugin SDK and
+# the plugin modules' sources come along (the binary links the SDK's ABI types)
 FROM godeps AS gosrc
-COPY scripts/gobuild.sh scripts/
+COPY scripts/gobuild.sh scripts/plugins.sh scripts/
 COPY scripts/repro/ scripts/repro/
+COPY scripts/pluginindex/ scripts/pluginindex/
 COPY cmd/ cmd/
 COPY internal/ internal/
+COPY sdk/ sdk/
+COPY plugins/ plugins/
 COPY --from=ui /src/internal/web/dist/ internal/web/dist/
 
 # One binary for the image platform
@@ -56,7 +60,8 @@ ARG SOURCE_DATE_EPOCH=0
 RUN scripts/gobuild.sh "$TARGETOS" "$TARGETARCH" /corsarr
 
 # The six release archives, Linux packages (.deb, .rpm, .apk for amd64 and
-# arm64; release versions only) and SHA256SUMS
+# arm64; release versions only), the plugin modules (<id>-<version>.wasm, one
+# file for every platform) with plugins-index.json, and SHA256SUMS
 FROM gosrc AS pack
 ARG VERSION=dev
 ARG COMMIT=
@@ -90,7 +95,12 @@ RUN find README.md LICENSE deploy -type d -exec chmod 0755 {} + \
            done; \
       done ;; \
     esac \
- && cd /dist && sha256sum corsarr[-_]* > SHA256SUMS
+ && scripts/plugins.sh build /stage/plugins all \
+ && cp /stage/plugins/*.wasm /dist/ \
+ && min= && case "$TAG" in v[0-9]*) min=${TAG#v} ;; esac \
+ && go run ./scripts/pluginindex build -release "$VERSION" -min-corsarr "$min" -epoch "$SOURCE_DATE_EPOCH" \
+      -o /dist/plugins-index.json /dist/*.wasm \
+ && cd /dist && sha256sum corsarr[-_]* *.wasm plugins-index.json > SHA256SUMS
 
 FROM scratch AS archives
 COPY --from=pack /dist/ /
