@@ -34,6 +34,15 @@ func TestPlan_AProfileLikeTheBuiltinUsesIt(t *testing.T) {
 	if e.Target != "profile:hd1080p" || e.Outcome != OutUnchanged || e.Reason != "same as the built-in profile hd1080p" || e.op != nil {
 		t.Fatalf("%s %s %s %v", e.Target, e.Outcome, e.Reason, e.op)
 	}
+	n := 0
+	for _, e := range rep.Entries {
+		if e.ID == "sonarr:profile:4" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("the profile is planned %d times", n)
+	}
 }
 
 func TestPlan_ACustomProfileInForceIsNotABuiltin(t *testing.T) {
