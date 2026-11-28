@@ -120,7 +120,7 @@ lint target="all":
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{target}}" in
-      go)      test -z "$({{x}} gofmt -l cmd internal)" || { {{x}} gofmt -l cmd internal; exit 1; }; {{x}} go vet ./... ;;
+      go)      test -z "$({{x}} gofmt -l cmd internal sdk plugins)" || { {{x}} gofmt -l cmd internal sdk plugins; exit 1; }; {{x}} go vet ./... ;;
       ui)      cd ui && {{x}} npm run check ;;
       docs)
         tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT

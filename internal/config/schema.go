@@ -64,7 +64,7 @@ type Schema struct {
 }
 
 // Bootstrap sections apply at start only.
-var bootstrapSections = map[string]bool{"server": true, "data": true, "log": true, "auth": true}
+var bootstrapSections = map[string]bool{"server": true, "data": true, "log": true, "auth": true, "plugins": true}
 
 // instanceSections are the MVP plugin-instance sections, in export order.
 var instanceSections = []plugin.Kind{
@@ -93,6 +93,7 @@ func NewSchema(reg *plugin.Registry) *Schema {
 		{Name: "auth", Node: obj("Sign-in (applies at start).",
 			Field{Name: "mode", Node: enum("password", "How people sign in: password asks for the admin login or the API key, local lets devices on private networks in without one, proxy trusts the user name your reverse proxy sends.", "password", "local", "proxy")},
 		)},
+		{Name: "plugins", Node: pluginsNode()},
 		{Name: "mediaKinds", Live: true, Node: obj("What corsarr does for each kind of media.",
 			kindField(domain.KindTV, domain.ModeActive), kindField(domain.KindMovie, domain.ModeActive),
 			kindField(domain.KindMusic, domain.ModeActive), kindField(domain.KindBook, domain.ModeDisabled),
@@ -257,10 +258,7 @@ func fieldNode(f plugin.Field) *Node {
 	case plugin.FieldMap:
 		return &Node{Kind: KindMap, Doc: f.Help, Required: f.Required, Elem: &Node{Kind: KindString}}
 	}
-	n.Check = rangeCheck(f)
-	if n.Check == nil {
-		n.Check = f.Check
-	}
+	n.Check = bothChecks(rangeCheck(f), f.Check)
 	return n
 }
 

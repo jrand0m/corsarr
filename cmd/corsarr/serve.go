@@ -24,6 +24,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/preflight"
 	"github.com/jrand0m/corsarr/internal/scheduler"
 	"github.com/jrand0m/corsarr/internal/store"
+	"github.com/jrand0m/corsarr/internal/wasm"
 	"github.com/jrand0m/corsarr/internal/web"
 )
 
@@ -60,12 +61,15 @@ func (c cli) serve(ctx context.Context, ready func(addr string)) int {
 		fmt.Fprintln(c.stderr, "corsarr:", err)
 		return 1
 	}
+	c.prepareModules(log)
+	defer c.closeModules()
 	k, err := startKernel(ctx, cfg, log)
 	if err != nil {
 		fmt.Fprintln(c.stderr, "corsarr:", err)
 		return 1
 	}
 	defer k.close()
+	c.runModules(ctx, k.bus)
 	srv, ln, err := k.listen(ctx, cfg)
 	if err != nil {
 		k.log.Error("cannot start HTTP server", "err", err)
@@ -134,7 +138,8 @@ func startKernel(ctx context.Context, cfg *config.Config, log *slog.Logger) (*ke
 	if list, err := st.Health().List(ctx); err == nil {
 		k.health.Load(list)
 	}
-	k.http = httpx.New(httpx.Options{Version: version, Reporter: k.health, Allow: cfg.Server.EgressAllow})
+	k.http = httpx.New(httpx.Options{Version: version, Reporter: k.health, Allow: cfg.Server.EgressAllow,
+		Transport: wasm.GuardedTransport()})
 	k.health.OK(configRef)
 	k.jobs = scheduler.New(scheduler.Options{Store: st.Jobs(), Events: k.bus,
 		OnError: func(job string, err error) { log.Warn("job failed", "job", job, "err", err) }})
