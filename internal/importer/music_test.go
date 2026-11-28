@@ -270,7 +270,9 @@ func (singleMeta) Releases(context.Context, string) ([]plugin.ReleaseRecord, err
 // noEditionMeta knows the album but none of its editions.
 type noEditionMeta struct{ albumMeta }
 
-func (noEditionMeta) Releases(context.Context, string) ([]plugin.ReleaseRecord, error) { return nil, nil }
+func (noEditionMeta) Releases(context.Context, string) ([]plugin.ReleaseRecord, error) {
+	return nil, nil
+}
 
 func TestMusicImportOfAOneTrackAlbum(t *testing.T) {
 	e, _, _ := musicEnvWith(t, "Example Artist - First Album (2020) [FLAC]", singleMeta{})
