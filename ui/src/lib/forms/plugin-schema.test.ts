@@ -1,0 +1,171 @@
+import { describe, expect, it } from 'vitest';
+import {
+  UnsupportedSchema, configSnippet, formatGoDuration, fromFormValues, parseGoDuration, permissionDiff, problemErrors,
+  sectionFor, toFormSchema, toFormValues,
+} from './plugin-schema';
+import type { ModuleField, ModuleSchema } from '../../app/api/types';
+
+const every: ModuleSchema = {
+  fields: [
+    { key: 'url', type: 'string', label: 'Address', pattern: 'url-http', required: true, description: 'Where the client listens.' },
+    { key: 'host', type: 'string', label: 'Host', pattern: 'hostname' },
+    { key: 'folder', type: 'string', label: 'Folder', pattern: 'path-absolute' },
+    { key: 'category', type: 'string', label: 'Category', pattern: 'identifier' },
+    { key: 'note', type: 'string', label: 'Note', maxLength: 40 },
+    { key: 'apiKey', type: 'secret', label: 'API key', required: true },
+    { key: 'paused', type: 'bool', label: 'Add paused', default: false },
+    { key: 'slots', type: 'int', label: 'Slots', min: 1, max: 10, step: 1, default: 4 },
+    { key: 'ratio', type: 'number', label: 'Ratio', min: 0, max: 5, decimals: 2 },
+    { key: 'priority', type: 'enum', label: 'Priority', options: [{ value: 'low', label: 'Low 🐢' }, { value: 'high', label: 'High ⚡' }] },
+    { key: 'timeout', type: 'duration', label: 'Timeout', minDuration: '5s', maxDuration: '5m', default: '30s' },
+    { key: 'tags', type: 'list<string>', label: 'Tags', maxItems: 5 },
+    { key: 'ports', type: 'list<int>', label: 'Ports', maxItems: 3 },
+    { key: 'paths', type: 'map<string,string>', label: 'Path mappings', maxEntries: 10 },
+  ],
+  groups: [
+    { title: 'Connection', description: 'How corsarr reaches it.', fields: ['host', 'url'] },
+    { title: 'Downloads', fields: ['paused', 'slots'] },
+  ],
+  actions: [{ id: 'test', label: 'Test connection' }, { id: 'discover', label: 'Find categories' }],
+};
+
+describe('toFormSchema', () => {
+  it('maps every type of the closed set onto a field molecule', () => {
+    const { schema } = toFormSchema(every);
+    const byKey = Object.fromEntries(schema.fields.map((f) => [f.key, f]));
+    expect(byKey.url).toMatchObject({ type: 'url', mono: true, required: true, help: 'Where the client listens.', validation: { schemes: ['http', 'https'] } });
+    expect(byKey.host).toMatchObject({ type: 'text', mono: true });
+    expect(byKey.host.validation?.pattern).toBeTruthy();
+    expect(byKey.folder).toMatchObject({ type: 'path', mono: true });
+    expect(byKey.category.validation?.pattern).toBe('^[a-z][a-zA-Z0-9]{0,47}$');
+    expect(byKey.note).toMatchObject({ type: 'text' });
+    expect(byKey.apiKey).toMatchObject({ type: 'text', secret: true });
+    expect(byKey.paused).toMatchObject({ type: 'bool', default: false });
+    expect(byKey.slots).toMatchObject({ type: 'number', default: 4, validation: { min: 1, max: 10 } });
+    expect(byKey.ratio).toMatchObject({ type: 'number', validation: { min: 0, max: 5 } });
+    expect(byKey.priority).toMatchObject({ type: 'select', options: [{ value: 'low', label: 'Low 🐢' }, { value: 'high', label: 'High ⚡' }] });
+    expect(byKey.timeout).toMatchObject({ type: 'duration', default: 30, validation: { min: 5, max: 300 } });
+    expect(byKey.tags).toMatchObject({ type: 'list', validation: { maxItems: 5 } });
+    expect(byKey.ports).toMatchObject({ type: 'list', mono: true, validation: { maxItems: 3 } });
+    expect(byKey.paths).toMatchObject({ type: 'map', mono: true });
+  });
+
+  it('orders grouped fields as the group lists them and keeps loose fields first', () => {
+    const { schema } = toFormSchema(every);
+    expect(schema.groups).toEqual([
+      { id: 'g0', label: 'Connection', help: 'How corsarr reaches it.' },
+      { id: 'g1', label: 'Downloads', help: undefined },
+    ]);
+    const keys = schema.fields.map((f) => `${f.key}:${f.group ?? ''}`);
+    expect(keys.slice(0, 2)).toEqual(['folder:', 'category:']);
+    expect(keys.slice(-4)).toEqual(['host:g0', 'url:g0', 'paused:g1', 'slots:g1']);
+  });
+
+  it('returns the actions and the plugin hints', () => {
+    const r = toFormSchema({ ...every, fields: [...every.fields, { key: 'user', type: 'string', label: 'User', hint: 'The web UI login.' }] });
+    expect(r.actions).toEqual([{ id: 'test', label: 'Test connection' }, { id: 'discover', label: 'Find categories' }]);
+    expect(r.hints).toEqual({ user: 'The web UI login.' });
+  });
+
+  it('refuses any type outside the closed set', () => {
+    for (const type of ['html', 'markdown', 'url', 'list<bool>', 'map<string,int>', 'object', '']) {
+      expect(() => toFormSchema({ fields: [{ key: 'x', type, label: 'X' }] })).toThrow(UnsupportedSchema);
+    }
+  });
+
+  it('refuses unknown patterns, bad keys, unknown group fields and oversized schemas', () => {
+    expect(() => toFormSchema({ fields: [{ key: 'x', type: 'string', label: 'X', pattern: '.*' }] })).toThrow(/pattern/);
+    expect(() => toFormSchema({ fields: [{ key: 'X-y', type: 'string', label: 'X' }] })).toThrow(/key/);
+    expect(() => toFormSchema({ fields: [{ key: 'a', type: 'bool', label: 'A' }], groups: [{ title: 'G', fields: ['b'] }] })).toThrow(/group/);
+    expect(() => toFormSchema({ fields: [{ key: 'a', type: 'bool', label: 'A' }], actions: [1, 2, 3, 4].map((i) => ({ id: `a${i}`, label: 'Go' })) })).toThrow(/actions/);
+    const many: ModuleField[] = Array.from({ length: 51 }, (_, i) => ({ key: `f${i}`, type: 'bool', label: 'F' }));
+    expect(() => toFormSchema({ fields: many })).toThrow(/fields/);
+    expect(() => toFormSchema(null as unknown as ModuleSchema)).toThrow(UnsupportedSchema);
+  });
+});
+
+describe('values', () => {
+  it('reads config values (also the env export strings) into form values', () => {
+    const v = toFormValues(every.fields, { slots: '6', ratio: 1.5, paused: 'true', timeout: '1m30s', ports: [8080, '9090'], url: 'http://box:8080' });
+    expect(v).toMatchObject({ slots: 6, ratio: 1.5, paused: true, timeout: 90, ports: ['8080', '9090'], url: 'http://box:8080' });
+  });
+
+  it('writes form values back in the module types and drops empty secrets', () => {
+    const v = fromFormValues(every.fields, { timeout: 90, ports: ['8080', ' ', '9090'], apiKey: '', slots: null, tags: ['a', ''], paths: [{ key: '/dl', value: '/data' }], url: 'http://x' });
+    expect(v).toEqual({ timeout: '1m30s', ports: [8080, 9090], tags: ['a'], paths: { '/dl': '/data' }, url: 'http://x' });
+    expect(fromFormValues(every.fields, { apiKey: 'typed' })).toEqual({ apiKey: 'typed' });
+  });
+
+  it('formats and parses Go durations', () => {
+    expect(formatGoDuration(0)).toBe('0s');
+    expect(formatGoDuration(45)).toBe('45s');
+    expect(formatGoDuration(3600 + 120)).toBe('1h2m');
+    expect(parseGoDuration('1h2m3s')).toBe(3723);
+    expect(parseGoDuration('1.5m')).toBe(90);
+    expect(parseGoDuration('500ms')).toBe(0.5);
+    expect(parseGoDuration('soon')).toBeNull();
+  });
+});
+
+describe('permissionDiff', () => {
+  it('lists added and removed hosts and secrets', () => {
+    const d = permissionDiff(
+      { http: { hosts: ['api.example.org', '$setting:url'] }, secrets: ['apiKey'] },
+      { http: { hosts: ['$setting:url', 'cdn.example.org', '*.example.net'] }, secrets: ['apiKey', 'password'] },
+    );
+    expect(d).toEqual({ addedHosts: ['cdn.example.org', '*.example.net'], removedHosts: ['api.example.org'], addedSecrets: ['password'], removedSecrets: [] });
+  });
+  it('treats a missing old set as nothing approved', () => {
+    expect(permissionDiff(undefined, { http: {} })).toEqual({ addedHosts: [], removedHosts: [], addedSecrets: [], removedSecrets: [] });
+    expect(permissionDiff(undefined, { http: { hosts: ['a.example'] } }).addedHosts).toEqual(['a.example']);
+  });
+});
+
+describe('configSnippet', () => {
+  it('writes a new instance under its section with secrets as references', () => {
+    const yaml = configSnippet({
+      section: 'downloadClients', key: 'box', plugin: 'harbourdl', name: 'Box: upstairs', fields: every.fields,
+      values: { url: 'http://box:8080', apiKey: 'sk-typed-value', paused: true, slots: 4, timeout: '1m', tags: ['tv', 'yes'], paths: { '/downloads': '/data' }, note: '' },
+    });
+    expect(yaml).toBe([
+      'downloadClients:',
+      '  box:',
+      '    type: harbourdl',
+      '    name: "Box: upstairs"',
+      '    url: http://box:8080',
+      '    apiKey: ${env:CORSARR_SECRET_DOWNLOADCLIENTS_BOX_APIKEY}',
+      '    paused: true',
+      '    timeout: 1m',
+      '    tags:',
+      '      - tv',
+      '      - "yes"',
+      '    paths:',
+      '      /downloads: /data',
+      '',
+    ].join('\n'));
+    expect(yaml).not.toContain('sk-typed-value');
+  });
+
+  it('quotes anything YAML would read as another type or as syntax', () => {
+    const yaml = configSnippet({ section: 'downloadClients', key: 'x', plugin: 'p', fields: [{ key: 'note', type: 'string', label: 'N' }], values: { note: '#1 "a" <b>\nnext' } });
+    expect(yaml).toContain('    note: "#1 \\"a\\" <b>\\nnext"');
+  });
+});
+
+describe('helpers', () => {
+  it('maps a module kind to its config section', () => {
+    expect(sectionFor('downloader')).toBe('downloadClients');
+    expect(sectionFor('indexer')).toBe('indexers');
+    expect(sectionFor('something')).toBe('something');
+  });
+
+  it('turns server problems into field messages with the plugin hint', () => {
+    const r = problemErrors([
+      { path: 'values.url', message: 'must be an http or https address' },
+      { path: 'tags[2]', msg: 'too long' },
+      { path: 'other', message: 'unknown setting' },
+    ], ['url', 'tags'], { url: 'Include the port.' });
+    expect(r.fields).toEqual({ url: 'must be an http or https address. Include the port.', tags: 'too long' });
+    expect(r.other).toEqual(['other: unknown setting']);
+  });
+});
