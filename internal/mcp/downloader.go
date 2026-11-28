@@ -30,12 +30,13 @@ type Downloaders interface {
 	SetSpeedLimits(ctx context.Context, key domain.ObjectKey, l plugin.SpeedLimits) error
 	SetAltSpeed(ctx context.Context, key domain.ObjectKey, on *bool) (bool, error)
 	TestClient(ctx context.Context, key domain.ObjectKey) error
+	AddURL(ctx context.Context, req queue.URLRequest) (domain.Grab, error)
 }
 
 // ManualGrab grabs a release from a recent search by hand (the movie, TV
 // and music search services).
 type ManualGrab interface {
-	GrabRelease(ctx context.Context, itemID int64, releaseID string, confirm bool) (domain.Grab, automation.Decided, error)
+	GrabReleaseTo(ctx context.Context, itemID int64, releaseID string, confirm bool, to domain.ObjectKey) (domain.Grab, automation.Decided, error)
 }
 
 // downloaderTools are the download-client tools: the queue, per-download
@@ -81,10 +82,12 @@ func (s *Service) downloaderTools() []Tool {
 		{Name: "test_downloader", Title: "Test a download client", Description: "Check that corsarr can reach and log in to a client.",
 			Input: object(map[string]schema{"downloader": str("Client key.")}, "downloader"), Run: bind(s.testDownloader)},
 		{Name: "grab_release", Title: "Grab a release", Write: true, OpenWorld: true,
-			Description: "Grab one release from a recent search_releases result for the item. A rejected release needs override: true.",
+			Description: "Grab one release from a recent search_releases result for the item, on the given download client or the first one that takes it. A rejected release needs override: true.",
 			Input: object(map[string]schema{"kind": kindEnum("Media kind."), "id": integer("Movie id, series id or music album id."),
-				"releaseId": str("The release's id (decision.releaseId in search_releases)."), "override": boolean("Grab even though it was rejected.")},
+				"releaseId": str("The release's id (decision.releaseId in search_releases)."), "override": boolean("Grab even though it was rejected."),
+				"downloader": str("Client key from list_downloaders; the first client that takes the release when omitted.")},
 				"kind", "id", "releaseId"), Run: bind(s.grabRelease)},
+		s.addURLTool(),
 	}
 	for _, a := range s.downloadActions() {
 		tools = append(tools, a.tool())
@@ -165,20 +168,20 @@ func actionResult(what string, err error) (Result, error) {
 	switch {
 	case errors.Is(err, queue.ErrShadowed):
 		return Result{Text: what + ": recorded, not sent (shadow mode)",
-			Data: map[string]any{"action": what, "sent": false, "recorded": true, "reason": err.Error()}}, nil
+			Data: ActionOut{Action: what, Recorded: true, Reason: err.Error()}}, nil
 	case errors.Is(err, plugin.ErrUnsupported):
 		return Result{}, unsupported(err.Error())
 	case err != nil:
 		return Result{}, err
 	}
-	return Result{Text: what + ": done", Data: map[string]any{"action": what, "sent": true}}, nil
+	return Result{Text: what + ": done", Data: ActionOut{Action: what, Sent: true}}, nil
 }
 
 // ── reads ────────────────────────────────────────────────────────────────────
 
 func (s *Service) listDownloaders(ctx context.Context, _ struct{}) (Result, error) {
 	list := s.d.Downloaders.Clients(ctx)
-	return Result{Text: fmt.Sprintf("%d download clients", len(list)), Data: map[string]any{"downloaders": list}}, nil
+	return Result{Text: fmt.Sprintf("%d download clients", len(list)), Data: DownloadersOut{Downloaders: list}}, nil
 }
 
 type queueArgs struct {
@@ -218,7 +221,7 @@ func (s *Service) testDownloader(ctx context.Context, in idArgs) (Result, error)
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Text: in.Downloader + ": ok", Data: map[string]any{"downloader": in.Downloader, "ok": true}}, nil
+	return Result{Text: in.Downloader + ": ok", Data: TestOut{Downloader: in.Downloader, OK: true}}, nil
 }
 
 // ── writes with arguments ────────────────────────────────────────────────────
@@ -282,8 +285,9 @@ func (s *Service) toggleAltSpeed(ctx context.Context, in altArgs) (Result, error
 	}
 	on, err := s.d.Downloaders.SetAltSpeed(ctx, key, in.On)
 	res, err := actionResult("toggle_alt_speed", err)
-	if m, ok := res.Data.(map[string]any); ok {
-		m["on"] = on
+	if out, ok := res.Data.(ActionOut); ok {
+		out.On = &on
+		res.Data = out
 	}
 	return res, err
 }
@@ -291,10 +295,11 @@ func (s *Service) toggleAltSpeed(ctx context.Context, in altArgs) (Result, error
 // ── grab_release ─────────────────────────────────────────────────────────────
 
 type grabArgs struct {
-	Kind      string `json:"kind"`
-	ID        int64  `json:"id"`
-	ReleaseID string `json:"releaseId"`
-	Override  bool   `json:"override"`
+	Kind       string `json:"kind"`
+	ID         int64  `json:"id"`
+	ReleaseID  string `json:"releaseId"`
+	Override   bool   `json:"override"`
+	Downloader string `json:"downloader"`
 }
 
 func (s *Service) grabRelease(ctx context.Context, in grabArgs) (Result, error) {
@@ -303,14 +308,14 @@ func (s *Service) grabRelease(ctx context.Context, in grabArgs) (Result, error) 
 		return Result{}, err
 	}
 	grabber := map[domain.MediaKind]ManualGrab{domain.KindMovie: s.d.MovieSearch, domain.KindTV: s.d.TVSearch, domain.KindMusic: s.d.MusicSearch}[kind]
-	g, d, err := grabber.GrabRelease(ctx, in.ID, in.ReleaseID, in.Override)
+	g, d, err := grabber.GrabReleaseTo(ctx, in.ID, in.ReleaseID, in.Override, domain.ObjectKey(in.Downloader))
 	if errors.Is(err, automation.ErrShadowed) {
 		return Result{Text: "grab recorded, not sent (shadow mode): " + d.Release.Title,
-			Data: map[string]any{"sent": false, "recorded": true, "release": d.Release, "decision": d.Decision}}, nil
+			Data: GrabOut{Recorded: true, Release: &d.Release, Decision: d.Decision}}, nil
 	}
 	if err != nil {
 		return Result{}, err
 	}
 	return Result{Text: fmt.Sprintf("grabbed %s on %s", d.Release.Title, g.Downloader),
-		Data: map[string]any{"sent": true, "grab": g, "decision": d.Decision}}, nil
+		Data: GrabOut{Sent: true, Grab: &g, Decision: d.Decision}}, nil
 }

@@ -19,6 +19,31 @@ func (s *Service) Mount(m api.Mounter) {
 	m.Handle("GET /api/v1/blocklist", s.blocklist)
 	m.Handle("POST /api/v1/blocklist", s.addBlock)
 	m.Handle("DELETE /api/v1/blocklist/{id}", s.removeBlock)
+	m.Handle("GET /api/v1/searches/{kind}/{id}", s.searchState)
+}
+
+// searchItems maps the searched item kinds onto their refs.
+var searchItems = map[string]domain.MediaKind{"movie": domain.KindMovie, "episode": domain.KindTV, "album": domain.KindMusic}
+
+// searchState answers an item's last automatic search: when it ran, what
+// it found and the rules that rejected the most releases (movie, episode
+// or album; an item never searched has no lastSearched).
+func (s *Service) searchState(w http.ResponseWriter, r *http.Request) {
+	kind, ok := searchItems[r.PathValue("kind")]
+	if !ok {
+		api.WriteError(w, http.StatusBadRequest, "invalid", "kind must be movie, episode or album", "kind")
+		return
+	}
+	id, ok := movies.PathID(w, r)
+	if !ok {
+		return
+	}
+	st, err := s.d.Searches.State(r.Context(), domain.ItemRef{Kind: kind, ID: id})
+	if err != nil {
+		api.WriteError(w, http.StatusInternalServerError, "internal", err.Error(), "")
+		return
+	}
+	api.WriteJSON(w, http.StatusOK, st)
 }
 
 func (s *Service) search(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +82,8 @@ type grabBody struct {
 	MovieID   int64  `json:"movieId"`
 	ReleaseID string `json:"releaseId"`
 	Confirm   bool   `json:"confirm"`
+	// Downloader is the client to send it to; empty picks one.
+	Downloader domain.ObjectKey `json:"downloader"`
 }
 
 func (s *Service) grabRelease(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +91,7 @@ func (s *Service) grabRelease(w http.ResponseWriter, r *http.Request) {
 	if !api.DecodeJSON(w, r, &b) {
 		return
 	}
-	g, d, err := s.GrabRelease(r.Context(), b.MovieID, b.ReleaseID, b.Confirm)
+	g, d, err := s.GrabReleaseTo(r.Context(), b.MovieID, b.ReleaseID, b.Confirm, b.Downloader)
 	switch {
 	case errors.Is(err, ErrUnknownRelease):
 		api.WriteError(w, http.StatusNotFound, "release_expired", err.Error(), "releaseId")

@@ -44,7 +44,7 @@ func (s *Service) syncOne(ctx context.Context, ix automation.Indexer) error {
 		if overlaps(p.d.Decision.ItemRefs, grabbed) {
 			continue
 		}
-		_, err := s.grab(ctx, p.scope, p.d, domain.OriginRSS, false)
+		_, err := s.grab(ctx, p.scope, p.d, domain.OriginRSS, false, "")
 		if err == nil || errors.Is(err, automation.ErrShadowed) {
 			mark(p.d.Decision.ItemRefs, grabbed)
 			continue

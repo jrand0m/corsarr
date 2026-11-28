@@ -53,6 +53,7 @@ type Deps struct {
 	Modes         domain.Modes           // nil = all active
 	Recent        automation.RecentStore // nil = in memory
 	PackThreshold float64                // 0 = DefaultPackThreshold
+	Searches      automation.StateStore  // nil = search results are not kept
 	Now           func() time.Time
 	Log           *slog.Logger
 }

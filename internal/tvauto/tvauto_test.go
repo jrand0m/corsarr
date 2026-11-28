@@ -212,7 +212,7 @@ func newEnv(t *testing.T) *env {
 		RootFolders: func() []string { return []string{root} }})
 	e.svc = New(Deps{TV: e.tv, Files: st.Library(), Queue: e.q, Blocklist: st.Blocklist(), Cursors: e.cur,
 		Indexers: func() []automation.Indexer { return []automation.Indexer{{Key: "ix", Impl: e.ix}} },
-		Pub:      e.pub, Modes: modes, Now: now, Log: log})
+		Pub:      e.pub, Modes: modes, Searches: st.Searches(), Now: now, Log: log})
 	return e
 }
 
@@ -297,6 +297,9 @@ func TestEpisodeSearchAndInteractiveAndManualGrab(t *testing.T) {
 	// queued now: an automatic search does not grab it again
 	if sum, _ := e.svc.SearchEpisode(ctx, s2e1.ID, domain.OriginAutomatic); sum.Grabbed != "" {
 		t.Fatalf("grabbed twice: %+v", sum)
+	}
+	if st, err := e.st.Searches().State(ctx, s2e1.Ref()); err != nil || st.LastResult == nil || len(st.LastResult.Rejections) == 0 {
+		t.Fatalf("the episode keeps its last search and why releases were rejected: %+v %v", st, err)
 	}
 	if _, err := e.svc.InteractiveSeason(ctx, s.ID, 9, &rec); !errors.Is(err, tv.ErrNotFound) {
 		t.Fatal(err)

@@ -117,6 +117,7 @@ type Library interface {
 // SearchStates reads an item's search state (store.Searches).
 type SearchStates interface {
 	State(ctx context.Context, item domain.ItemRef) (domain.SearchState, error)
+	States(ctx context.Context, kind domain.MediaKind) (map[int64]domain.SearchState, error)
 }
 
 // History pages History (store.History).
@@ -195,6 +196,12 @@ func New(d Deps) *Service {
 	s.register(s.requestTools()...)
 	s.register(s.libraryTools()...)
 	s.register(s.downloaderTools()...)
+	outputs := toolOutputs()
+	for i := range s.tools {
+		if s.tools[i].Output == nil {
+			s.tools[i].Output = outputs[s.tools[i].Name]
+		}
+	}
 	return s
 }
 

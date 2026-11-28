@@ -106,6 +106,8 @@ type grabBody struct {
 	Confirm   bool   `json:"confirm"`
 	Season    *int   `json:"season"`
 	EpisodeID *int64 `json:"episodeId"`
+	// Downloader is the client to send it to; empty picks one.
+	Downloader domain.ObjectKey `json:"downloader"`
 }
 
 // grabRelease grabs a release by hand; the episodes it covers come from the
@@ -116,7 +118,7 @@ func (s *Service) grabRelease(w http.ResponseWriter, r *http.Request) {
 	if !ok || !api.DecodeJSON(w, r, &b) {
 		return
 	}
-	g, d, err := s.GrabRelease(r.Context(), id, b.ReleaseID, b.Confirm)
+	g, d, err := s.GrabReleaseTo(r.Context(), id, b.ReleaseID, b.Confirm, b.Downloader)
 	switch {
 	case errors.Is(err, automation.ErrUnknownRelease):
 		api.WriteError(w, http.StatusNotFound, "not_found", err.Error(), "releaseId")

@@ -78,7 +78,8 @@ func newHarness(t *testing.T) *harness {
 		TV: h.tvs, TVSearch: &fakeTVSearch{c: c, idx: tvauto.NewIndex()},
 		Music: h.mu, MusicSearch: &fakeMusicSearch{c: c, idx: musicauto.NewIndex()},
 		Queue: h.q, Downloaders: h.dl, Library: fakeLibrary{}, Searches: fakeSearches{states: map[domain.ItemRef]domain.SearchState{
-			{Kind: domain.KindMovie, ID: 2}: {LastSearched: &searched, LastResult: &domain.SearchEventData{Releases: 3}},
+			{Kind: domain.KindMovie, ID: 2}: {LastSearched: &searched, LastResult: &domain.SearchEventData{Releases: 3,
+				Rejections: []domain.ReasonCount{{RuleID: "quality.notWanted", Message: "quality not wanted", Count: 3}}}},
 		}}, History: fakeHistory{}, Health: fakeHealth{}, RootFolders: fakeRoots{}, Bus: h.bus,
 		Go: func(fn func(context.Context)) { fn(context.Background()) }, Now: func() time.Time { return h.now }})
 	h.sess = h.s.NewSession(KeyFull)
@@ -132,6 +133,9 @@ func (h *harness) callOn(t *testing.T, sess *Session, name string, args any) cal
 		IsError    bool           `json:"isError"`
 	}
 	_ = json.Unmarshal(out.Result, &r)
+	if !r.IsError {
+		checkOutput(t, h.s.byName[name], r.Structured)
+	}
 	return callOut{Text: r.Content[0].Text, Data: r.Structured, IsError: r.IsError}
 }
 

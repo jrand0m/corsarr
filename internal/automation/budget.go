@@ -107,16 +107,7 @@ func (s *Service) allow(ctx context.Context, ix Indexer) error {
 
 // record stores the result of one search for the movie.
 func (s *Service) record(ctx context.Context, m domain.Movie, res domain.SearchEventData) {
-	st, err := s.d.Searches.State(ctx, m.Ref())
-	s.warn("read search state", err, "movie", m.ID)
-	at := s.d.Now().UTC()
-	st.Misses++
-	if res.Grabbed != "" {
-		st.Misses = 0
-	}
-	next := NextEligible(at, st.Misses)
-	st.LastSearched, st.NextEligible, st.LastResult = &at, &next, &res
-	s.warn("save search state", s.d.Searches.SaveState(ctx, st), "movie", m.ID)
+	s.warn("save search state", RecordSearch(ctx, s.d.Searches, m.Ref(), s.d.Now().UTC(), res), "movie", m.ID)
 }
 
 // Request queues an automatic search for a movie (on add, on availability,

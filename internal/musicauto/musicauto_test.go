@@ -164,7 +164,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.mus.Stop()
 	f.artID = ar.ID
-	f.svc = New(Deps{Music: f.mus, Queue: f.q, Blocklist: st.Blocklist(), Pub: f.pub, Modes: modes, Now: func() time.Time { return now },
+	f.svc = New(Deps{Music: f.mus, Queue: f.q, Blocklist: st.Blocklist(), Pub: f.pub, Modes: modes, Searches: st.Searches(), Now: func() time.Time { return now },
 		Indexers: func() []automation.Indexer { return []automation.Indexer{{Key: "ix", Impl: f.ix}} }, Log: log})
 	if err := f.svc.Rebuild(ctx); err != nil {
 		t.Fatal(err)
@@ -254,6 +254,9 @@ func TestShadowAndDisabledModes(t *testing.T) {
 	sum, err := f.svc.SearchAlbum(ctx, albums[0].ID, domain.OriginAutomatic)
 	if err != nil || sum.Shadowed == "" || f.q.count() != 0 || f.pub.count(domain.EvDecisionShadowed) != 1 {
 		t.Fatalf("%+v %v", sum, err)
+	}
+	if st, err := f.st.Searches().State(ctx, albums[0].Ref()); err != nil || st.LastResult == nil || st.LastResult.Releases != sum.Releases {
+		t.Fatalf("the album keeps its last search: %+v %v", st, err)
 	}
 	f.mode = domain.ModeDisabled
 	var me domain.ModeError

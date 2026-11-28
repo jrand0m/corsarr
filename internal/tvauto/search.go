@@ -145,7 +145,7 @@ func (s *Service) run(ctx context.Context, sc scope, req domain.SearchRequest, o
 	ds, sum := s.collect(ctx, sc, req, automation.NopEmitter)
 	if top, n, ok := automation.Best(ds); ok {
 		sum.Accepted = n
-		switch _, err := s.grab(ctx, sc, top, origin, false); {
+		switch _, err := s.grab(ctx, sc, top, origin, false, ""); {
 		case err == nil:
 			sum.Grabbed = top.Release.Title
 		case errors.Is(err, automation.ErrShadowed):
@@ -154,9 +154,22 @@ func (s *Service) run(ctx context.Context, sc scope, req domain.SearchRequest, o
 			s.warn("grab", err, "release", top.Release.Title)
 		}
 	}
-	s.publish(domain.EvSearchCompleted, "automation", s.items(sc, req.ItemRefs), domain.SearchEventData{Origin: origin,
-		Indexers: sum.Indexers, Failed: sum.Failed, Releases: sum.Releases, Accepted: sum.Accepted, Grabbed: sum.Grabbed})
+	res := domain.SearchEventData{Origin: origin, Indexers: sum.Indexers, Failed: sum.Failed, Releases: sum.Releases,
+		Accepted: sum.Accepted, Grabbed: sum.Grabbed, Rejections: automation.Rejections(ds)}
+	s.record(ctx, req.ItemRefs, res)
+	s.publish(domain.EvSearchCompleted, "automation", s.items(sc, req.ItemRefs), res)
 	return sum
+}
+
+// record keeps the search's result on every episode it searched.
+func (s *Service) record(ctx context.Context, refs []domain.ItemRef, res domain.SearchEventData) {
+	if s.d.Searches == nil {
+		return
+	}
+	at := s.d.Now().UTC()
+	for _, ref := range refs {
+		s.warn("save search state", automation.RecordSearch(ctx, s.d.Searches, ref, at, res), "episode", ref.ID)
+	}
 }
 
 // items names episode refs of the scope for events.
@@ -174,12 +187,12 @@ func (s *Service) items(sc scope, refs []domain.ItemRef) []domain.EventItem {
 
 // grab sends a decided release to the queue linked to every covered
 // episode; in shadow mode it records decision.shadowed instead.
-func (s *Service) grab(ctx context.Context, sc scope, d automation.Decided, origin domain.SearchOrigin, override bool) (domain.Grab, error) {
+func (s *Service) grab(ctx context.Context, sc scope, d automation.Decided, origin domain.SearchOrigin, override bool, to domain.ObjectKey) (domain.Grab, error) {
 	items := s.items(sc, d.Decision.ItemRefs)
 	switch mode := s.d.Modes.Of(domain.KindTV); mode {
 	case domain.ModeShadow:
 		s.publish(domain.EvDecisionShadowed, automation.ActorOf(origin), items, domain.GrabEventData{Release: d.Release,
-			Decision: d.Decision, Origin: origin, Override: override})
+			Decision: d.Decision, Origin: origin, Override: override, Downloader: to})
 		return domain.Grab{}, automation.ErrShadowed
 	case domain.ModeDisabled:
 		return domain.Grab{}, domain.ModeError{Kind: domain.KindTV, Mode: mode}
@@ -188,7 +201,7 @@ func (s *Service) grab(ctx context.Context, sc scope, d automation.Decided, orig
 		return domain.Grab{}, errors.New("release covers no episode of " + sc.series.Title)
 	}
 	g, err := s.d.Queue.Grab(ctx, queue.GrabRequest{Kind: domain.KindTV, Items: items, Release: d.Release,
-		Decision: d.Decision, Origin: origin, Override: override})
+		Decision: d.Decision, Origin: origin, Override: override, Downloader: to})
 	if err == nil {
 		for _, it := range items {
 			s.refreshEpisode(ctx, it.Ref.ID)

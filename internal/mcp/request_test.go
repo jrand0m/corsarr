@@ -3,6 +3,7 @@ package mcp
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/store"
@@ -130,7 +131,7 @@ func TestRequestBookIsRefusedWithTheReason(t *testing.T) {
 func TestRequestStatusStates(t *testing.T) {
 	h := newHarness(t)
 	h.ok(t, "request_status", map[string]any{"kind": "movie", "imdbId": "tt1"}, "imported")
-	h.ok(t, "request_status", map[string]any{"kind": "movie", "tmdbId": 20}, "all_rejected")
+	h.ok(t, "request_status", map[string]any{"kind": "movie", "tmdbId": 20}, "all_rejected", "top reasons: quality not wanted ×3")
 	h.ok(t, "request_status", map[string]any{"kind": "tv", "tvdbId": 7}, `downloading — grabbed "Show.S01" on qbit: downloading, 50%`)
 	h.ok(t, "request_status", map[string]any{"kind": "tv", "imdbId": "tt7"}, "downloading")
 	h.ok(t, "request_status", map[string]any{"kind": "music", "mbid": "artist-1"}, "Band (music 1): searching")
@@ -147,6 +148,25 @@ func TestRequestStatusStates(t *testing.T) {
 	h.fails(t, "request_status", map[string]any{"kind": "movie", "id": 1}, "boom")
 	h.mv.err = errBoom
 	h.fails(t, "request_status", map[string]any{"kind": "movie", "tmdbId": 1}, "boom")
+}
+
+func TestRequestStatusUsesTheLatestPartSearch(t *testing.T) {
+	h := newHarness(t)
+	older, newer := day.Add(-time.Hour), day
+	rejected := &domain.SearchEventData{Releases: 2, Rejections: []domain.ReasonCount{{RuleID: "size", Message: "too big", Count: 2}}}
+	h.s.d.Searches = fakeSearches{states: map[domain.ItemRef]domain.SearchState{
+		{Kind: domain.KindTV, ID: 11}:     {LastSearched: &older, LastResult: &domain.SearchEventData{}},
+		{Kind: domain.KindTV, ID: 21}:     {LastSearched: &newer, LastResult: rejected},
+		{Kind: domain.KindMusic, ID: 100}: {LastSearched: &newer, LastResult: rejected},
+	}}
+	h.q.pages = nil
+	out := h.ok(t, "request_status", map[string]any{"kind": "tv", "id": 1}, "partial", "last search: all 2 releases were rejected", "too big ×2")
+	if ls, _ := out.Data["lastSearch"].(map[string]any); ls == nil || ls["lastResult"] == nil {
+		t.Fatalf("the latest search is in the result: %v", out.Data)
+	}
+	h.ok(t, "request_status", map[string]any{"kind": "music", "id": 1}, "all_rejected", "too big ×2")
+	h.s.d.Searches = fakeSearches{err: errBoom}
+	h.fails(t, "request_status", map[string]any{"kind": "tv", "id": 1}, "boom")
 }
 
 func TestJudge(t *testing.T) {

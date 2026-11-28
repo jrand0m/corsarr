@@ -102,8 +102,8 @@ func (f *fakeMovieSearch) Search(_ context.Context, id int64, _ domain.SearchOri
 
 func (f *fakeMovieSearch) Interactive(_ context.Context, id int64, em automation.Emitter) (automation.Summary, error) {
 	f.c.add("movies.interactive")
-	_ = em.Record(map[string]string{"title": "r1"})
-	_ = em.Record(map[string]string{"title": "r2"})
+	_ = em.Record(automation.Decided{Release: domain.Release{ID: "r1", Title: "r1"}, Decision: domain.Decision{ReleaseID: "r1", Reasons: []domain.Reason{}}})
+	_ = em.Record(automation.Decided{Release: domain.Release{ID: "r2", Title: "r2"}, Decision: domain.Decision{ReleaseID: "r2", Reasons: []domain.Reason{}}})
 	_ = em.Error("idx", errBoom)
 	return automation.Summary{Indexers: 1, Releases: 2, Accepted: 1}, nil
 }
@@ -402,10 +402,21 @@ func (fakeLibrary) FilesOf(_ context.Context, ref domain.ItemRef) ([]domain.Libr
 
 type fakeSearches struct {
 	states map[domain.ItemRef]domain.SearchState
+	err    error
 }
 
 func (f fakeSearches) State(_ context.Context, ref domain.ItemRef) (domain.SearchState, error) {
 	return f.states[ref], nil
+}
+
+func (f fakeSearches) States(_ context.Context, kind domain.MediaKind) (map[int64]domain.SearchState, error) {
+	out := map[int64]domain.SearchState{}
+	for ref, st := range f.states {
+		if ref.Kind == kind {
+			out[ref.ID] = st
+		}
+	}
+	return out, f.err
 }
 
 type fakeHistory struct{}

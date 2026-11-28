@@ -1,8 +1,9 @@
-<!-- Settings › General: root folders and media kind modes (read-only, from config), the API key, the server. -->
+<!-- Settings › General: root folders and media kind modes (read-only, from config), the API key, assistants (MCP) and their read-only key, the server. -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import SettingsPage from '../../../lib/components/templates/SettingsPage/SettingsPage.svelte';
   import Button from '../../../lib/components/atoms/Button/Button.svelte';
+  import Link from '../../../lib/components/atoms/Link/Link.svelte';
   import CopyableValue from '../../../lib/components/atoms/CopyableValue/CopyableValue.svelte';
   import MediaKindIcon from '../../../lib/components/atoms/MediaKindIcon/MediaKindIcon.svelte';
   import Skeleton from '../../../lib/components/atoms/Skeleton/Skeleton.svelte';
@@ -44,6 +45,28 @@
   };
   const src = $derived(status.data?.configSource);
   const shadow = $derived(kindList.filter((k) => cfg.data?.kinds[k.kind] === 'shadow').map((k) => k.label));
+
+  // The read-only key for assistants: fetched on request (fetching issues one when there is none).
+  let roKey = $state<string | null>(null);
+  let roBusy = $state(false);
+  let roRotateOpen = $state(false);
+  let roRevokeOpen = $state(false);
+  async function roAction(run: () => Promise<{ apiKey: string }>, ok?: string) {
+    roBusy = true;
+    try {
+      roKey = (await run()).apiKey;
+      roRotateOpen = roRevokeOpen = false;
+      if (ok) toasts.push({ message: ok, tone: 'ok' });
+    } catch (e) {
+      toasts.push({ message: 'The assistant key was not changed', detail: toApiError(e).message, tone: 'error' });
+    } finally {
+      roBusy = false;
+    }
+  }
+  const showRoKey = () => roAction(() => api.get<{ apiKey: string }>('auth/apikey/readonly'));
+  const rotateRoKey = () => roAction(() => api.post<{ apiKey: string }>('auth/apikey/readonly/rotate'), 'New assistant key created');
+  const revokeRoKey = () => roAction(() => api.del<{ apiKey: string }>('auth/apikey/readonly'), 'Assistant key revoked');
+  const mcpDocs = 'https://github.com/jrand0m/corsarr/blob/master/docs/configuration.md';
 
   let confirmOpen = $state(false);
   let rotating = $state(false);
@@ -102,6 +125,42 @@
     {/if}
   </section>
 
+  <section class="block" aria-labelledby="sg-assistants">
+    <h2 id="sg-assistants">Assistants (MCP)</h2>
+    <p class="help">AI assistants connect to <code>/mcp</code> with the API key, or with the read-only assistant key below, which can look things up but never change anything and opens nothing else.</p>
+    {#if cfg.data}
+      <PropertyList label="Assistant endpoint" items={[
+        { key: 'enabled', label: 'Endpoint', value: cfg.data.mcp.enabled ? 'On' : 'Off' },
+        { key: 'scope', label: 'Allowed', value: cfg.data.mcp.scope === 'write' ? 'Look up and change (write)' : 'Look up only (read)' },
+        { key: 'tools', label: 'Tools', value: cfg.data.mcp.tools.length ? cfg.data.mcp.tools.join(', ') : 'Every tool the scope allows', mono: cfg.data.mcp.tools.length > 0 },
+        { key: 'rate', label: 'Calls per minute', value: cfg.data.mcp.rateLimit ? String(cfg.data.mcp.rateLimit) : 'No limit' },
+      ]} />
+    {:else if cfg.error}
+      <ErrorState size="sm" title="Couldn't read the assistant settings" code={cfg.error.label} onretry={cfg.retry} level={3}>{cfg.error.message}</ErrorState>
+    {:else}
+      <Skeleton shape="block" height="6rem" />
+    {/if}
+    <p class="help">These come from <code>mcp.*</code> in the config. <Link external href={mcpDocs}>Configuration reference</Link></p>
+    <h3 id="sg-rokey">Read-only assistant key</h3>
+    {#if roKey}
+      <div class="key">
+        <CopyableValue value={roKey} label="Read-only assistant key" secret />
+        <Button icon="refresh" onclick={() => (roRotateOpen = true)}>Regenerate…</Button>
+        <Button variant="danger" onclick={() => (roRevokeOpen = true)}>Revoke…</Button>
+      </div>
+    {:else if roKey === ''}
+      <div class="key">
+        <span class="help">No read-only assistant key: assistants need the API key.</span>
+        <Button onclick={rotateRoKey} loading={roBusy}>Create key</Button>
+      </div>
+    {:else}
+      <div class="key">
+        <span class="help">Shown on request; one is created if there is none yet.</span>
+        <Button onclick={showRoKey} loading={roBusy}>Show key</Button>
+      </div>
+    {/if}
+  </section>
+
   <section class="block" aria-labelledby="sg-kinds">
     <h2 id="sg-kinds">Media kinds</h2>
     {#if shadow.length}<p class="help">{shadow.join(' and ')} {shadow.length === 1 ? 'is' : 'are'} in shadow mode: corsarr logs what it would grab and import, and changes nothing there.</p>{/if}
@@ -140,9 +199,18 @@
   consequences={['The current key stops working at once.', 'Bots, request tools and scripts using it lose access until you paste the new key into them.']}
   onconfirm={rotate} oncancel={() => (confirmOpen = false)} />
 
+<ConfirmDialog bind:open={roRotateOpen} title="Regenerate the assistant key?" confirmLabel="Regenerate key" undoable={false} loading={roBusy}
+  consequences={['The current read-only key stops working at once.', 'Assistants using it lose access until you give them the new key.']}
+  onconfirm={rotateRoKey} />
+
+<ConfirmDialog bind:open={roRevokeOpen} title="Revoke the assistant key?" confirmLabel="Revoke key" undoable={false} loading={roBusy}
+  consequences={['Assistants using the read-only key lose access at once.', 'You can create a new one later.']}
+  onconfirm={revokeRoKey} />
+
 <style>
   .block { display: grid; gap: var(--space-3); min-width: 0; }
   h2 { font-size: var(--text-lg); margin-top: var(--space-2); }
+  h3 { font-size: var(--text-md); font-weight: var(--weight-medium); margin-top: var(--space-2); }
   .help { color: var(--ink-muted); font-size: var(--text-md); max-width: var(--measure); }
   code { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
   .roots, .kinds { list-style: none; margin: 0; padding: 0; background: var(--surface-raised); border: var(--border-w) solid var(--line); border-radius: var(--radius-lg); }

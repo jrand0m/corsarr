@@ -23,7 +23,7 @@ func (a *App) newMusic() *music.Service {
 func (a *App) newMusicAuto() *musicauto.Service {
 	st := a.d.Store
 	return musicauto.New(musicauto.Deps{Music: a.Music, Queue: a.Queue, Blocklist: st.Blocklist(), Indexers: a.indexers,
-		Pub: a.d.Bus, Payload: decide.PayloadPolicy{}, Modes: a.mode, Recent: st.RecentReleases(), Log: a.d.Log})
+		Pub: a.d.Bus, Payload: decide.PayloadPolicy{}, Modes: a.mode, Recent: st.RecentReleases(), Searches: st.Searches(), Log: a.d.Log})
 }
 
 func (a *App) musicMetadata() (plugin.MusicMetadata, bool) {

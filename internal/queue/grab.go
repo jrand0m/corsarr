@@ -17,6 +17,11 @@ type GrabRequest struct {
 	Decision domain.Decision
 	Origin   domain.SearchOrigin
 	Override bool // grabbed by hand despite a rejection
+	// Downloader sends it to this client instead of the first usable one
+	// for the release's protocol.
+	Downloader domain.ObjectKey
+
+	payload *plugin.Payload // given by hand (AddURL); else resolved through the indexer
 }
 
 // Grab resolves the payload through the release's indexer, adds it to a
@@ -52,11 +57,11 @@ func actorOf(o domain.SearchOrigin) string {
 
 // send picks a downloader, resolves the payload and adds it.
 func (s *Service) send(ctx context.Context, req GrabRequest) (Downloader, string, string, error) {
-	dl, ok := s.pick(req.Release)
+	dl, ok := s.pickFor(req.Release, req.Downloader)
 	if !ok {
-		return dl, "", "", ErrNoDownloader
+		return dl, "", "", noDownloader(req.Downloader)
 	}
-	payload, err := s.resolve(ctx, req.Release)
+	payload, err := s.payloadOf(ctx, req)
 	if err != nil {
 		return dl, "", "", fmt.Errorf("payload: %w", err)
 	}
@@ -67,6 +72,34 @@ func (s *Service) send(ctx context.Context, req GrabRequest) (Downloader, string
 		return dl, "", "", fmt.Errorf("downloader rejected the release: %w", err)
 	}
 	return dl, lower(id), cat, nil
+}
+
+// pickFor is the chosen client when it takes the release, else (with no
+// choice) the first usable one.
+func (s *Service) pickFor(rel domain.Release, key domain.ObjectKey) (Downloader, bool) {
+	if key == "" {
+		return s.pick(rel)
+	}
+	for _, d := range s.d.Plugins.Downloaders() {
+		if d.Key == key && handles(d.Impl, rel) {
+			return d, true
+		}
+	}
+	return Downloader{Key: key}, false
+}
+
+func (s *Service) payloadOf(ctx context.Context, req GrabRequest) (plugin.Payload, error) {
+	if req.payload != nil {
+		return *req.payload, nil
+	}
+	return s.resolve(ctx, req.Release)
+}
+
+func noDownloader(key domain.ObjectKey) error {
+	if key == "" {
+		return ErrNoDownloader
+	}
+	return fmt.Errorf("%w: %s is not running or does not take this release", ErrNoDownloader, key)
 }
 
 func (s *Service) resolve(ctx context.Context, rel domain.Release) (plugin.Payload, error) {

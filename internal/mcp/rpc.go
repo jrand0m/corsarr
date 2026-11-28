@@ -117,6 +117,8 @@ func (s *Service) methods() map[string]handler {
 		"resources/read":           s.readResource,
 		"resources/subscribe":      s.subscribe,
 		"resources/unsubscribe":    s.unsubscribe,
+		"prompts/list":             s.listPrompts,
+		"prompts/get":              s.getPrompt,
 	}
 }
 
@@ -171,6 +173,7 @@ func (s *Service) initialize(_ context.Context, sess *Session, params json.RawMe
 		"capabilities": map[string]any{
 			"tools":     map[string]bool{"listChanged": false},
 			"resources": map[string]bool{"subscribe": true, "listChanged": false},
+			"prompts":   map[string]bool{"listChanged": false},
 		},
 		"serverInfo":   map[string]string{"name": "corsarr", "title": "corsarr", "version": s.d.Version},
 		"instructions": instructions,

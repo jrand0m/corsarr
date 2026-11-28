@@ -143,7 +143,7 @@ func (s *Service) movieItem(ctx context.Context, in itemArgs) (string, any, erro
 		return "", nil, err
 	}
 	files, err := s.d.Library.FilesOf(ctx, m.Ref())
-	return fmt.Sprintf("%s (%d)", m.Title, m.Year), map[string]any{"movie": m, "files": files}, err
+	return fmt.Sprintf("%s (%d)", m.Title, m.Year), MovieItemOut{Movie: m, Files: files}, err
 }
 
 func (s *Service) seriesItem(ctx context.Context, in itemArgs) (string, any, error) {
@@ -151,15 +151,13 @@ func (s *Service) seriesItem(ctx context.Context, in itemArgs) (string, any, err
 	if err != nil {
 		return "", nil, err
 	}
-	out := map[string]any{"series": d.Series, "seasons": d.Seasons}
+	out := SeriesItemOut{Series: d.Series, Seasons: d.Seasons}
 	if in.Season != nil {
-		eps := []tv.EpisodeView{}
 		for _, e := range d.Episodes {
 			if e.Season == *in.Season {
-				eps = append(eps, e)
+				out.Episodes = append(out.Episodes, e)
 			}
 		}
-		out["episodes"] = eps
 	}
 	return fmt.Sprintf("%s (%d): %d seasons", d.Series.Title, d.Series.Year, len(d.Seasons)), out, nil
 }
@@ -236,7 +234,7 @@ func (s *Service) getCalendar(ctx context.Context, in calendarArgs) (Result, err
 	if err != nil {
 		return Result{}, err
 	}
-	out := map[string]any{"from": from.Format(time.DateOnly), "to": to.Format(time.DateOnly)}
+	out := CalendarOut{From: from.Format(time.DateOnly), To: to.Format(time.DateOnly)}
 	episodes, movieDates := []tv.CalendarItem{}, []MovieDate{}
 	if s.usable(domain.KindTV) == nil {
 		if episodes, err = s.d.TV.Upcoming(ctx, from, to); err != nil {
@@ -248,9 +246,9 @@ func (s *Service) getCalendar(ctx context.Context, in calendarArgs) (Result, err
 			return Result{}, err
 		}
 	}
-	out["episodes"], out["movies"] = episodes, movieDates
+	out.Episodes, out.Movies = episodes, movieDates
 	return Result{Text: fmt.Sprintf("%d episodes and %d movie releases between %s and %s", len(episodes), len(movieDates),
-		out["from"], out["to"]), Data: out}, nil
+		out.From, out.To), Data: out}, nil
 }
 
 func (s *Service) window(in calendarArgs) (time.Time, time.Time, error) {
@@ -331,7 +329,7 @@ func (s *Service) getHealth(ctx context.Context, _ struct{}) (Result, error) {
 		}
 	}
 	return Result{Text: fmt.Sprintf("%d integrations, %d not ok; %d root folders", len(list), bad, len(roots)),
-		Data: map[string]any{"integrations": list, "rootFolders": roots, "modes": modes}}, nil
+		Data: HealthOut{Integrations: list, RootFolders: roots, Modes: modes}}, nil
 }
 
 // ── search_releases ──────────────────────────────────────────────────────────
@@ -376,13 +374,13 @@ func (s *Service) searchReleases(ctx context.Context, in releaseArgs) (Result, e
 	if err != nil {
 		return Result{}, err
 	}
-	c := &collector{max: paging{Limit: in.Limit}.size()}
+	c := &collector{max: paging{Limit: in.Limit}.size(), records: []any{}, errors: []string{}}
 	sum, err := s.interactive(ctx, kind, in, c)
 	if err != nil {
 		return Result{}, err
 	}
 	text := fmt.Sprintf("%d releases, %d accepted (%d indexers, %d failed); nothing was grabbed", sum.Releases, sum.Accepted, sum.Indexers, sum.Failed)
-	return Result{Text: text, Data: map[string]any{"summary": sum, "releases": c.records, "omitted": c.more, "errors": c.errors}}, nil
+	return Result{Text: text, Data: ReleasesOut{Summary: sum, Releases: c.records, Omitted: c.more, Errors: c.errors}}, nil
 }
 
 func (s *Service) interactive(ctx context.Context, kind domain.MediaKind, in releaseArgs, c *collector) (automation.Summary, error) {
@@ -420,14 +418,14 @@ func (s *Service) listProfiles(_ context.Context, in kindFilter) (Result, error)
 			out = append(out, ProfileView{Key: movies.ProfileKey(spec.Name), Name: spec.Name, Kind: k, Upgrades: spec.Upgrades, Cutoff: string(spec.Cutoff)})
 		}
 	}
-	data := map[string]any{"profiles": out}
+	data := ProfilesOut{Profiles: out}
 	if in.Kind == "" || in.Kind == string(domain.KindMusic) {
-		data["metadataProfiles"] = domain.MetadataProfiles
+		data.MetadataProfiles = domain.MetadataProfiles
 	}
 	return Result{Text: fmt.Sprintf("%d quality profiles", len(out)), Data: data}, nil
 }
 
 func (s *Service) listRootFolders(ctx context.Context, _ struct{}) (Result, error) {
 	list, err := s.d.RootFolders.List(ctx)
-	return Result{Text: fmt.Sprintf("%d root folders", len(list)), Data: map[string]any{"rootFolders": list}}, err
+	return Result{Text: fmt.Sprintf("%d root folders", len(list)), Data: RootFoldersOut{RootFolders: list}}, err
 }

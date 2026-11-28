@@ -45,6 +45,10 @@ func TestHTTPEndpoints(t *testing.T) {
 		{"POST", "/api/v1/movies/1/search", "", 200, `"releases":3`},
 		{"POST", "/api/v1/movies/9/search", "", 404, ""},
 		{"POST", "/api/v1/movies/x/search", "", 400, ""},
+		{"GET", "/api/v1/searches/movie/1", "", 200, `"rejections":[{"ruleId":`},
+		{"GET", "/api/v1/searches/episode/5", "", 200, `"item":{`},
+		{"GET", "/api/v1/searches/book/1", "", 400, ""},
+		{"GET", "/api/v1/searches/movie/x", "", 400, ""},
 		{"GET", "/api/v1/wanted/missing", "", 200, `"reason":"missing"`},
 		{"GET", "/api/v1/wanted/missing?limit=0", "", 400, ""},
 		{"POST", "/api/v1/blocklist", `{"movieId":1,"release":{"title":"Bad.Release"},"reason":"fake"}`, 201, `"source":"manual"`},
@@ -65,6 +69,10 @@ func TestHTTPEndpoints(t *testing.T) {
 	}
 	if len(e.rec.Of(domain.EvBlocklistRemoved)) != 1 {
 		t.Fatal("blocklist.removed")
+	}
+	body2 := `{"movieId":1,"releaseId":"` + tooSmall.ID + `","confirm":true,"downloader":"qb2"}`
+	if code, _ := testkit.Do(t, srv, "POST", "/api/v1/grabs", body2); code != 201 || e.q.grabs[len(e.q.grabs)-1].Downloader != "qb2" {
+		t.Fatalf("a grab names its client: %d", code)
 	}
 	e.q.err = errors.New("downloader down")
 	if code, _ := testkit.Do(t, srv, "POST", "/api/v1/grabs", `{"movieId":1,"releaseId":"`+rel(good, 0, 0).ID+`"}`); code != 502 {

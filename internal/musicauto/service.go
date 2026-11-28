@@ -47,6 +47,7 @@ type Deps struct {
 	Payload   decide.PayloadPolicy
 	Modes     domain.Modes           // nil = all active
 	Recent    automation.RecentStore // nil = in memory
+	Searches  automation.StateStore  // nil = search results are not kept
 	Now       func() time.Time
 	Log       *slog.Logger
 }
