@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -262,6 +263,10 @@ func TestFileSourceWarnsAboutIgnoredKeysOnce(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("want one warning, got %v", c.Warnings)
+	}
+	one := mustLoad(t, inputs(nil, []string{"CORSARR_LOG_LEVEL=debug", "QBIT_PASS=x", "CORSARR_CONFIGFILE=/c.yml"}, map[string]string{"/c.yml": file}))
+	if !slices.Contains(one.Warnings, "config file in use; ignored keys from other sources: CORSARR_LOG_LEVEL") {
+		t.Fatalf("one ignored key: %v", one.Warnings)
 	}
 	// a file referencing a CORSARR_* variable keeps it out of the warning
 	file2 := file + "indexers:\n  k:\n    type: torznab\n    url: http://i\n    apiKey: ${env:CORSARR_LOG_LEVEL}\n"

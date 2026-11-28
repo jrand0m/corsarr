@@ -93,8 +93,10 @@ func checkModuleID(s string) error {
 	return nil
 }
 
+// checkModuleVersion never sees an empty version: the decoder skips checks
+// on unset values.
 func checkModuleVersion(s string) error {
-	if s != "" && !moduleVersionRe.MatchString(s) {
+	if !moduleVersionRe.MatchString(s) {
 		return errors.New("must be a version such as 1.2.0")
 	}
 	return nil

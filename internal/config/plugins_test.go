@@ -28,7 +28,7 @@ func TestPluginsSection(t *testing.T) {
 	if c.ModulesDir() != "/srv/mods" || c.Plugins.CallTimeout != 2*time.Second || !slices.Equal(c.Plugins.DisabledBuiltins, []string{"sabnzbd"}) {
 		t.Errorf("%+v", c.Plugins)
 	}
-	for _, bad := range []string{"--plugins.memoryMiB=1", "--plugins.callTimeout=1ms", "--plugins.dir=rel", "--plugins.concurrency=0"} {
+	for _, bad := range []string{"--plugins.memoryMiB=1", "--plugins.callTimeout=1ms", "--plugins.dir=rel", "--plugins.concurrency=0", "--plugins.maxModuleMiB=0"} {
 		if _, err := Load(inputs([]string{bad}, nil, nil), reg); err == nil {
 			t.Errorf("%s accepted", bad)
 		}
@@ -66,5 +66,17 @@ func TestPeek(t *testing.T) {
 	}
 	if _, err := Peek(inputs([]string{"--plugins.dir=relative"}, nil, nil)); err == nil || !strings.Contains(err.Error(), "plugins.dir") {
 		t.Errorf("bad dir: %v", err)
+	}
+}
+
+func TestPluginInstallVersion(t *testing.T) {
+	reg := testRegistry(t)
+	if _, err := Load(inputs([]string{"--plugins.install.0.id=sonarr", "--plugins.install.0.version=v1"}, nil, nil), reg); err == nil ||
+		!strings.Contains(err.Error(), "plugins.install.0.version") {
+		t.Fatalf("bad version: %v", err)
+	}
+	c, err := Load(inputs([]string{"--plugins.install.0.id=sonarr", "--plugins.install.0.version=1.0.0-rc.1", "--plugins.maxModuleMiB=1"}, nil, nil), reg)
+	if err != nil || c.Plugins.Install[0].Version != "1.0.0-rc.1" || c.Plugins.MaxModuleMiB != 1 {
+		t.Fatalf("good version: %v", err)
 	}
 }
