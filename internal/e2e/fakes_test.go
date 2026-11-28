@@ -207,12 +207,17 @@ func (f *fakeQB) add(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("Ok."))
 }
 
-// info answers lookups by hash without side effects; a category listing is a
-// queue poll and advances every torrent one step.
+// info filters by hash and category like qBittorrent does. Lookups by hash
+// have no side effects; a category listing is a queue poll and advances each
+// listed torrent one step.
 func (f *fakeQB) info(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
+	category, hashes := r.URL.Query().Get("category"), r.URL.Query().Get("hashes")
 	for hash, step := range f.state {
-		if r.URL.Query().Get("category") != "" && step < len(qbStates)-1 && (!f.hold || step < 1) {
+		if (hashes != "" && !strings.EqualFold(hashes, hash)) || (category != "" && category != categoryOf[hash]) {
+			continue
+		}
+		if category != "" && step < len(qbStates)-1 && (!f.hold || step < 1) {
 			step++
 			f.state[hash] = step
 		}
