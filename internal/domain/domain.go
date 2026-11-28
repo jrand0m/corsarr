@@ -125,22 +125,29 @@ type IndexerRef struct {
 // Release is one search result. Download links stay
 // inside the indexer layer and are resolved at grab time.
 type Release struct {
-	ID          string            `json:"id"`
-	Title       string            `json:"title"`
-	Protocol    Protocol          `json:"protocol"`
-	Size        int64             `json:"size"`
-	PublishedAt time.Time         `json:"publishedAt"`
-	Indexers    []IndexerRef      `json:"indexers"`
-	Categories  []int             `json:"categories,omitempty"`
-	InfoHash    string            `json:"infoHash,omitempty"`
-	GUID        string            `json:"guid,omitempty"`
-	DetailsURL  string            `json:"detailsUrl,omitempty"`
-	Seeders     int               `json:"seeders"`
-	Peers       int               `json:"peers"`
-	Grabs       int               `json:"grabs"`
-	Flags       []string          `json:"flags,omitempty"`
-	FileList    []string          `json:"fileList,omitempty"`
-	ExternalIDs map[string]string `json:"externalIds,omitempty"`
+	ID          string       `json:"id"`
+	Title       string       `json:"title"`
+	Protocol    Protocol     `json:"protocol"`
+	Size        int64        `json:"size"`
+	PublishedAt time.Time    `json:"publishedAt"`
+	Indexers    []IndexerRef `json:"indexers"`
+	Categories  []int        `json:"categories,omitempty"`
+	InfoHash    string       `json:"infoHash,omitempty"`
+	GUID        string       `json:"guid,omitempty"`
+	DetailsURL  string       `json:"detailsUrl,omitempty"`
+	Seeders     int          `json:"seeders"`
+	Peers       int          `json:"peers"`
+	Grabs       int          `json:"grabs"`
+	Flags       []string     `json:"flags,omitempty"`
+	FileList    []string     `json:"fileList,omitempty"`
+	// SwarmReported is true when the indexer sent seeders or peers, so a
+	// zero means an empty swarm rather than "not reported".
+	SwarmReported bool `json:"swarmReported,omitempty"`
+	// Files is the number of files the indexer reports (0 = not reported).
+	Files int `json:"files,omitempty"`
+	// MinimumRatio is the seed ratio the tracker asks for (0 = not reported).
+	MinimumRatio float64           `json:"minimumRatio,omitempty"`
+	ExternalIDs  map[string]string `json:"externalIds,omitempty"`
 	// DownloadURL is the indexer's payload link (magnet or .torrent URL). It
 	// may carry indexer credentials, so it is never serialised to JSON; the
 	// queue persists it sealed with the grab so a payload resolves after a restart.
@@ -198,7 +205,9 @@ type Reason struct {
 	RuleID   string         `json:"ruleId"`
 	Category ReasonCategory `json:"category"`
 	Message  string         `json:"message"`
-	Values   map[string]any `json:"values,omitempty"`
+	// Summary is a short plain line for a card ("Too large: 14.2 GB, max 9.5 GB").
+	Summary string         `json:"summary,omitempty"`
+	Values  map[string]any `json:"values,omitempty"`
 }
 
 // Override says whether a rejected release may still be grabbed by hand.
@@ -222,6 +231,32 @@ type Decision struct {
 	FormatScore int       `json:"formatScore"`
 	RankKey     string    `json:"rankKey"`
 	Override    Override  `json:"override"`
+	// Desirability is how close the release is to the profile's target;
+	// nil when its quality is outside the profile.
+	Desirability *Desirability `json:"desirability,omitempty"`
+}
+
+// Position says on which side of the profile's target a release lies.
+type Position string
+
+const (
+	PositionAbove    Position = "above"
+	PositionOnTarget Position = "on_target"
+	PositionBelow    Position = "below"
+)
+
+// Desirability measures a release against the profile's target from both
+// sides: quality steps from the cutoff, size against the preferred size and
+// custom-format score short of the cutoff format score.
+type Desirability struct {
+	Score           int      `json:"score"` // 0-100, 100 = on target
+	Position        Position `json:"position"`
+	QualitySteps    int      `json:"qualitySteps"` // + above the cutoff, - below
+	Cutoff          string   `json:"cutoff"`
+	SizeDelta       *float64 `json:"sizeDelta,omitempty"` // (size - preferred) / preferred
+	PreferredSize   int64    `json:"preferredSize,omitempty"`
+	FormatShortfall int      `json:"formatShortfall,omitempty"`
+	FormatTarget    int      `json:"formatTarget,omitempty"`
 }
 
 // OverrideFor derives the strongest override rule from the reasons.
