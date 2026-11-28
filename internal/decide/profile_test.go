@@ -83,6 +83,10 @@ func TestNewQualityProfile_RefusesInvalid(t *testing.T) {
 		"duplicate quality":  {Name: "p", Kind: domain.KindMovie, Groups: single("webdl-1080p", "webdl-1080p"), Cutoff: "webdl-1080p"},
 		"cutoff not allowed": {Name: "p", Kind: domain.KindMovie, Groups: ok, Cutoff: "bluray-1080p"},
 		"negative increment": {Name: "p", Kind: domain.KindMovie, Groups: ok, Cutoff: "webdl-1080p", MinUpgradeIncrement: -1},
+		"size not allowed":   {Name: "p", Kind: domain.KindMovie, Groups: ok, Cutoff: "webdl-1080p", Sizes: map[QualityID]QualityDefinition{"bluray-1080p": {}}},
+		"music shared":       {Name: "p", Kinds: []domain.MediaKind{domain.KindMusic, domain.KindTV}, Groups: ok, Cutoff: "webdl-1080p"},
+		"kind twice":         {Name: "p", Kinds: []domain.MediaKind{domain.KindTV, domain.KindTV}, Groups: ok, Cutoff: "webdl-1080p"},
+		"audio on video":     {Name: "p", Kind: domain.KindMovie, Groups: single("flac"), Cutoff: "flac"},
 	}
 	for name, spec := range cases {
 		if _, err := NewQualityProfile(spec); err == nil {

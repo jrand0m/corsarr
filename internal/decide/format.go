@@ -292,57 +292,72 @@ func (c Condition) Required() bool { return c.required }
 func (c Condition) Matches(s Subject) bool { return c.test(s) != c.negate }
 
 func (c Condition) test(s Subject) bool {
-	switch c.kind {
-	case CondTitle:
-		return c.re.MatchString(s.Title)
-	case CondGroup:
-		return s.Group != "" && c.re.MatchString(s.Group)
-	case CondEdition:
-		return s.Edition != "" && c.re.MatchString(s.Edition)
-	case CondSize:
-		return s.Size > 0 && float64(s.Size) > c.min*gb && (c.max <= 0 || float64(s.Size) <= c.max*gb)
-	case CondYear:
-		return s.Year > 0 && float64(s.Year) >= c.min && (c.max <= 0 || float64(s.Year) <= c.max)
-	case CondLanguage:
+	if text, ok := patternSubjects[c.kind]; ok {
+		v := text(s)
+		return v != "" && c.re.MatchString(v)
+	}
+	if num, ok := rangeSubjects[c.kind]; ok {
+		return c.inRange(num(s))
+	}
+	if c.kind == CondLanguage {
 		return c.testLanguage(s.Languages)
 	}
-	return c.anyValue(c.subjectValues(s))
+	if vals, ok := valueSubjects[c.kind]; ok {
+		return c.anyValue(vals(s))
+	}
+	return false
 }
 
-func (c Condition) subjectValues(s Subject) []string {
-	switch c.kind {
-	case CondSource:
-		return nonEmpty(s.Source)
-	case CondResolution:
-		if s.Resolution == 0 {
-			return nil
-		}
-		return []string{fmt.Sprint(s.Resolution)}
-	case CondModifier:
-		return s.Modifiers
-	case CondCodec:
-		return nonEmpty(s.Codec)
-	case CondAudio:
-		return nonEmpty(s.Audio)
-	case CondChannels:
-		return nonEmpty(s.Channels)
-	case CondHDR:
-		return s.HDR
-	case CondFlag:
-		return s.Flags
-	case CondContainer:
-		return nonEmpty(s.Container)
-	case CondBitDepth:
-		if s.BitDepth == 0 {
-			return nil
-		}
-		return []string{fmt.Sprint(s.BitDepth)}
-	case CondDVFallback:
-		return nonEmpty(s.DVFallback)
-	case CondReleaseType:
-		return nonEmpty(s.ReleaseType)
+// patternSubjects are the texts pattern conditions test ("" = not stated).
+var patternSubjects = map[ConditionKind]func(Subject) string{
+	CondTitle:   func(s Subject) string { return s.Title },
+	CondGroup:   func(s Subject) string { return s.Group },
+	CondEdition: func(s Subject) string { return s.Edition },
+}
+
+// rangeSubjects are the numbers range conditions test, with how a bound
+// compares: sizes in GB above the minimum, years from the minimum on.
+var rangeSubjects = map[ConditionKind]func(Subject) rangeValue{
+	CondSize: func(s Subject) rangeValue {
+		return rangeValue{v: float64(s.Size) / gb, known: s.Size > 0, exclusiveMin: true}
+	},
+	CondYear: func(s Subject) rangeValue { return rangeValue{v: float64(s.Year), known: s.Year > 0} },
+}
+
+type rangeValue struct {
+	v            float64
+	known        bool
+	exclusiveMin bool
+}
+
+func (c Condition) inRange(r rangeValue) bool {
+	if !r.known || r.v < c.min || (r.exclusiveMin && r.v == c.min) {
+		return false
 	}
-	return nil
+	return c.max <= 0 || r.v <= c.max
+}
+
+// valueSubjects are the values list conditions test (nil = not stated).
+var valueSubjects = map[ConditionKind]func(Subject) []string{
+	CondSource:      func(s Subject) []string { return nonEmpty(s.Source) },
+	CondResolution:  func(s Subject) []string { return nonZero(s.Resolution) },
+	CondModifier:    func(s Subject) []string { return s.Modifiers },
+	CondCodec:       func(s Subject) []string { return nonEmpty(s.Codec) },
+	CondAudio:       func(s Subject) []string { return nonEmpty(s.Audio) },
+	CondChannels:    func(s Subject) []string { return nonEmpty(s.Channels) },
+	CondHDR:         func(s Subject) []string { return s.HDR },
+	CondFlag:        func(s Subject) []string { return s.Flags },
+	CondContainer:   func(s Subject) []string { return nonEmpty(s.Container) },
+	CondBitDepth:    func(s Subject) []string { return nonZero(s.BitDepth) },
+	CondDVFallback:  func(s Subject) []string { return nonEmpty(s.DVFallback) },
+	CondReleaseType: func(s Subject) []string { return nonEmpty(s.ReleaseType) },
+}
+
+func nonZero(n int) []string {
+	if n == 0 {
+		return nil
+	}
+	return []string{fmt.Sprint(n)}
 }
 
 func nonEmpty(v string) []string {
@@ -411,22 +426,26 @@ func (f CustomFormat) Explain(s Subject) []bool {
 
 type groupState struct{ requiredFailed, hasOptional, optionalHit bool }
 
+func (g *groupState) add(required, hit bool) {
+	if required {
+		g.requiredFailed = g.requiredFailed || !hit
+		return
+	}
+	g.hasOptional, g.optionalHit = true, g.optionalHit || hit
+}
+
+func (g *groupState) passes() bool { return !g.requiredFailed && (!g.hasOptional || g.optionalHit) }
+
 func formatMatches(conds []Condition, hits []bool) bool {
 	groups := map[ConditionKind]*groupState{}
 	for i, c := range conds {
-		g := groups[c.kind]
-		if g == nil {
-			g = &groupState{}
-			groups[c.kind] = g
+		if groups[c.kind] == nil {
+			groups[c.kind] = &groupState{}
 		}
-		if c.required {
-			g.requiredFailed = g.requiredFailed || !hits[i]
-			continue
-		}
-		g.hasOptional, g.optionalHit = true, g.optionalHit || hits[i]
+		groups[c.kind].add(c.required, hits[i])
 	}
 	for _, g := range groups {
-		if g.requiredFailed || (g.hasOptional && !g.optionalHit) {
+		if !g.passes() {
 			return false
 		}
 	}

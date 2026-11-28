@@ -168,17 +168,21 @@ func (c *Config) checkQuality() Errors {
 
 // nearestLoc is where a path, or its closest set parent, came from.
 func (c *Config) nearestLoc(path string) Location {
-	for p := path; p != ""; {
-		if l, ok := c.locs[p]; ok && l.Kind != "" {
+	for p := path; p != ""; p = parentPath(p) {
+		if l := c.locs[p]; l.Kind != "" {
 			return l
 		}
-		i := strings.LastIndex(p, ".")
-		if i < 0 {
-			break
-		}
-		p = p[:i]
 	}
 	return Location{}
+}
+
+// parentPath drops the last segment of a dotted path ("" at the top).
+func parentPath(p string) string {
+	i := strings.LastIndex(p, ".")
+	if i < 0 {
+		return ""
+	}
+	return p[:i]
 }
 
 func listOf(v any) []any { l, _ := v.([]any); return l }

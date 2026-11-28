@@ -338,18 +338,13 @@ func (s *Service) DeleteFormat(ctx context.Context, key string) error {
 // freeKey derives an unused key from a name: "hd1080p", then "hd1080p2", ….
 func freeKey(name string, taken func(string) bool) string {
 	base := decide.KeyOf(name)
-	if !taken(base) && !decide.IsBuiltinKey(base) {
-		return base
+	free := func(k string) bool { return !taken(k) && !decide.IsBuiltinKey(k) }
+	k := base
+	for n := 2; !free(k); n++ {
+		suffix := fmt.Sprint(n)
+		k = base[:min(len(base), 48-len(suffix))] + suffix
 	}
-	for n := 2; ; n++ {
-		k := fmt.Sprintf("%s%d", base, n)
-		if len(k) > 48 {
-			k = fmt.Sprintf("%s%d", base[:48-len(fmt.Sprint(n))], n)
-		}
-		if !taken(k) && !decide.IsBuiltinKey(k) {
-			return k
-		}
-	}
+	return k
 }
 
 // ── test box ────────────────────────────────────────────────────────────────

@@ -54,34 +54,42 @@ func NewQualityProfile(spec ProfileSpec) (QualityProfile, error) {
 	if spec.Name == "" {
 		return QualityProfile{}, errors.New("profile needs a name")
 	}
-	if err := normaliseKinds(&spec); err != nil {
+	rank, err := checkSpec(&spec)
+	if err != nil {
 		return QualityProfile{}, fmt.Errorf("profile %q: %w", spec.Name, err)
 	}
 	if spec.Key == "" {
 		spec.Key = KeyOf(spec.Name)
 	}
-	rank, err := rankGroups(spec.Groups, spec.Kind == domain.KindMusic)
-	if err != nil {
-		return QualityProfile{}, fmt.Errorf("profile %q: %w", spec.Name, err)
-	}
-	if _, ok := rank[spec.Cutoff]; !ok {
-		return QualityProfile{}, fmt.Errorf("profile %q: cutoff %q is not an allowed quality", spec.Name, spec.Cutoff)
-	}
-	if spec.MinUpgradeIncrement < 0 {
-		return QualityProfile{}, fmt.Errorf("profile %q: minimum upgrade increment must be >= 0", spec.Name)
-	}
-	if spec.MinUpgradeIncrement == 0 {
-		spec.MinUpgradeIncrement = 1
-	}
-	for id := range spec.Sizes {
-		if _, ok := rank[id]; !ok {
-			return QualityProfile{}, fmt.Errorf("profile %q: size limits for %q, which is not allowed", spec.Name, id)
-		}
-	}
+	spec.MinUpgradeIncrement = max(spec.MinUpgradeIncrement, 1)
 	spec.Groups = append([]QualityGroup(nil), spec.Groups...)
 	spec.Formats = append([]FormatScore(nil), spec.Formats...)
 	spec.Kinds = append([]domain.MediaKind(nil), spec.Kinds...)
 	return QualityProfile{spec: spec, rank: rank}, nil
+}
+
+// checkSpec validates kinds, ladder, cutoff, upgrade step and size limits
+// and returns the rank of each allowed quality.
+func checkSpec(spec *ProfileSpec) (map[QualityID]int, error) {
+	if err := normaliseKinds(spec); err != nil {
+		return nil, err
+	}
+	rank, err := rankGroups(spec.Groups, spec.Kind == domain.KindMusic)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := rank[spec.Cutoff]; !ok {
+		return nil, fmt.Errorf("cutoff %q is not an allowed quality", spec.Cutoff)
+	}
+	if spec.MinUpgradeIncrement < 0 {
+		return nil, errors.New("minimum upgrade increment must be >= 0")
+	}
+	for id := range spec.Sizes {
+		if _, ok := rank[id]; !ok {
+			return nil, fmt.Errorf("size limits for %q, which is not allowed", id)
+		}
+	}
+	return rank, nil
 }
 
 // normaliseKinds checks the served kinds: one kind, or TV and movies together

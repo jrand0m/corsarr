@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/jrand0m/corsarr/internal/config"
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/store"
@@ -180,35 +181,43 @@ func (q *qualityPlan) addProfile(app App, p SrcProfile, sizes map[string]SrcSize
 		return "", false // nothing allowed survived: the built-in mapping reports it
 	}
 	src := qualitySource{app: app, id: p.ID, name: p.Name, notes: notes}
-	content := profileContent(doc)
 	if bk, ok := sameAsBuiltin(doc, kind); ok {
 		q.profiles = append(q.profiles, &plannedProfile{doc: decide.ProfileDoc{Key: bk, Name: doc.Name}, builtin: true, from: []qualitySource{src}})
 		return bk, true
 	}
-	var sameName *plannedProfile
-	for _, pp := range q.profiles {
-		if pp.builtin || norm(pp.doc.Name) != norm(doc.Name) {
-			continue
+	content := profileContent(doc)
+	same, clash := q.findProfile(doc.Name, content)
+	if same != nil {
+		if !slices.Contains(same.doc.Kinds, kind) {
+			same.doc.Kinds = append(same.doc.Kinds, kind)
 		}
-		if pp.content == content {
-			if !slices.Contains(pp.doc.Kinds, kind) {
-				pp.doc.Kinds = append(pp.doc.Kinds, kind)
-			}
-			pp.from = append(pp.from, src)
-			return pp.doc.Key, true
-		}
-		sameName = pp
+		same.from = append(same.from, src)
+		return same.doc.Key, true
 	}
-	switch {
-	case sameName != nil:
+	if clash || decide.IsBuiltinKey(decide.KeyOf(doc.Name)) {
 		doc.Name = fmt.Sprintf("%s (%s)", doc.Name, appLabel(app))
+	}
+	if clash {
 		src.notes = append(src.notes, fmt.Sprintf("another source has a different profile with this name; this one is named %q", doc.Name))
-	case decide.IsBuiltinKey(decide.KeyOf(doc.Name)):
-		doc.Name = fmt.Sprintf("%s (%s)", doc.Name, appLabel(app))
 	}
 	doc.Key = q.key(doc.Name)
 	q.profiles = append(q.profiles, &plannedProfile{doc: doc, content: content, from: []qualitySource{src}})
 	return doc.Key, true
+}
+
+// findProfile finds a planned custom profile with the same name and
+// content, or reports that one with the same name differs.
+func (q *qualityPlan) findProfile(name, content string) (same *plannedProfile, clash bool) {
+	for _, pp := range q.profiles {
+		if pp.builtin || norm(pp.doc.Name) != norm(name) {
+			continue
+		}
+		if pp.content == content {
+			return pp, false
+		}
+		clash = true
+	}
+	return nil, clash
 }
 
 // sameAsBuiltin finds the built-in profile with the same name and content.
@@ -367,23 +376,30 @@ func saveDoc(ctx context.Context, a *applier, t store.QualityTable, key, name st
 // quality reads the custom formats and profiles corsarr holds and the keys
 // the config file sets.
 func (s *Service) quality(ctx context.Context, st *State, _ []Snapshot) error {
-	q := QualityState{Formats: map[string]string{}, Profiles: map[string]string{}, ConfigFormats: map[string]bool{}, ConfigProfiles: map[string]bool{}}
+	q := configQuality(s.d.Config())
 	if err := fingerprints(ctx, s.d.Store.Quality(), store.TableFormats, q.Formats, FormatFingerprint); err != nil {
 		return err
 	}
 	if err := fingerprints(ctx, s.d.Store.Quality(), store.TableProfiles, q.Profiles, ProfileFingerprint); err != nil {
 		return err
 	}
-	if cfg := s.d.Config(); cfg != nil {
-		for _, f := range cfg.CustomFormats {
-			q.ConfigFormats[f.Key] = true
-		}
-		for _, p := range cfg.QualityProfiles {
-			q.ConfigProfiles[p.Key] = true
-		}
-	}
 	st.Quality = q
 	return nil
+}
+
+// configQuality is an empty quality state with the config file's keys.
+func configQuality(cfg *config.Config) QualityState {
+	q := QualityState{Formats: map[string]string{}, Profiles: map[string]string{}, ConfigFormats: map[string]bool{}, ConfigProfiles: map[string]bool{}}
+	if cfg == nil {
+		return q
+	}
+	for _, f := range cfg.CustomFormats {
+		q.ConfigFormats[f.Key] = true
+	}
+	for _, p := range cfg.QualityProfiles {
+		q.ConfigProfiles[p.Key] = true
+	}
+	return q
 }
 
 func fingerprints[T any](ctx context.Context, r store.Quality, t store.QualityTable, out map[string]string, fp func(T) string) error {

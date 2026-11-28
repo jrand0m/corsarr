@@ -234,3 +234,44 @@ func TestHTTP(t *testing.T) {
 type mounter struct{ m *http.ServeMux }
 
 func (m mounter) Handle(p string, h http.HandlerFunc) { m.m.Handle(p, h) }
+
+func TestFreeKeyAndUpdates(t *testing.T) {
+	taken := map[string]bool{"ps5": true, "ps52": true}
+	if k := freeKey("PS5", func(k string) bool { return taken[k] }); k != "ps53" {
+		t.Fatalf("key %q", k)
+	}
+	if k := freeKey("HD-1080p", func(string) bool { return false }); k != "hd1080p2" {
+		t.Fatalf("built-in key %q", k)
+	}
+	long := strings.Repeat("a", 60)
+	if k := freeKey(long, func(k string) bool { return len(k) == 48 && !strings.HasSuffix(k, "2") }); len(k) != 48 || !strings.HasSuffix(k, "2") {
+		t.Fatalf("long key %q", k)
+	}
+	ctx := context.Background()
+	s, _ := newService(t, newRepo(), &config.Config{CustomFormats: []decide.FormatDoc{{Key: "cfg", Name: "Cfg", Conditions: ps5Format.Conditions}}})
+	if _, err := s.UpdateFormat(ctx, "nope", ps5Format); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing: %v", err)
+	}
+	f, _ := s.CreateFormat(ctx, ps5Format)
+	upd := ps5Format
+	upd.Name = "Renamed"
+	if row, err := s.UpdateFormat(ctx, f.Key, upd); err != nil || row.Name != "Renamed" || row.Key != f.Key {
+		t.Fatalf("update %+v %v", row, err)
+	}
+	if _, err := s.CreateProfile(ctx, decide.ProfileDoc{Key: f.Key + "p", Name: "x", Kinds: []domain.MediaKind{domain.KindTV},
+		Groups: []decide.GroupDoc{{Qualities: []decide.QualityID{"webdl-720p"}}}, Cutoff: "webdl-720p"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateProfile(ctx, decide.ProfileDoc{Key: f.Key + "p", Name: "y"}); !errors.Is(err, ErrExists) {
+		t.Fatalf("exists: %v", err)
+	}
+	if _, err := s.UpdateProfile(ctx, "nope", ps5Profile(f.Key)); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing profile: %v", err)
+	}
+	if err := s.DeleteFormat(ctx, "nope"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("delete missing: %v", err)
+	}
+	if _, err := s.Profile(ctx, "nope", ""); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("get missing: %v", err)
+	}
+}

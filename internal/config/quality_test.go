@@ -82,3 +82,13 @@ func TestQualitySectionsReportProblemsWithLocations(t *testing.T) {
 		t.Fatalf("missing format error in %v", es)
 	}
 }
+
+func TestNearestLoc(t *testing.T) {
+	c := &Config{locs: map[string]Location{"qualityProfiles.p": {Kind: SourceFile, File: "/c.yml", Line: 4}}}
+	if l := c.nearestLoc("qualityProfiles.p.formats.0.format"); l.Line != 4 {
+		t.Fatalf("parent location %+v", l)
+	}
+	if l := c.nearestLoc("customFormats.x"); l.Kind != "" {
+		t.Fatalf("unset %+v", l)
+	}
+}

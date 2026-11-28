@@ -3,6 +3,7 @@ package migrate
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -55,38 +56,38 @@ type mappedCondition struct {
 	ok    bool
 }
 
-// mapCondition maps one source condition (Sonarr or Radarr).
-func mapCondition(app App, sp SrcSpec) mappedCondition {
-	base := decide.ConditionDoc{Negate: sp.Negate, Required: sp.Required}
-	pattern := func(k decide.ConditionKind) mappedCondition {
+type conditionMapper func(app App, sp SrcSpec, base decide.ConditionDoc) mappedCondition
+
+func patternMapper(k decide.ConditionKind) conditionMapper {
+	return func(_ App, sp SrcSpec, base decide.ConditionDoc) mappedCondition {
 		base.Kind, base.Pattern = k, sp.Values["value"]
 		return mappedCondition{doc: base, ok: base.Pattern != ""}
 	}
-	switch strings.TrimSuffix(sp.Impl, "Specification") {
-	case "ReleaseTitle":
-		return pattern(decide.CondTitle)
-	case "ReleaseGroup":
-		return pattern(decide.CondGroup)
-	case "Edition":
-		return pattern(decide.CondEdition)
-	case "Source":
-		return mapSource(app, sp, base)
-	case "Resolution":
-		return mapResolution(sp, base)
-	case "QualityModifier":
-		return mapModifier(sp, base)
-	case "Language":
-		return mapLanguage(sp, base)
-	case "IndexerFlag":
-		return mapFlag(app, sp, base)
-	case "Size":
-		return mapRange(decide.CondSize, sp, base)
-	case "Year":
-		return mapRange(decide.CondYear, sp, base)
-	case "ReleaseType":
-		return mapReleaseType(sp, base)
+}
+
+func appless(f func(SrcSpec, decide.ConditionDoc) mappedCondition) conditionMapper {
+	return func(_ App, sp SrcSpec, base decide.ConditionDoc) mappedCondition { return f(sp, base) }
+}
+
+func rangeMapper(k decide.ConditionKind) conditionMapper {
+	return func(_ App, sp SrcSpec, base decide.ConditionDoc) mappedCondition { return mapRange(k, sp, base) }
+}
+
+// conditionMappers map each source implementation by name.
+var conditionMappers = map[string]conditionMapper{
+	"ReleaseTitle": patternMapper(decide.CondTitle), "ReleaseGroup": patternMapper(decide.CondGroup),
+	"Edition": patternMapper(decide.CondEdition), "Source": mapSource, "Resolution": appless(mapResolution),
+	"QualityModifier": appless(mapModifier), "Language": appless(mapLanguage), "IndexerFlag": mapFlag,
+	"Size": rangeMapper(decide.CondSize), "Year": rangeMapper(decide.CondYear), "ReleaseType": appless(mapReleaseType),
+}
+
+// mapCondition maps one source condition (Sonarr or Radarr).
+func mapCondition(app App, sp SrcSpec) mappedCondition {
+	m, ok := conditionMappers[strings.TrimSuffix(sp.Impl, "Specification")]
+	if !ok {
+		return mappedCondition{notes: []string{fmt.Sprintf("condition %q (%s) has no corsarr equivalent and was left out", sp.Name, sp.Impl)}}
 	}
-	return mappedCondition{notes: []string{fmt.Sprintf("condition %q (%s) has no corsarr equivalent and was left out", sp.Name, sp.Impl)}}
+	return m(app, sp, decide.ConditionDoc{Negate: sp.Negate, Required: sp.Required})
 }
 
 func values(base decide.ConditionDoc, k decide.ConditionKind, vs ...string) mappedCondition {
@@ -116,17 +117,13 @@ func mapSource(app App, sp SrcSpec, base decide.ConditionDoc) mappedCondition {
 }
 
 func mapResolution(sp SrcSpec, base decide.ConditionDoc) mappedCondition {
-	r := strings.TrimSuffix(strings.ToLower(sp.Options["value"]), "p")
-	if r == "" || r == "r"+sp.Values["value"] {
-		r = sp.Values["value"]
-	}
-	r = strings.TrimPrefix(r, "r")
+	r := sp.Values["value"]
 	if near, ok := resolutionNearest[r]; ok {
 		m := values(base, decide.CondResolution, near)
 		m.notes = []string{fmt.Sprintf("condition %q: %sp counts as %sp in corsarr", sp.Name, r, near)}
 		return m
 	}
-	if _, ok := map[string]bool{"480": true, "576": true, "720": true, "1080": true, "2160": true}[r]; !ok {
+	if !slices.Contains([]string{"480", "576", "720", "1080", "2160"}, r) {
 		return dropped(sp, fmt.Sprintf("resolution %q is not on corsarr's ladder", r))
 	}
 	return values(base, decide.CondResolution, r)
@@ -263,17 +260,26 @@ func mapItem(it SrcQualityItem) (decide.GroupDoc, []string) {
 	}
 	var notes []string
 	for _, name := range it.Members {
-		id, ok := profileQuality(name)
-		switch {
-		case !ok && it.Allowed:
-			notes = append(notes, fmt.Sprintf("quality %s has no corsarr equivalent and was left out", name))
-		case ok && decide.BelowFloor(id) && it.Allowed:
-			notes = append(notes, fmt.Sprintf("quality %s is below corsarr's quality floor and was left out", name))
-		case ok && !decide.BelowFloor(id):
+		id, why := memberQuality(name)
+		if why == "" {
 			g.Qualities = append(g.Qualities, id)
+		} else if it.Allowed {
+			notes = append(notes, fmt.Sprintf("quality %s %s and was left out", name, why))
 		}
 	}
 	return g, notes
+}
+
+// memberQuality maps a profile's quality, or says why it cannot be kept.
+func memberQuality(name string) (decide.QualityID, string) {
+	id, ok := profileQuality(name)
+	switch {
+	case !ok:
+		return "", "has no corsarr equivalent"
+	case decide.BelowFloor(id):
+		return "", "is below corsarr's quality floor"
+	}
+	return id, ""
 }
 
 func profileCutoff(doc decide.ProfileDoc, byItem map[int]decide.QualityID, p SrcProfile, notes []string) (decide.QualityID, []string) {
@@ -338,23 +344,8 @@ func profileSizes(groups []decide.GroupDoc, sizes map[string]SrcSize, notes []st
 
 func sizeDoc(q decide.QualityID, s SrcSize) (*decide.SizeDoc, []string) {
 	def := decide.DefaultDefinitions().For(q)
-	lo, pref, hi := def.Min(), def.Preferred(), def.Max()
-	var notes []string
-	if s.Min != nil {
-		lo = *s.Min
-	}
-	if s.Preferred != nil {
-		pref = *s.Preferred
-	}
-	switch {
-	case s.Max == nil || *s.Max <= 0:
-		notes = append(notes, fmt.Sprintf("%s had no size limit; corsarr keeps a limit of %.0f MB per minute", q, hi))
-	case *s.Max > decide.MaxMBPerMinute:
-		hi = decide.MaxMBPerMinute
-		notes = append(notes, fmt.Sprintf("%s limit %.0f MB per minute is above corsarr's largest allowed %.0f", q, *s.Max, hi))
-	default:
-		hi = *s.Max
-	}
+	lo, pref := orDefault(s.Min, def.Min()), orDefault(s.Preferred, def.Preferred())
+	hi, notes := sourceMax(q, s.Max, def.Max())
 	if hi <= lo {
 		hi = math.Min(decide.MaxMBPerMinute, math.Max(lo*2, lo+1))
 	}
@@ -363,4 +354,23 @@ func sizeDoc(q decide.QualityID, s SrcSize) (*decide.SizeDoc, []string) {
 		return nil, notes
 	}
 	return &decide.SizeDoc{Quality: q, Min: lo, Preferred: pref, Max: hi}, notes
+}
+
+func orDefault(v *float64, def float64) float64 {
+	if v == nil {
+		return def
+	}
+	return *v
+}
+
+// sourceMax keeps a finite maximum: an unlimited source keeps corsarr's
+// default, one above the largest allowed is capped.
+func sourceMax(q decide.QualityID, v *float64, def float64) (float64, []string) {
+	switch {
+	case v == nil || *v <= 0:
+		return def, []string{fmt.Sprintf("%s had no size limit; corsarr keeps a limit of %.0f MB per minute", q, def)}
+	case *v > decide.MaxMBPerMinute:
+		return decide.MaxMBPerMinute, []string{fmt.Sprintf("%s limit %.0f MB per minute is above corsarr's largest allowed %.0f", q, *v, decide.MaxMBPerMinute)}
+	}
+	return *v, nil
 }

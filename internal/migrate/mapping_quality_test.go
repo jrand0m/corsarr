@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jrand0m/corsarr/internal/config"
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
 )
@@ -206,5 +207,50 @@ func TestQualityOutcome(t *testing.T) {
 		if got, _ := qualityOutcome(stored, map[string]bool{"cfg": true}, key, fp, "profile"); got != want {
 			t.Errorf("%s: %s", key, got)
 		}
+	}
+}
+
+func TestReadQuality_WireShapes(t *testing.T) {
+	cases := map[string]string{`"x"`: "x", `1080`: "1080", `1.5`: "1.5", `true`: "true", `null`: "", ``: ""}
+	for raw, want := range cases {
+		if got := rawText([]byte(raw)); got != want {
+			t.Errorf("%s: %q", raw, got)
+		}
+	}
+	f := srcFormat(wCustomFormat{ID: 3, Name: "HDR", Specifications: []wSpec{{Name: "src", Implementation: "SourceSpecification", Required: true,
+		Fields: []wSpecField{{Name: "value", Value: []byte("6"), SelectOptions: []wSpecOption{{Value: 5, Name: "DVD"}, {Value: 6, Name: "Bluray"}}}}}}})
+	if sp := f.Specs[0]; sp.Values["value"] != "6" || sp.Options["value"] != "Bluray" || !sp.Required {
+		t.Fatalf("spec %+v", sp)
+	}
+	items := srcItems([]wProfileItem{{ID: 1001, Name: "WEB", Allowed: true, Items: []wProfileItem{{Quality: &struct {
+		ID   int
+		Name string
+	}{3, "WEBDL-1080p"}}}}})
+	if len(items) != 1 || !items[0].Group || items[0].Members[0] != "WEBDL-1080p" {
+		t.Fatalf("items %+v", items)
+	}
+}
+
+func TestSizeDoc(t *testing.T) {
+	if d, notes := sizeDoc("webdl-1080p", SrcSize{Min: f64p(6), Preferred: f64p(35), Max: f64p(70)}); d != nil || notes != nil {
+		t.Fatalf("defaults need no limit: %+v %v", d, notes)
+	}
+	d, notes := sizeDoc("webdl-1080p", SrcSize{Min: f64p(10), Max: f64p(5000)})
+	if d == nil || d.Max != decide.MaxMBPerMinute || len(notes) != 1 {
+		t.Fatalf("capped: %+v %v", d, notes)
+	}
+	d, _ = sizeDoc("webdl-720p", SrcSize{Min: f64p(50), Max: f64p(40)})
+	if d.Max <= d.Min || d.Preferred < d.Min || d.Preferred > d.Max {
+		t.Fatalf("kept valid: %+v", d)
+	}
+}
+
+func TestConfigQuality(t *testing.T) {
+	if q := configQuality(nil); len(q.ConfigFormats) != 0 {
+		t.Fatal("nil config")
+	}
+	q := configQuality(&config.Config{CustomFormats: []decide.FormatDoc{{Key: "a"}}, QualityProfiles: []decide.ProfileDoc{{Key: "b"}}})
+	if !q.ConfigFormats["a"] || !q.ConfigProfiles["b"] {
+		t.Fatalf("%+v", q)
 	}
 }
