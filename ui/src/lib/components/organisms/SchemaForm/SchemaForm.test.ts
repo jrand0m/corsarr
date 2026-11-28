@@ -71,7 +71,7 @@ describe('SchemaForm', () => {
       ...base, meta: { ...everyFieldMeta, url: { managed: 'downloaders.harbourbox.url' }, slots: { drift: 'The client runs 5.' } },
     });
     expect((getByLabelText('Address') as HTMLInputElement).readOnly).toBe(true);
-    expect(getByText('downloaders.harbourbox.url')).toBeTruthy();
+    expect(getByText(/at downloaders\.harbourbox\.url\./)).toBeTruthy();
     expect(getByText('The client runs 5.')).toBeTruthy();
     expect(getAllByText('Partly managed by config').length).toBe(1);
   });

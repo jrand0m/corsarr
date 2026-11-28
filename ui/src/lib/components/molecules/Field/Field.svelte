@@ -131,7 +131,5 @@
   .error, .drift { display: flex; gap: var(--space-1); align-items: flex-start; }
   .error { color: var(--tone-error-ink); font-weight: var(--weight-medium); }
   .error :global(svg), .drift :global(svg) { margin-top: 0.125rem; }
-  .note { color: var(--tone-managed-ink); }
   .drift { color: var(--tone-warn-ink); }
-  code { font-size: var(--text-xs); overflow-wrap: anywhere; }
 </style>
