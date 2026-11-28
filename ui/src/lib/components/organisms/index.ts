@@ -33,6 +33,10 @@ export type { PlanGroup, PlanOp, PlanField, PlanOpKind } from './PlanDiff/PlanDi
 
 // Lane A: data and forms.
 export { default as SchemaForm } from './SchemaForm/SchemaForm.svelte';
+export { default as PluginSettingsForm } from './PluginSettingsForm/PluginSettingsForm.svelte';
+export { default as PluginInstallDialog } from './PluginInstallDialog/PluginInstallDialog.svelte';
+export type { ActionReply } from './PluginSettingsForm/PluginSettingsForm.svelte';
+export type { ModuleChange } from './PluginInstallDialog/PluginInstallDialog.svelte';
 export { default as SetupFlow } from './SetupFlow/SetupFlow.svelte';
 export { default as OrderedListEditor } from './OrderedListEditor/OrderedListEditor.svelte';
 export { default as ToggleMatrix } from './ToggleMatrix/ToggleMatrix.svelte';
