@@ -76,7 +76,7 @@ func parseVersion(s string) (version, bool) {
 	}
 	for i, p := range parts {
 		n, err := strconv.Atoi(p)
-		if err != nil || n < 0 {
+		if err != nil {
 			return v, false
 		}
 		v.n[i] = n
@@ -141,9 +141,10 @@ const (
 // WithinPolicy reports whether moving from installed to next is an
 // automatic update under policy (pure).
 func WithinPolicy(policy, installed, next string) bool {
-	a, okA := parseVersion(installed)
-	b, okB := parseVersion(next)
-	if !okA || !okB || CompareVersions(next, installed) <= 0 || b.pre != "" {
+	// An unparsable version compares as equal, so it is never an update.
+	a, _ := parseVersion(installed)
+	b, _ := parseVersion(next)
+	if CompareVersions(next, installed) <= 0 || b.pre != "" {
 		return false
 	}
 	switch policy {

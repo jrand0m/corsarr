@@ -8,12 +8,16 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
 
+	"github.com/jrand0m/corsarr/internal/plugin/schema"
 	"github.com/jrand0m/corsarr/internal/wasm"
 	"github.com/jrand0m/corsarr/sdk/go/abi"
 )
@@ -166,9 +170,10 @@ func TestSignedMessageHasThePrefix(t *testing.T) {
 func TestTrustedKeysFromFiles(t *testing.T) {
 	_, key := testKey()
 	text := string(mustB64(key.Public)) + "\n"
+	other := ed25519.NewKeyFromSeed([]byte("fedcba9876543210fedcba9876543210")).Public().(ed25519.PublicKey)
 	fsys := fstest.MapFS{
 		"trusted/" + key.ID + ".pub": {Data: []byte(text)},
-		"trusted/wrongname.pub":      {Data: []byte(text)},
+		"trusted/wrongname.pub":      {Data: []byte(string(mustB64(other)) + "\n")},
 		"trusted/README":             {Data: []byte("x")},
 	}
 	keys := keysIn(fsys, "trusted")
@@ -288,6 +293,7 @@ type catalogueServer struct {
 	*httptest.Server
 	index, sig, module []byte
 	indexHits          atomic.Int32
+	notModified        atomic.Int32
 	down               atomic.Bool
 }
 
@@ -308,6 +314,7 @@ func newCatalogueServer(t *testing.T, signed bool) *catalogueServer {
 		case "/plugins-index.json":
 			cs.indexHits.Add(1)
 			if r.Header.Get("If-None-Match") == `"v1"` {
+				cs.notModified.Add(1)
 				w.WriteHeader(http.StatusNotModified)
 				return
 			}
@@ -380,3 +387,187 @@ func TestFetcherRefusesUnsignedOrForeign(t *testing.T) {
 }
 
 func mustB64(b []byte) []byte { return []byte(base64.StdEncoding.EncodeToString(b)) }
+
+func TestFetcherRefetchesConditionallyOnceTheCacheIsAnHourOld(t *testing.T) {
+	cs := newCatalogueServer(t, true)
+	_, key := testKey()
+	now := time.Date(2026, 11, 28, 12, 0, 0, 0, time.UTC)
+	f := &Fetcher{Dir: t.TempDir(), HTTP: http.DefaultClient, Keys: []Key{key}, MaxModule: 32 << 20, Now: func() time.Time { return now }}
+	url := cs.URL + "/plugins-index.json"
+	if _, err := f.Get(context.Background(), url, false); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(MaxAge)
+	s, err := f.Get(context.Background(), url, false)
+	if err != nil || cs.indexHits.Load() != 2 || !s.FetchedAt.Equal(now) {
+		t.Fatalf("an hour-old cache was not refetched: hits=%d %+v %v", cs.indexHits.Load(), s, err)
+	}
+	if cs.notModified.Load() != 1 {
+		t.Fatalf("the refetch did not send the cached ETag (not-modified answers = %d)", cs.notModified.Load())
+	}
+}
+
+func TestFetcherIgnoresACacheRecordedForAnotherAddress(t *testing.T) {
+	cs := newCatalogueServer(t, true)
+	_, key := testKey()
+	f := &Fetcher{Dir: t.TempDir(), HTTP: http.DefaultClient, Keys: []Key{key}, MaxModule: 32 << 20}
+	url := cs.URL + "/plugins-index.json"
+	if _, err := f.Get(context.Background(), url, false); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(meta{URL: url + "?other", FetchedAt: time.Now()})
+	if err := os.WriteFile(filepath.Join(f.dir(url), "meta.json"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.Cached(url); ok {
+		t.Fatal("a cache recorded for another address was used")
+	}
+	cs.down.Store(true)
+	if s, err := f.Get(context.Background(), url, false); err == nil {
+		t.Fatalf("offline with no usable cache: %+v", s)
+	}
+}
+
+func TestFetcherBoundsTheSignatureFile(t *testing.T) {
+	const limit = 64 << 10
+	for _, c := range []struct {
+		name string
+		size int
+		ok   bool
+	}{{"exactly the limit", limit, true}, {"one byte over", limit + 1, false}} {
+		t.Run(c.name, func(t *testing.T) {
+			cs := newCatalogueServer(t, true)
+			// Trailing blanks keep the signature valid, so only the size decides.
+			cs.sig = append(cs.sig, []byte(strings.Repeat(" ", c.size-len(cs.sig)))...)
+			_, key := testKey()
+			f := &Fetcher{Dir: t.TempDir(), HTTP: http.DefaultClient, Keys: []Key{key}, MaxModule: 32 << 20}
+			_, err := f.Get(context.Background(), cs.URL+"/plugins-index.json", false)
+			if c.ok && err != nil {
+				t.Fatalf("a %d-byte signature file was refused: %v", c.size, err)
+			}
+			if !c.ok && (err == nil || !strings.Contains(err.Error(), "larger than 65536 bytes")) {
+				t.Fatalf("a %d-byte signature file: err = %v", c.size, err)
+			}
+		})
+	}
+}
+
+func TestDownloadRefusesAModuleLongerThanItsEntry(t *testing.T) {
+	cs := newCatalogueServer(t, true)
+	e := entryFor(cs.module)
+	cs.module = append(append([]byte{}, cs.module...), 0xff)
+	var ve *VerifyError
+	if _, err := Download(context.Background(), http.DefaultClient, cs.URL+"/plugins-index.json", e); !errors.As(err, &ve) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func hasProblem(ps schema.Problems, path string) bool {
+	return slices.ContainsFunc(ps, func(p schema.Problem) bool { return p.Path == path })
+}
+
+func TestCheckEntryLimits(t *testing.T) {
+	good := entryFor(fakeModule(testManifest))
+	if ps := CheckEntry(good, 32<<20); len(ps) != 0 {
+		t.Fatalf("valid entry: %v", ps)
+	}
+	cases := []struct {
+		name      string
+		mutate    func(*Entry)
+		maxModule int64
+		path      string
+		want      bool
+	}{
+		{"kind not an identifier", func(e *Entry) { e.Kind = "Downloader" }, 32 << 20, "kind", true},
+		{"abi 0", func(e *Entry) { e.ABIVersion = 0 }, 32 << 20, "abiVersion", true},
+		{"one byte", func(e *Entry) { e.Size = 1 }, 32 << 20, "size", false},
+		{"exactly the largest", func(e *Entry) { e.Size = 32 << 20 }, 32 << 20, "size", false},
+		{"over a one-byte limit", func(e *Entry) { e.Size = 2 }, 1, "size", true},
+		{"no limit", func(e *Entry) { e.Size = 1 << 40 }, 0, "size", false},
+		{"empty url", func(e *Entry) { e.URL = "" }, 32 << 20, "url", true},
+		{"unparsable url", func(e *Entry) { e.URL = "%zz" }, 32 << 20, "url", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := good
+			c.mutate(&e)
+			if got := hasProblem(CheckEntry(e, c.maxModule), c.path); got != c.want {
+				t.Fatalf("problem at %s = %v, want %v", c.path, got, c.want)
+			}
+		})
+	}
+}
+
+func TestCheckEntryCountAndOrder(t *testing.T) {
+	good := entryFor(fakeModule(testManifest))
+	entries := func(n int) []Entry {
+		out := make([]Entry, n)
+		for i := range out {
+			out[i] = good
+			out[i].ID = "p" + string(rune('a'+i/26)) + string(rune('a'+i%26))
+		}
+		return out
+	}
+	ix := func(es []Entry) Index {
+		return Index{Schema: 1, Release: "v1.4.0", Generated: time.Date(2026, 11, 28, 10, 0, 0, 0, time.UTC), Plugins: es}
+	}
+	if ps := Check(ix(entries(MaxEntries)), 32<<20); len(ps) != 0 {
+		t.Fatalf("%d sorted entries: %v", MaxEntries, ps)
+	}
+	if ps := Check(ix(entries(MaxEntries+1)), 32<<20); !hasProblem(ps, "plugins") {
+		t.Fatalf("%d entries: %v", MaxEntries+1, ps)
+	}
+	dup := entries(2)
+	dup[1].ID = dup[0].ID
+	if ps := Check(ix(dup), 32<<20); !hasProblem(ps, "plugins[1].id") {
+		t.Fatalf("duplicate ids: %v", ps)
+	}
+}
+
+func TestPolicyEdges(t *testing.T) {
+	if !(Diff{AddedHosts: []string{"a.example"}}).Grew() || !(Diff{AddedSecrets: []string{"token"}}).Grew() || (Diff{RemovedHosts: []string{"a.example"}}).Grew() {
+		t.Fatal("one added host or secret is growth; a removal is not")
+	}
+	for _, bad := range []string{"v+1.2.3", "1.x.0"} {
+		if CompareVersions(bad, "2.0.0") != 0 {
+			t.Fatalf("%q is not a version and compares as equal", bad)
+		}
+	}
+	e := entryFor(fakeModule(testManifest))
+	if o := OfferFor(e, Installed{}, "v"+e.MinCorsarr); o.State != StateAvailable {
+		t.Fatalf("corsarr equal to minCorsarr: %s (%s)", o.State, o.Reason)
+	}
+}
+
+func TestParseKeyNeeds32Bytes(t *testing.T) {
+	_, key := testKey()
+	if k, err := ParseKey(string(mustB64(key.Public))); err != nil || k.ID != key.ID {
+		t.Fatalf("valid key: %+v %v", k, err)
+	}
+	if _, err := ParseKey(string(mustB64(key.Public[:16]))); err == nil {
+		t.Fatal("a 16-byte key was accepted")
+	}
+}
+
+func TestVerifyReadsTheSignatureFileStrictly(t *testing.T) {
+	priv, key := testKey()
+	index := []byte(`{"schema":1}`)
+	var good Signature
+	if err := json.Unmarshal(Sign(index, priv), &good); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*Signature){
+		"newer format":    func(s *Signature) { s.Schema = 2 },
+		"other algorithm": func(s *Signature) { s.Alg = "rsa" },
+		"trailing junk":   func(s *Signature) { s.Signature += "!!" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := good
+			mutate(&s)
+			b, _ := json.Marshal(s)
+			if err := Verify(index, b, []Key{key}); err == nil {
+				t.Fatal("accepted")
+			}
+		})
+	}
+}
