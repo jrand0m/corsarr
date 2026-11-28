@@ -28,6 +28,13 @@ describe('testChecks', () => {
     expect(c.slice(1).map((x) => x.status)).toEqual(['warn', 'skipped', 'warn']);
     expect(testChecks({ ok: false, message: 'down', elapsedMs: 1 })[0].detail).toBe('down');
   });
+  it('names known search modes and shows unknown ones as declared', () => {
+    const c = testChecks({ ok: true, message: '', elapsedMs: 1, caps: { modes: ['tv', 'music', 'book', 'audiobook'], idParams: [], categories: {}, limit: 0 } });
+    expect(c[1]).toMatchObject({ status: 'pass', detail: 'TV, music, books, audiobook' });
+    expect(c.slice(2).map((x) => [x.status, x.detail])).toEqual([
+      ['skipped', 'Text searches only'], ['warn', 'No categories; every search covers all of them'],
+    ]);
+  });
 });
 
 describe('pluginChoices', () => {
