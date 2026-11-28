@@ -8,10 +8,10 @@ Short notes per release. Each release's assets, checksums and how to verify them
 - Interactive search leads with the decision: each result says what automatic search would do (the single pick, accepted but outranked and why, or rejected with the main reason in one line); the full reason list folds under "Why it was rejected?", and the separate override notice is gone.
 - Interactive search shows seeders against leechers with a ratio bar and health word, whether the whole payload is available (with file count, times downloaded and the tracker's seed ratio when the indexer reports them), and how close each release is to the profile, above or below target.
 - Interactive search can sort by automation order, closest to profile, seeders, size, newest or quality; the choice stays in the page link.
+- Indexers: a missing seeders/peers count is no longer read as zero; Torznab `files` and `minimumratio` are carried through.
 
 ## v0.5.4 — 2026-11-28
 
-- Indexers: a missing seeders/peers count is no longer read as zero; Torznab `files` and `minimumratio` are carried through.
 - Rate limits are learned per service (announced limits first, then where it throttles) and requests are kept below them; observed limits are re-checked gently about once a week while there is demand. See them in System › Health; settings under `server.rateLearning`.
 - Media-type mode badges explain Disabled, Shadow and Active on hover.
 - Config-managed fields show only a lock; hover names the key and where it is set.
