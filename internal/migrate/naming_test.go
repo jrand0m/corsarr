@@ -185,3 +185,10 @@ func TestConfigViewSeesNamingTheConfigSets(t *testing.T) {
 		t.Fatalf("%v", v.Naming)
 	}
 }
+
+func TestATemplateThatDoesNotParseKeepsTheBuiltin(t *testing.T) {
+	m := mapNaming(Radarr, SrcNaming{Formats: map[string]string{"standardMovieFormat": "{/Movie Title}"}})
+	if m.Scheme.File != naming.DefaultMovieFile || !strings.Contains(strings.Join(m.Notes, "|"), "standardMovieFormat could not be converted (") {
+		t.Fatalf("%+v %v", m.Scheme, m.Notes)
+	}
+}

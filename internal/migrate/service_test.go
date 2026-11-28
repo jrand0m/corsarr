@@ -391,3 +391,11 @@ func TestHistoryWindowFollowsTheRequestedDays(t *testing.T) {
 	r.req.Options.HistoryDays = 0
 	entry(t, r.plan(), "sonarr:history:72")
 }
+
+func TestSourceQualityDefinitionsReachTheProfile(t *testing.T) {
+	r := newRig(t)
+	r.sonarr.routes["/qualitydefinition"] = []any{map[string]any{"quality": map[string]any{"name": "Bluray-1080p"}, "minSize": 1, "maxSize": nil}}
+	if e := entry(t, r.plan(), "sonarr:profile:1"); !strings.Contains(e.Reason, "bluray-1080p had no size limit") {
+		t.Fatalf("%s %s", e.Outcome, e.Reason)
+	}
+}

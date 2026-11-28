@@ -357,3 +357,26 @@ func TestTrackPlaceFallsBackToThePrintedNumber(t *testing.T) {
 		}
 	}
 }
+
+func TestArtistNotesCountPinnedAndSkippedAlbums(t *testing.T) {
+	snap := Snapshot{Source: SourceInfo{App: Lidarr}}
+	a := SrcArtist{MBID: "a", Name: "Band", MonitorNew: "all", Albums: []SrcAlbum{{MBID: "al", Title: "Kept", Type: "Album"}}}
+	if _, albums, notes := artistTarget(a, snap, Rewrite{}); len(albums) != 1 || len(notes) != 0 {
+		t.Fatalf("nothing folded: %d %v", len(albums), notes)
+	}
+	a.Albums = append(a.Albums, SrcAlbum{Title: "No id", Type: "Album"})
+	_, albums, notes := artistTarget(a, snap, Rewrite{})
+	if len(albums) != 1 || len(notes) != 1 || notes[0] != "1 albums without a MusicBrainz id were left out" {
+		t.Fatalf("one skipped: %d %v", len(albums), notes)
+	}
+}
+
+func TestLidarrProfileCountsOnlyNonZeroScores(t *testing.T) {
+	r := newMusicRig(t)
+	profiles := r.lidarr.routes["/qualityprofile"].([]any)
+	profiles[0].(map[string]any)["formatItems"] = []any{map[string]any{"name": "A", "score": 5},
+		map[string]any{"name": "B", "score": -3}, map[string]any{"name": "C", "score": 0}}
+	if e := entry(t, r.plan(), "lidarr:profile:1"); !strings.Contains(e.Reason, "; 2 custom format scores are not carried over") {
+		t.Fatalf("%s %s", e.Outcome, e.Reason)
+	}
+}

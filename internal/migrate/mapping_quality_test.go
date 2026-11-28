@@ -42,7 +42,13 @@ func TestMapCondition_EveryKind(t *testing.T) {
 		{Sonarr, spec("IndexerFlag", map[string]string{"value": "1"}, nil), "flag:freeleech", false},
 		{Radarr, spec("IndexerFlag", map[string]string{"value": "8"}, map[string]string{"value": "PTP_Golden"}), "", true},
 		{Radarr, spec("IndexerFlag", map[string]string{"value": "2048"}, nil), "flag:nuked", true},
+		{Sonarr, spec("IndexerFlag", map[string]string{"value": "1"}, map[string]string{"value": "Freeleech"}), "flag:freeleech", false},
+		{Sonarr, spec("IndexerFlag", map[string]string{"value": "1"}, map[string]string{"value": "G_Freeleech"}), "flag:freeleech", false},
 		{Sonarr, spec("Size", map[string]string{"min": "1", "max": "10"}, nil), "size:1-10", false},
+		{Sonarr, spec("Size", map[string]string{"min": "5"}, nil), "size:5-0", false},
+		{Sonarr, spec("Size", map[string]string{"max": "10"}, nil), "size:0-10", false},
+		{Radarr, spec("Year", map[string]string{"min": "-5", "max": "-1"}, nil), "year:0-0", false},
+		{Sonarr, spec("Size", map[string]string{}, nil), "", true},
 		{Radarr, spec("Year", map[string]string{"min": "1990", "max": "1999"}, nil), "year:1990-1999", false},
 		{Sonarr, spec("ReleaseType", map[string]string{"value": "3"}, nil), "releasetype:seasonpack", false},
 		{Sonarr, spec("Mystery", nil, nil), "", true},
@@ -263,5 +269,60 @@ func TestCustomProfileKeepsTheBluray576pRung(t *testing.T) {
 	}
 	if _, errs := decide.CompileProfile(decide.ProfileDoc{Key: "sd", Name: doc.Name, Kinds: doc.Kinds, Groups: doc.Groups, Cutoff: doc.Cutoff, Sizes: doc.Sizes}, nil); len(errs) > 0 {
 		t.Fatal(errs)
+	}
+}
+
+func TestMapFormat_OkOnlyWhenAConditionSurvives(t *testing.T) {
+	one := SrcFormat{ID: 1, Name: "One", Specs: []SrcSpec{spec("Resolution", map[string]string{"value": "1080"}, nil)}}
+	if doc, _, ok := mapFormat(Sonarr, one); !ok || len(doc.Conditions) != 1 {
+		t.Fatalf("one condition: %+v %v", doc, ok)
+	}
+	none := SrcFormat{ID: 2, Name: "None", Specs: []SrcSpec{spec("Mystery", nil, nil)}}
+	if doc, notes, ok := mapFormat(Sonarr, none); ok || len(doc.Conditions) != 0 || len(notes) != 1 {
+		t.Fatalf("no condition: %+v %v %v", doc, notes, ok)
+	}
+}
+
+func TestCustomProfileCutoffAndUpgradeStep(t *testing.T) {
+	p := SrcProfile{ID: 1, Name: "Mixed", CutoffID: 2, Cutoff: "WEBDL-1080p", Items: []SrcQualityItem{
+		{ID: 1, Name: "WEBDL-720p", Allowed: true, Members: []string{"WEBDL-720p"}},
+		{ID: 3, Name: "BR-DISK", Allowed: true, Members: []string{"BR-DISK"}},
+		{ID: 2, Name: "WEBDL-1080p", Members: []string{"WEBDL-1080p"}},
+	}}
+	doc, notes := mapCustomProfile(p, domain.KindMovie, nil, nil)
+	if doc.Cutoff != "disc-1080p" || len(doc.Groups) != 2 || doc.Groups[1].Qualities[0] != "disc-1080p" {
+		t.Fatalf("a cutoff that is not allowed falls back to the best allowed: %+v", doc)
+	}
+	if len(notes) != 1 || !strings.Contains(notes[0], `cutoff "WEBDL-1080p" has no corsarr equivalent`) {
+		t.Fatalf("notes %v", notes)
+	}
+	if doc.MinUpgradeFormatScore != 1 {
+		t.Fatalf("a zero upgrade step becomes 1: %d", doc.MinUpgradeFormatScore)
+	}
+	p.Items = p.Items[2:]
+	if doc, notes := mapCustomProfile(p, domain.KindMovie, nil, nil); doc.Cutoff != "" || len(notes) != 0 {
+		t.Fatalf("nothing allowed: no cutoff and no cutoff note: %+v %v", doc, notes)
+	}
+}
+
+func TestSizeDocWidensAndBoundsTheMaximum(t *testing.T) {
+	def := decide.DefaultDefinitions().For("webdl-1080p")
+	cases := []struct {
+		name     string
+		min, max float64
+		wantMax  float64
+		notes    int
+	}{
+		{"maximum equal to the minimum doubles it", 10, 10, 20, 0},
+		{"a tiny minimum adds one", 0.5, 0.2, 1.5, 0},
+		{"no limit keeps the default", 1, 0, def.Max(), 1},
+		{"a limit of one is kept", 0.5, 1, 1, 0},
+		{"the largest allowed limit is kept as is", 1, decide.MaxMBPerMinute, decide.MaxMBPerMinute, 0},
+	}
+	for _, c := range cases {
+		d, notes := sizeDoc("webdl-1080p", SrcSize{Min: f64p(c.min), Max: f64p(c.max)})
+		if d == nil || d.Max != c.wantMax || len(notes) != c.notes {
+			t.Errorf("%s: %+v %v", c.name, d, notes)
+		}
 	}
 }

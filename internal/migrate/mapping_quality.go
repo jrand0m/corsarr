@@ -90,9 +90,10 @@ func mapCondition(app App, sp SrcSpec) mappedCondition {
 	return m(app, sp, decide.ConditionDoc{Negate: sp.Negate, Required: sp.Required})
 }
 
+// values keeps a condition on the given values; every caller passes at least one.
 func values(base decide.ConditionDoc, k decide.ConditionKind, vs ...string) mappedCondition {
 	base.Kind, base.Values = k, vs
-	return mappedCondition{doc: base, ok: len(vs) > 0}
+	return mappedCondition{doc: base, ok: true}
 }
 
 func dropped(sp SrcSpec, why string) mappedCondition {
