@@ -261,6 +261,34 @@ export interface IntegrationHealth {
   fixHint?: string;
 }
 
+/** One window's learned rate limit and how it was found. */
+export interface RateCeiling {
+  windowSeconds: number;
+  limit: number;
+  source: 'advertised' | 'declared' | 'throttle' | 'probe';
+  foundAt: string;
+}
+
+/** What the outbound client learned about one service's rate limit. */
+export interface RateLimitStatus {
+  service: string;
+  ceilings: RateCeiling[];
+  recent: { windowSeconds: number; count: number }[];
+  /** Requests per second allowed now; 0 = not paced. */
+  pace: number;
+  probe: 'normal' | 'gentle' | 'off';
+  probing: boolean;
+  lastThrottle?: string;
+  checkedAt?: string;
+  nextCheck?: string;
+  heldUntil?: string;
+}
+
+export interface RateLimits {
+  enabled: boolean;
+  items: RateLimitStatus[] | null;
+}
+
 export interface JobState {
   name: string;
   enabled: boolean;

@@ -9,19 +9,22 @@
   import StatusBadge from '../../../lib/components/atoms/StatusBadge/StatusBadge.svelte';
   import Timestamp from '../../../lib/components/atoms/Timestamp/Timestamp.svelte';
   import PropertyList from '../../../lib/components/molecules/PropertyList/PropertyList.svelte';
-  import type { Column } from '../../../lib/components/organisms/DataTable/DataTable.svelte';
+  import DataTable, { type Column } from '../../../lib/components/organisms/DataTable/DataTable.svelte';
   import { formatAbsolute } from '../../../lib/format/time';
   import { app } from '../../context.svelte';
   import { Resource } from '../../resource.svelte';
   import { refetchOn } from '../../live.svelte';
   import { toApiError } from '../../api/client';
-  import type { IntegrationHealth } from '../../api/types';
+  import type { IntegrationHealth, RateLimits, RateLimitStatus } from '../../api/types';
+  import { ceilingText, noCheckReason, paceText, serviceName } from '../../ratelimits';
   import { healthRank, integrationName, integrationType, isProblem, settingsFor } from '../../model';
 
   const { api, live, toasts } = app();
   const health = new Resource((s) => api.list<IntegrationHealth>('health/integrations', undefined, s));
+  const limits = new Resource((s) => api.get<RateLimits>('system/ratelimits', undefined, s));
   onMount(() => {
     void health.load();
+    void limits.load();
     return refetchOn(live, ['health.changed'], () => void health.load(true), 300);
   });
 
@@ -53,6 +56,14 @@
     { id: 'status', label: 'Status', width: '10.5rem', value: (r) => r.status, phone: 'trailing' },
     { id: 'since', label: 'Since', width: '7rem', value: (r) => r.since, phone: 'hidden' },
     { id: 'retry', label: 'Next retry', width: '9rem', value: (r) => r.nextRetryAt, phone: 'hidden' },
+  ];
+  const limitRows = $derived(limits.data?.items ?? []);
+  const limitColumns: Column<RateLimitStatus>[] = [
+    { id: 'service', label: 'Service', value: (r) => serviceName(r.service), phone: 'title' },
+    { id: 'limit', label: 'Learned limit', value: (r) => r.ceilings.map(ceilingText).join(' · ') || 'Not found yet', phone: 'meta' },
+    { id: 'pace', label: 'Pace now', width: '9rem', value: (r) => (r.probing ? `${paceText(r.pace)} (checking)` : paceText(r.pace)), phone: 'trailing' },
+    { id: 'throttle', label: 'Last throttle', width: '8rem', value: (r) => r.lastThrottle, phone: 'hidden' },
+    { id: 'check', label: 'Next check', width: '10rem', value: (r) => r.nextCheck, phone: 'hidden' },
   ];
   const lastCheck = $derived(Math.max(0, ...rows.map((r) => Date.parse(r.lastOkAt ?? '') || 0)));
 </script>
@@ -91,7 +102,27 @@
   {/snippet}
 </ListPage>
 
+{#snippet limitCell(r: RateLimitStatus, c: Column<RateLimitStatus>)}
+  {#if c.id === 'throttle'}{#if r.lastThrottle}<Timestamp value={r.lastThrottle} />{:else}Never{/if}
+  {:else if c.id === 'check'}{#if r.heldUntil}<Countdown to={r.heldUntil} action="Resumes" tone="warn" />{:else if r.nextCheck}<Countdown to={r.nextCheck} action="Checks" />{:else}{noCheckReason(r)}{/if}
+  {:else}{c.value?.(r)}{/if}
+{/snippet}
+
+<section class="limits" aria-labelledby="rate-limits">
+  <div class="limits-head">
+    <h2 id="rate-limits">Rate limits</h2>
+    <p>{limits.data && !limits.data.enabled ? 'Learning is off: only the configured limits apply.'
+      : 'Where each service starts throttling, how that was found, and the pace corsarr keeps below it.'}</p>
+  </div>
+  <DataTable rows={limitRows} columns={limitColumns} rowKey={(r) => r.service} cell={limitCell} label="Rate limits" height="auto" density="compact"
+    noun="service" loading={limits.loading && !limits.data} error={limits.error?.message} errorCode={limits.error?.label} onretry={limits.retry} />
+</section>
+
 <style>
+  .limits { display: grid; gap: var(--space-3); margin-top: var(--space-6); }
+  .limits-head { display: grid; gap: var(--space-1); }
+  .limits-head h2 { font-size: var(--text-lg); line-height: var(--leading-tight); }
+  .limits-head p { font-size: var(--text-md); color: var(--ink-muted); }
   .detail { display: grid; gap: var(--space-3); max-width: 48rem; }
   .fix { display: flex; gap: var(--space-2); align-items: flex-start; font-size: var(--text-md); color: var(--ink); }
   .fix :global(svg) { color: var(--tone-info-ink); flex: none; margin-top: var(--space-0-5); }

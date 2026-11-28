@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jrand0m/corsarr/internal/automation"
 	"github.com/jrand0m/corsarr/internal/domain"
@@ -65,8 +66,14 @@ func (a *App) testDownloader(ctx context.Context, key domain.ObjectKey) error {
 
 func (a *App) indexers() []automation.Indexer {
 	var out []automation.Indexer
+	var throttle func(domain.IntegrationRef, time.Duration)
+	if t, ok := a.d.HTTP.(interface {
+		Throttled(domain.IntegrationRef, time.Duration)
+	}); ok {
+		throttle = t.Throttled
+	}
 	for _, n := range append(usable[plugin.Indexer](a, plugin.KindIndexer), sources[plugin.Indexer](a)...) {
-		out = append(out, automation.Indexer{Key: n.Key, Impl: reporting{Indexer: n.Impl, ref: n.Ref(), health: a.d.Health},
+		out = append(out, automation.Indexer{Key: n.Key, Impl: reporting{Indexer: n.Impl, ref: n.Ref(), health: a.d.Health, throttle: throttle},
 			Limit: automation.ParseLimit(n.Settings.Int("queryLimit", 0), first(n.Settings.Strings("queryLimitPer")))})
 	}
 	return out

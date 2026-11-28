@@ -10,7 +10,9 @@
   import StatusBadge from '../lib/components/atoms/StatusBadge/StatusBadge.svelte';
   import Timestamp from '../lib/components/atoms/Timestamp/Timestamp.svelte';
   import PropertyList from '../lib/components/molecules/PropertyList/PropertyList.svelte';
-  import type { Column } from '../lib/components/organisms/DataTable/DataTable.svelte';
+  import DataTable, { type Column } from '../lib/components/organisms/DataTable/DataTable.svelte';
+  import type { RateLimitStatus } from '../app/api/types';
+  import { ceilingText, noCheckReason, paceText, serviceName } from '../app/ratelimits';
   import { healthRows, NOW, nowDate, type HealthRow } from '../lib/storybook/fixtures';
 
   let { allOk = false }: { allOk?: boolean } = $props();
@@ -29,7 +31,31 @@
     { id: 'since', label: 'Since', width: '7rem', value: (r) => r.since, phone: 'hidden' },
     { id: 'retry', label: 'Next retry', width: '9rem', value: (r) => r.nextRetry, phone: 'hidden' },
   ];
+
+  const day = 86_400_000;
+  const limits: RateLimitStatus[] = [
+    { service: 'api.metadata.example', pace: 34, probe: 'normal', probing: false, recent: [],
+      ceilings: [{ windowSeconds: 10, limit: 400, source: 'advertised', foundAt: new Date(NOW - 2 * day).toISOString() }] },
+    { service: 'indexer/usenet', pace: 0.12, probe: 'gentle', probing: false, recent: [], lastThrottle: new Date(NOW - 3 * day).toISOString(),
+      nextCheck: new Date(NOW + 4 * day).toISOString(),
+      ceilings: [{ windowSeconds: 60, limit: 10, source: 'probe', foundAt: new Date(NOW - 3 * day).toISOString() }] },
+    { service: 'indexer/publictracker', pace: 0.4, probe: 'off', probing: false, recent: [], lastThrottle: new Date(NOW - 9 * day).toISOString(),
+      ceilings: [{ windowSeconds: 1, limit: 1, source: 'throttle', foundAt: new Date(NOW - 9 * day).toISOString() }] },
+  ];
+  const limitColumns: Column<RateLimitStatus>[] = [
+    { id: 'service', label: 'Service', value: (r) => serviceName(r.service), phone: 'title' },
+    { id: 'limit', label: 'Learned limit', value: (r) => r.ceilings.map(ceilingText).join(' · '), phone: 'meta' },
+    { id: 'pace', label: 'Pace now', width: '9rem', value: (r) => paceText(r.pace), phone: 'trailing' },
+    { id: 'throttle', label: 'Last throttle', width: '8rem', value: (r) => r.lastThrottle, phone: 'hidden' },
+    { id: 'check', label: 'Next check', width: '10rem', value: (r) => r.nextCheck, phone: 'hidden' },
+  ];
 </script>
+
+{#snippet limitCell(r: RateLimitStatus, c: Column<RateLimitStatus>)}
+  {#if c.id === 'throttle'}{#if r.lastThrottle}<Timestamp value={r.lastThrottle} now={nowDate} />{:else}Never{/if}
+  {:else if c.id === 'check'}{#if r.nextCheck}<Countdown to={r.nextCheck} action="Checks" now={NOW} />{:else}{noCheckReason(r)}{/if}
+  {:else}{c.value?.(r)}{/if}
+{/snippet}
 
 {#snippet cell(r: HealthRow, c: Column<HealthRow>)}
   {#if c.id === 'status'}<StatusBadge family="health" value={r.status} size="sm" />
@@ -64,9 +90,20 @@
       {#if !problems.length}<p class="calm"><Icon name="check-circle" /><span>Every integration answered on its last check, 2 minutes ago.</span></p>{/if}
     {/snippet}
   </ListPage>
+  <section class="limits" aria-labelledby="rate-limits">
+    <div class="limits-head">
+      <h2 id="rate-limits">Rate limits</h2>
+      <p>Where each service starts throttling, how that was found, and the pace corsarr keeps below it.</p>
+    </div>
+    <DataTable rows={limits} columns={limitColumns} rowKey={(r) => r.service} cell={limitCell} label="Rate limits" height="auto" density="compact" noun="service" />
+  </section>
 </Shell>
 
 <style>
+  .limits { display: grid; gap: var(--space-3); margin-top: var(--space-6); }
+  .limits-head { display: grid; gap: var(--space-1); }
+  .limits-head h2 { font-size: var(--text-lg); line-height: var(--leading-tight); }
+  .limits-head p { font-size: var(--text-md); color: var(--ink-muted); }
   .detail { display: grid; gap: var(--space-3); max-width: 48rem; }
   .fix { display: flex; gap: var(--space-2); align-items: flex-start; font-size: var(--text-md); color: var(--ink); }
   .fix :global(svg) { color: var(--tone-info-ink); flex: none; margin-top: var(--space-0-5); }

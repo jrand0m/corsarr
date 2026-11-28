@@ -21,6 +21,17 @@ server:
   # host, or list hosts to lock outgoing traffic down.
   # egressAllow:
   #   -
+  # How corsarr finds each service's rate limit and stays below it.
+  rateLearning:
+    # Learn where each service starts throttling and keep requests below it; turn off to use only
+    # the configured limits. true or false.
+    enabled: true
+    # Share of a learned limit corsarr uses, between 0.1 and 1; lower it to stay further from the
+    # limit.
+    headroom: 0.85
+    # How often a limit found by throttling is gently re-checked while requests are waiting; 0
+    # never re-checks. A duration such as 90s, 15m or 2h.
+    probeEvery: 168h0m0s
 
 # Data folder (applies at start).
 data:

@@ -1,7 +1,9 @@
 // Package httpx is the one shared outbound HTTP client: connection reuse, per-host timeout and token-bucket rate
 // limit, jittered bounded retries for idempotent requests and 429/5xx
-// (Retry-After honoured), User-Agent corsarr/<version>, and health
-// reporting per integration. It implements plugin.HTTPDoer.
+// (Retry-After honoured), optional per-service rate-limit learning that
+// keeps traffic below where each service throttles, User-Agent
+// corsarr/<version>, and health reporting per integration. It implements
+// plugin.HTTPDoer.
 package httpx
 
 import (
@@ -47,12 +49,14 @@ type Options struct {
 	Now         func() time.Time
 	Jitter      func(n int64) int64 // uniform [0,n)
 	Allow       []string            // outbound host allow list; empty allows every host
+	Learning    Learning            // per-service rate-limit learning; off when not enabled
 }
 
 // Client is safe for concurrent use.
 type Client struct {
 	o     Options
 	allow *egress
+	learn *learning
 	mu    sync.Mutex
 	hosts map[string]*host
 }
@@ -84,7 +88,7 @@ func New(o Options) *Client {
 	if o.Jitter == nil {
 		o.Jitter = func(n int64) int64 { return rand.Int64N(max(n, 1)) }
 	}
-	return &Client{o: o, allow: newEgress(o.Allow), hosts: map[string]*host{}}
+	return &Client{o: o, allow: newEgress(o.Allow), learn: newLearning(o.Learning), hosts: map[string]*host{}}
 }
 
 func pick[T comparable](v, def T) T {
@@ -156,7 +160,7 @@ func (c *Client) do(req *http.Request, ref *domain.IntegrationRef) (*http.Respon
 	if ref != nil && c.blocked(*ref) {
 		retries = 0 // action needed: one attempt so a fixed credential recovers, no blind retries
 	}
-	resp, err := c.attempts(req, h, retries)
+	resp, err := c.attempts(req, h, c.learnerFor(ref, req.URL.Hostname()), retries)
 	c.report(ref, resp, err)
 	return resp, err
 }
@@ -182,9 +186,16 @@ func (c *Client) blocked(ref domain.IntegrationRef) bool {
 	return ok && b.Blocked(ref)
 }
 
-func (c *Client) attempts(req *http.Request, h *host, retries int) (*http.Response, error) {
+func (c *Client) learnerFor(ref *domain.IntegrationRef, hostname string) *learner {
+	if c.learn == nil {
+		return nil
+	}
+	return c.learn.get(learnKey(ref, hostname))
+}
+
+func (c *Client) attempts(req *http.Request, h *host, l *learner, retries int) (*http.Response, error) {
 	for attempt := 0; ; attempt++ {
-		resp, err := c.once(req, h)
+		resp, err := c.once(req, h, l)
 		wait, retry := c.retryAfter(req, resp, err, attempt, retries)
 		if !retry {
 			return resp, err
@@ -199,8 +210,12 @@ func (c *Client) attempts(req *http.Request, h *host, retries int) (*http.Respon
 	}
 }
 
-// once waits for a token and sends one attempt bounded by the host timeout.
-func (c *Client) once(req *http.Request, h *host) (*http.Response, error) {
+// once waits for the learned pace and a token, then sends one attempt
+// bounded by the host timeout.
+func (c *Client) once(req *http.Request, h *host, l *learner) (*http.Response, error) {
+	if err := c.pace(req.Context(), l); err != nil {
+		return nil, err
+	}
 	if d := h.bucket.reserve(c.o.Now()); d > 0 {
 		if err := c.o.Sleep(req.Context(), d); err != nil {
 			return nil, err
@@ -213,6 +228,7 @@ func (c *Client) once(req *http.Request, h *host) (*http.Response, error) {
 		return nil, err
 	}
 	resp.Body = &cancelBody{ReadCloser: resp.Body, cancel: cancel}
+	c.observe(l, resp)
 	return resp, nil
 }
 
@@ -247,7 +263,7 @@ func retryable(req *http.Request, resp *http.Response, err error) bool {
 		return false
 	}
 	if err != nil {
-		return idempotent[req.Method]
+		return idempotent[req.Method] && !errors.As(err, new(ErrHeld)) // a held service is not asked again early
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
 		return true // the server refused the request, so even a POST is safe to resend
@@ -319,7 +335,11 @@ func peek(resp *http.Response, n int64) []byte {
 // inspected for an anti-bot page (and left readable).
 func Classify(resp *http.Response, err error, now time.Time) health.Observation {
 	if err != nil {
-		return health.Observation{Class: errClass(err), Message: err.Error()}
+		o := health.Observation{Class: errClass(err), Message: err.Error()}
+		if held := (ErrHeld{}); errors.As(err, &held) {
+			o.NextRetry = &held.Until
+		}
+		return o
 	}
 	switch code := resp.StatusCode; {
 	case challenged(resp):
@@ -341,6 +361,9 @@ func Classify(resp *http.Response, err error, now time.Time) health.Observation 
 
 func errClass(err error) string {
 	var ne net.Error
+	if errors.As(err, new(ErrHeld)) {
+		return health.ClassRateLimited
+	}
 	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()) {
 		return health.ClassTimeout
 	}
