@@ -18,7 +18,7 @@
   import DataTable, { type Column } from '../lib/components/organisms/DataTable/DataTable.svelte';
   import DecisionPanel from '../lib/components/organisms/DecisionPanel/DecisionPanel.svelte';
   import Drawer from '../lib/components/organisms/Drawer/Drawer.svelte';
-  import { NOW } from '../lib/storybook/fixtures';
+  import { artSwatch, NOW } from '../lib/storybook/fixtures';
   import { lightsAlbums, lowTideDecisions, lowTideTracks, type AlbumRow, type TrackRow } from '../lib/storybook/music-fixtures';
 
   let { page = 'artist', search = false, all = false }: { page?: 'artist' | 'album'; search?: boolean; all?: boolean } = $props();
@@ -45,13 +45,13 @@
   ];
 
   const artist = {
-    title: 'Harbour Lights', kind: 'music' as const, kindLabel: 'Artist', art: null, meta: 'Group · GB', monitor: 'monitored' as const,
+    title: 'Harbour Lights', kind: 'music' as const, kindLabel: 'Artist', art: artSwatch(280, 'cover'), meta: 'Group · GB', monitor: 'monitored' as const,
     status: [{ family: 'item' as const, value: 'missing' }], back: { href: '#/library/music', label: 'Music' },
     facts: [{ label: 'Albums on disk', value: '4 of 6 monitored' }, { label: 'Tracks', value: '41' }, { label: 'Size', value: '940 MB' }],
     menu: [{ id: 'refresh', label: 'Refresh metadata', icon: 'refresh' as const }, { id: 'delete', label: 'Delete…', icon: 'trash' as const, danger: true }],
   };
   const album = {
-    title: 'Low Tide', kind: 'music' as const, art: null, meta: 'Harbour Lights · 2025 · Album', monitor: 'monitored' as const,
+    title: 'Low Tide', kind: 'music' as const, art: artSwatch(160, 'cover'), meta: 'Harbour Lights · 2025 · Album', monitor: 'monitored' as const,
     status: [{ family: 'item' as const, value: 'missing', detail: 'FLAC' }], back: { href: '#/library/music/1', label: 'Harbour Lights' },
     facts: [{ label: 'Tracks on disk', value: '9 of 11' }, { label: 'Length', value: '48:07' }, { label: 'Size', value: '255 MB' }],
   };

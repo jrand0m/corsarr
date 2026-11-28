@@ -1,5 +1,6 @@
 <!-- Page composition (story only): Library › Music, the artist table. -->
 <script lang="ts">
+  import Artwork from '../lib/components/atoms/Artwork/Artwork.svelte';
   import Shell from './Shell.svelte';
   import ListPage from '../lib/components/templates/ListPage/ListPage.svelte';
   import Button from '../lib/components/atoms/Button/Button.svelte';
@@ -9,7 +10,7 @@
   import EmptyState from '../lib/components/molecules/EmptyState/EmptyState.svelte';
   import MonitorToggle from '../lib/components/molecules/MonitorToggle/MonitorToggle.svelte';
   import type { Column } from '../lib/components/organisms/DataTable/DataTable.svelte';
-  import { nowDate } from '../lib/storybook/fixtures';
+  import { artSwatch, nowDate } from '../lib/storybook/fixtures';
   import { artistRows, type ArtistRow } from '../lib/storybook/music-fixtures';
 
   let { selected = [], empty = false }: { selected?: string[]; empty?: boolean } = $props();
@@ -34,7 +35,7 @@
 
 {#snippet cell(r: ArtistRow, c: Column<ArtistRow>)}
   {#if c.id === 'monitored'}<MonitorToggle item={r.name} state={r.watched ? 'monitored' : 'unmonitored'} size="sm" />
-  {:else if c.id === 'name'}{r.name}{#if r.disambiguation}{' '}({r.disambiguation}){/if}
+  {:else if c.id === 'name'}<span class="artist"><Artwork src={rows.indexOf(r) % 4 === 3 ? null : artSwatch((rows.indexOf(r) * 61) % 360, 'cover')} title={r.name} kind="music" shape="cover" width={32} />{r.name}{#if r.disambiguation}{' '}({r.disambiguation}){/if}</span>
   {:else if c.id === 'albums'}<Progress label="Albums of {r.name} on disk" done={r.withFiles} total={r.monitored} size="sm" showValue tone={r.withFiles >= r.monitored ? 'ok' : 'warn'} />
   {:else if c.id === 'size'}{#if r.size}<Quantity kind="bytes" value={r.size} />{:else}—{/if}
   {:else if c.id === 'next'}{#if r.nextRelease}<Timestamp value={r.nextRelease} now={nowDate} />{:else}—{/if}
@@ -59,3 +60,7 @@
     {/snippet}
   </ListPage>
 </Shell>
+
+<style>
+  .artist { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+</style>

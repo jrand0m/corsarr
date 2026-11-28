@@ -21,6 +21,8 @@
   import { count } from '../../tv';
   import AddArtist from './AddArtist.svelte';
   import type { ScreenProps } from '../../screen';
+  import { artSrc } from '../../art';
+  import Artwork from '../../../lib/components/atoms/Artwork/Artwork.svelte';
 
   let { screen }: ScreenProps = $props();
   const { api, live, toasts, navigate } = app();
@@ -116,7 +118,7 @@
 
 {#snippet cell(r: ArtistSummary, c: Column<ArtistSummary>)}
   {#if c.id === 'monitored'}<MonitorToggle item={r.name} state={r.monitored ? 'monitored' : 'unmonitored'} size="sm" onchange={(s) => setMonitored(r, s === 'monitored')} />
-  {:else if c.id === 'name'}<a class="title" href="#/library/music/{r.id}">{r.name}{#if r.disambiguation}{' '}<span class="dis">({r.disambiguation})</span>{/if}</a>
+  {:else if c.id === 'name'}<span class="artist"><Artwork src={artSrc(r.coverUrl, 32)} title={r.name} kind="music" shape="cover" width={32} /><a class="title" href="#/library/music/{r.id}">{r.name}{#if r.disambiguation}{' '}<span class="dis">({r.disambiguation})</span>{/if}</a></span>
   {:else if c.id === 'albums'}
     <Progress label="Albums of {r.name} on disk" done={r.stats?.albumsWithFiles ?? 0} total={r.stats?.monitoredAlbums ?? 0} size="sm" showValue
       tone={artistItemStatus(r.stats) === 'missing' ? 'warn' : 'ok'} />
@@ -165,6 +167,7 @@
 {/if}
 
 <style>
+  .artist { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
   .title { color: var(--ink); text-decoration: none; font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
   .title:hover { text-decoration: underline; }
   .dis { font-weight: var(--weight-regular); color: var(--ink-muted); }

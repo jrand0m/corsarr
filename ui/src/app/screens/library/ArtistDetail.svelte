@@ -26,6 +26,8 @@
   import { albumItemStatus, albumOrder, albumTypes, albumYear, artistItemStatus, shownAlbums } from '../../music';
   import { count } from '../../tv';
   import type { ScreenProps } from '../../screen';
+  import { artSrc } from '../../art';
+  import Artwork from '../../../lib/components/atoms/Artwork/Artwork.svelte';
 
   let { params = {} }: ScreenProps = $props();
   const { api, live, toasts, navigate } = app();
@@ -44,7 +46,7 @@
   const hidden = $derived((detail.data?.albums?.length ?? 0) - shownAlbums(detail.data?.albums ?? [], false).length);
 
   const entity = $derived({
-    title: artist?.name ?? 'Artist', kind: 'music' as const, kindLabel: 'Artist', art: null,
+    title: artist?.name ?? 'Artist', kind: 'music' as const, kindLabel: 'Artist', art: artSrc(artist?.coverUrl, 128),
     meta: [artist?.disambiguation, artist?.type, artist?.country].filter(Boolean).join(' · '),
     back: { href: '#/library/music', label: 'Music' },
     monitor: (artist?.monitored ? 'monitored' : 'unmonitored') as MonitorState,
@@ -132,7 +134,7 @@
 
 {#snippet albumCell(a: AlbumView, c: Column<AlbumView>)}
   {#if c.id === 'monitored'}<MonitorToggle item={a.title} state={a.monitored ? 'monitored' : 'unmonitored'} size="sm" onchange={(s) => monitorAlbum(a, s === 'monitored')} />
-  {:else if c.id === 'title'}<a class="title" href="#/library/music/albums/{a.id}">{a.title}</a>
+  {:else if c.id === 'title'}<span class="album"><Artwork src={artSrc(a.coverUrl, 32)} title={a.title} kind="music" shape="cover" width={32} /><a class="title" href="#/library/music/albums/{a.id}">{a.title}</a></span>
   {:else if c.id === 'tracks'}
     {#if a.trackCount}<Progress label="Tracks of {a.title} on disk" done={a.fileCount} total={a.trackCount} size="sm" showValue tone={a.status === 'downloaded' ? 'ok' : 'warn'} />{:else}—{/if}
   {:else if c.id === 'status'}<StatusBadge family="item" value={albumItemStatus(a)} size="sm" detail={a.quality} />
@@ -186,6 +188,7 @@
 {/if}
 
 <style>
+  .album { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
   .albums { display: grid; gap: var(--space-3); }
   .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
   h2 { font-size: var(--text-lg); }

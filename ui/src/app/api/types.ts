@@ -23,6 +23,9 @@ export interface Movie {
   path: string;
   fileId?: number;
   addedAt: string;
+  /** Cached artwork path (relative, like every API path); absent when the provider has none. */
+  posterUrl?: string;
+  fanartUrl?: string;
 }
 
 export interface MovieRecord {
@@ -70,6 +73,7 @@ export interface Series {
   runtimeMin?: number;
   altTitles?: string[] | null;
   posterUrl?: string;
+  fanartUrl?: string;
   rootFolder: string;
   path: string;
   profileKey: string;
@@ -472,7 +476,7 @@ export interface ArtistStats {
   lastRelease: string | null;
 }
 
-export interface ArtistSummary extends Artist { stats: ArtistStats }
+export interface ArtistSummary extends Artist { stats: ArtistStats; coverUrl?: string }
 
 export interface ArtistRecord {
   mbid: string;
@@ -509,6 +513,7 @@ export interface AlbumView extends Album {
   sizeOnDisk: number;
   quality?: string;
   cutoffMet: boolean;
+  coverUrl?: string;
 }
 
 export interface ArtistDetail { artist: ArtistSummary; albums: AlbumView[] | null }
@@ -530,3 +535,25 @@ export interface AlbumDetail { album: AlbumView; artist: { id: number; name: str
 
 export interface MusicProfileOption { key: string; name: string }
 export interface MusicProfiles { quality: (MusicProfileOption & { cutoff: string; isDefault: boolean })[]; metadata: MusicProfileOption[] }
+
+/** One run of the artwork cache's shrinking (counts and bytes freed). */
+export interface CacheRun { at: string; reencoded: number; resized: number; evicted: number; metadataEvicted: number; bytesFreed: number }
+
+/** GET system/cache: the artwork cache's usage. */
+export interface CacheStatus {
+  enabled: boolean;
+  dir: string;
+  maxSize: number;
+  usage: number;
+  imageBytes: number;
+  metadataBytes: number;
+  images: number;
+  variants: number;
+  misses: number;
+  requests: number;
+  hits: number;
+  hitRate: number;
+  highWater: number;
+  lowWater: number;
+  lastRun?: CacheRun;
+}

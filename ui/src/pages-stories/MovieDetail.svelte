@@ -15,7 +15,7 @@
   import ReleaseResults from '../lib/components/organisms/ReleaseResults/ReleaseResults.svelte';
   import { sortOptions } from '../app/interactive.svelte';
   import { ToastQueue } from '../lib/toast/toasts.svelte';
-  import { docksideDecisions, docksideHistory, downloads, NOW, nowDate, searchSources } from '../lib/storybook/fixtures';
+  import { artSwatch, docksideDecisions, docksideHistory, downloads, NOW, nowDate, searchSources } from '../lib/storybook/fixtures';
 
   interface Props { search?: boolean; stream?: boolean }
   let { search = true, stream = true }: Props = $props();
@@ -47,7 +47,7 @@
   });
 
   const entity = {
-    title: 'Dockside', kind: 'movie' as const, art: null, meta: '2026 · Harbourline Pictures · 1h 52m', monitor: 'monitored' as const,
+    title: 'Dockside', kind: 'movie' as const, art: artSwatch(210), meta: '2026 · Harbourline Pictures · 1h 52m', monitor: 'monitored' as const,
     status: [{ family: 'item' as const, value: 'queued', detail: 'downloading' }],
     facts: [{ label: 'Profile', value: 'HD' }, { label: 'Availability', value: 'Released 14 Nov' }, { label: 'Folder', value: '/data/media/movies/Dockside (2026)' }],
     back: { href: '#/library/movies', label: 'Movies' },
