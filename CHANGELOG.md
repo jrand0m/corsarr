@@ -2,7 +2,7 @@
 
 Short notes per release. Each release's assets, checksums and how to verify them are on its GitHub release page.
 
-## Unreleased
+## v0.5.5 — 2026-11-28
 
 - Migration plan: copy the shown rows as text or JSON, or download them.
 - Migration plan: the config-file snippet folds away as optional, and the environment variables for API keys are listed one per line with a copy button.
