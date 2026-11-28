@@ -50,8 +50,9 @@ func readText(path string) string {
 	return strings.TrimSpace(string(b))
 }
 
-// writeAtomic writes a file through a temporary name and a rename.
-func writeAtomic(path string, data []byte) error {
+// WriteAtomic writes a file through a temporary name and a rename, so a
+// reader never sees half of it.
+func WriteAtomic(path string, data []byte) error {
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
 		return err
@@ -134,11 +135,11 @@ func (s Store) Activate(id, version string) error {
 		previous = active
 	}
 	if previous != "" {
-		if err := writeAtomic(filepath.Join(s.idDir(id), filePrevious), []byte(previous+"\n")); err != nil {
+		if err := WriteAtomic(filepath.Join(s.idDir(id), filePrevious), []byte(previous+"\n")); err != nil {
 			return err
 		}
 	}
-	if err := writeAtomic(filepath.Join(s.idDir(id), fileActive), []byte(version+"\n")); err != nil {
+	if err := WriteAtomic(filepath.Join(s.idDir(id), fileActive), []byte(version+"\n")); err != nil {
 		return err
 	}
 	if s.prune(id, version, previous) {
@@ -195,13 +196,13 @@ func (s Store) Swap(id string) (string, error) {
 	if previous == "" {
 		return "", fmt.Errorf("%s has no previous version to roll back to", id)
 	}
-	if err := writeAtomic(filepath.Join(s.idDir(id), fileActive), []byte(previous+"\n")); err != nil {
+	if err := WriteAtomic(filepath.Join(s.idDir(id), fileActive), []byte(previous+"\n")); err != nil {
 		return "", err
 	}
 	if active == "" {
 		return previous, os.Remove(filepath.Join(s.idDir(id), filePrevious))
 	}
-	return previous, writeAtomic(filepath.Join(s.idDir(id), filePrevious), []byte(active+"\n"))
+	return previous, WriteAtomic(filepath.Join(s.idDir(id), filePrevious), []byte(active+"\n"))
 }
 
 // versions lists the stored versions of id.

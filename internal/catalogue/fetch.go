@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/jrand0m/corsarr/internal/modules"
 )
 
 // Doer sends HTTP requests (the shared outbound client).
@@ -209,10 +211,10 @@ func (f *Fetcher) store(url string, index, sig []byte, m meta) error {
 	if err := os.MkdirAll(d, 0o755); err != nil {
 		return err
 	}
-	if err := writeFile(filepath.Join(d, "index.json"), index); err != nil {
+	if err := modules.WriteAtomic(filepath.Join(d, "index.json"), index); err != nil {
 		return err
 	}
-	if err := writeFile(filepath.Join(d, "index.json.sig"), sig); err != nil {
+	if err := modules.WriteAtomic(filepath.Join(d, "index.json.sig"), sig); err != nil {
 		return err
 	}
 	return f.writeMeta(url, m)
@@ -220,13 +222,5 @@ func (f *Fetcher) store(url string, index, sig []byte, m meta) error {
 
 func (f *Fetcher) writeMeta(url string, m meta) error {
 	b, _ := json.Marshal(m)
-	return writeFile(filepath.Join(f.dir(url), "meta.json"), b)
-}
-
-func writeFile(path string, data []byte) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return modules.WriteAtomic(filepath.Join(f.dir(url), "meta.json"), b)
 }

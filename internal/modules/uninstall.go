@@ -35,7 +35,7 @@ func (s Store) writeRecord(id string, manifest []byte) error {
 	if err := os.MkdirAll(s.idDir(id), 0o755); err != nil {
 		return err
 	}
-	return writeAtomic(s.recordPath(id), manifest)
+	return WriteAtomic(s.recordPath(id), manifest)
 }
 
 func (s Store) dropRecord(id string) {

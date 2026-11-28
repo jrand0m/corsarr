@@ -486,14 +486,12 @@ func (p *PluginAdmin) sources() map[string]installRecord {
 
 func (p *PluginAdmin) writeSources(s map[string]installRecord) {
 	b, _ := json.MarshalIndent(s, "", "  ")
-	if err := os.MkdirAll(p.fetch.Dir, 0o755); err == nil {
-		tmp := p.sourcesPath() + ".tmp"
-		if err = os.WriteFile(tmp, b, 0o644); err == nil {
-			err = os.Rename(tmp, p.sourcesPath())
-		}
-		if err != nil {
-			p.d.Log.Warn("catalogue install record not written", "err", err)
-		}
+	err := os.MkdirAll(p.fetch.Dir, 0o755)
+	if err == nil {
+		err = modules.WriteAtomic(p.sourcesPath(), b)
+	}
+	if err != nil {
+		p.d.Log.Warn("catalogue install record not written", "err", err)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/jrand0m/corsarr/internal/plaintext"
@@ -62,12 +63,11 @@ type Entry struct {
 
 // Find returns the entry with id.
 func (ix Index) Find(id string) (Entry, bool) {
-	for _, e := range ix.Plugins {
-		if e.ID == id {
-			return e, true
-		}
+	i := slices.IndexFunc(ix.Plugins, func(e Entry) bool { return e.ID == id })
+	if i < 0 {
+		return Entry{}, false
 	}
-	return Entry{}, false
+	return ix.Plugins[i], true
 }
 
 // FormatError lists every problem of an index.
