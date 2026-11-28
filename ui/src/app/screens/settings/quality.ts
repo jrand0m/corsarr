@@ -71,20 +71,36 @@ export function repairCutoff(cutoff: string, groups: GroupDoc[]): string {
   return allowed.includes(cutoff) ? cutoff : allowed[allowed.length - 1] ?? '';
 }
 
+/** "1–10 GB", "above 5 GB". */
+function rangeText(c: ConditionDoc, unit: string | undefined): string {
+  const u = unit ? ` ${unit}` : '';
+  return c.max ? `${c.min ?? 0}–${c.max}${u}` : `above ${c.min ?? 0}${u}`;
+}
+
+/** The chosen values by their offered names; values the kind does not offer stay as they are. */
+const valueNames = (c: ConditionDoc, info: ConditionKindInfo | undefined): string[] =>
+  (c.values ?? []).map((v) => info?.values?.find((o) => o.value === v)?.label ?? v);
+
+/** "AAC", "AAC or AC3", "AAC, DTS or AC3". */
+const orList = (names: string[]): string =>
+  names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names[0] ?? '';
+
+/** "Audio codec is AAC or AC3", "Audio codec is anything but AAC". */
+function valuesSummary(label: string, not: string, c: ConditionDoc, info: ConditionKindInfo | undefined): string {
+  const list = orList(valueNames(c, info));
+  return c.except ? `${label} is anything but ${list}` : `${label} is${not} ${list}`;
+}
+
 /** "Audio codec is AAC or AC3", "Release title does not match \bDTS\b", "Size 1–10 GB". */
 export function conditionSummary(c: ConditionDoc, kinds: ConditionKindInfo[]): string {
   const info = kinds.find((k) => k.kind === c.kind);
   const label = info?.label ?? c.kind;
   const not = c.negate ? ' not' : '';
-  if (info?.input === 'pattern') return `${label} does${c.negate ? ' not' : ''} match ${c.pattern ?? ''}`;
-  if (info?.input === 'range') {
-    const unit = info.unit ? ` ${info.unit}` : '';
-    const range = c.max ? `${c.min ?? 0}–${c.max}${unit}` : `above ${c.min ?? 0}${unit}`;
-    return `${label} is${not} ${range}`;
+  switch (info?.input) {
+    case 'pattern': return `${label} does${not} match ${c.pattern ?? ''}`;
+    case 'range': return `${label} is${not} ${rangeText(c, info.unit)}`;
+    default: return valuesSummary(label, not, c, info);
   }
-  const names = (c.values ?? []).map((v) => info?.values?.find((o) => o.value === v)?.label ?? v);
-  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names[0] ?? '';
-  return c.except ? `${label} is anything but ${list}` : `${label} is${not} ${list}`;
 }
 
 /** Summary of a whole format for the list: first two conditions and a count. */
@@ -104,17 +120,20 @@ export interface Refused { fields: Record<string, string>; conditions: Record<st
 export function refusal(body: Record<string, unknown> | undefined, message?: string): Refused {
   const out: Refused = { fields: {}, conditions: [], message };
   const fields = (body?.fields ?? []) as { field: string; message: string }[];
-  for (const f of fields) {
-    const m = /^conditions\.(\d+)\.(\w+)/.exec(f.field ?? '');
-    if (m) {
-      const i = Number(m[1]);
-      out.conditions[i] = { ...(out.conditions[i] ?? {}), [m[2]]: f.message };
-      continue;
-    }
-    const top = (f.field ?? '').split('.')[0] || 'form';
-    out.fields[top] = out.fields[top] ? `${out.fields[top]} ${f.message}` : f.message;
-  }
+  for (const f of fields) routeRefusal(out, f);
   return out;
+}
+
+/** Puts one refused field's message on its condition field, or on its top-level field (the form when unnamed). */
+function routeRefusal(out: Refused, f: { field: string; message: string }): void {
+  const m = /^conditions\.(\d+)\.(\w+)/.exec(f.field ?? '');
+  if (m) {
+    const i = Number(m[1]);
+    out.conditions[i] = { ...(out.conditions[i] ?? {}), [m[2]]: f.message };
+    return;
+  }
+  const top = (f.field ?? '').split('.')[0] || 'form';
+  out.fields[top] = out.fields[top] ? `${out.fields[top]} ${f.message}` : f.message;
 }
 
 export function emptyFormat(): FormatDoc {
