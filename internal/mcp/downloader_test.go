@@ -13,8 +13,8 @@ import (
 	"github.com/jrand0m/corsarr/internal/store"
 )
 
-func grabOf(c *calls, kind string, id int64, release string, confirm bool) (domain.Grab, automation.Decided, error) {
-	c.add(fmt.Sprintf("%s.grab %d %s %v", kind, id, release, confirm))
+func grabOf(c *calls, kind string, id int64, release string, confirm bool, to domain.ObjectKey) (domain.Grab, automation.Decided, error) {
+	c.add(strings.TrimSpace(fmt.Sprintf("%s.grab %d %s %v %s", kind, id, release, confirm, to)))
 	d := automation.Decided{Release: domain.Release{Title: "Rel." + release}}
 	switch release {
 	case "shadow":
@@ -22,19 +22,22 @@ func grabOf(c *calls, kind string, id int64, release string, confirm bool) (doma
 	case "gone":
 		return domain.Grab{}, d, automation.ErrUnknownRelease
 	}
-	return domain.Grab{Downloader: "qbit"}, d, nil
+	if to == "" {
+		to = "qbit"
+	}
+	return domain.Grab{Downloader: to}, d, nil
 }
 
-func (f *fakeMovieSearch) GrabRelease(_ context.Context, id int64, rel string, confirm bool) (domain.Grab, automation.Decided, error) {
-	return grabOf(f.c, "movie", id, rel, confirm)
+func (f *fakeMovieSearch) GrabReleaseTo(_ context.Context, id int64, rel string, confirm bool, to domain.ObjectKey) (domain.Grab, automation.Decided, error) {
+	return grabOf(f.c, "movie", id, rel, confirm, to)
 }
 
-func (f *fakeTVSearch) GrabRelease(_ context.Context, id int64, rel string, confirm bool) (domain.Grab, automation.Decided, error) {
-	return grabOf(f.c, "tv", id, rel, confirm)
+func (f *fakeTVSearch) GrabReleaseTo(_ context.Context, id int64, rel string, confirm bool, to domain.ObjectKey) (domain.Grab, automation.Decided, error) {
+	return grabOf(f.c, "tv", id, rel, confirm, to)
 }
 
-func (f *fakeMusicSearch) GrabRelease(_ context.Context, id int64, rel string, confirm bool) (domain.Grab, automation.Decided, error) {
-	return grabOf(f.c, "music", id, rel, confirm)
+func (f *fakeMusicSearch) GrabReleaseTo(_ context.Context, id int64, rel string, confirm bool, to domain.ObjectKey) (domain.Grab, automation.Decided, error) {
+	return grabOf(f.c, "music", id, rel, confirm, to)
 }
 
 // fakeDownloaders answers per client key: "qbit" does everything, "sab"
@@ -194,7 +197,8 @@ func TestGrabRelease(t *testing.T) {
 	h.ok(t, "grab_release", map[string]any{"kind": "movie", "id": 2, "releaseId": "r1"}, "grabbed Rel.r1 on qbit")
 	h.ok(t, "grab_release", map[string]any{"kind": "tv", "id": 1, "releaseId": "r2", "override": true}, "grabbed")
 	h.ok(t, "grab_release", map[string]any{"kind": "music", "id": 100, "releaseId": "shadow"}, "recorded, not sent (shadow mode): Rel.shadow")
-	if !h.c.has("tv.grab 1 r2 true") || !h.c.has("movie.grab 2 r1 false") {
+	h.ok(t, "grab_release", map[string]any{"kind": "movie", "id": 3, "releaseId": "r3", "downloader": "sab"}, "grabbed Rel.r3 on sab")
+	if !h.c.has("tv.grab 1 r2 true") || !h.c.has("movie.grab 2 r1 false") || !h.c.has("movie.grab 3 r3 false sab") {
 		t.Fatal(h.c.list)
 	}
 	h.fails(t, "grab_release", map[string]any{"kind": "movie", "id": 2, "releaseId": "gone"}, "search again")

@@ -57,6 +57,8 @@ type grabBody struct {
 	MovieID   int64  `json:"movieId"`
 	ReleaseID string `json:"releaseId"`
 	Confirm   bool   `json:"confirm"`
+	// Downloader is the client to send it to; empty picks one.
+	Downloader domain.ObjectKey `json:"downloader"`
 }
 
 func (s *Service) grabRelease(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +66,7 @@ func (s *Service) grabRelease(w http.ResponseWriter, r *http.Request) {
 	if !api.DecodeJSON(w, r, &b) {
 		return
 	}
-	g, d, err := s.GrabRelease(r.Context(), b.MovieID, b.ReleaseID, b.Confirm)
+	g, d, err := s.GrabReleaseTo(r.Context(), b.MovieID, b.ReleaseID, b.Confirm, b.Downloader)
 	switch {
 	case errors.Is(err, ErrUnknownRelease):
 		api.WriteError(w, http.StatusNotFound, "release_expired", err.Error(), "releaseId")

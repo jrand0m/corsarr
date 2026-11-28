@@ -52,6 +52,12 @@ func (s *Service) interactive(ctx context.Context, sc scope, req domain.SearchRe
 // and "allowed" overrides go through, "confirm" needs confirm, "never" is
 // refused.
 func (s *Service) GrabRelease(ctx context.Context, seriesID int64, releaseID string, confirm bool) (domain.Grab, automation.Decided, error) {
+	return s.GrabReleaseTo(ctx, seriesID, releaseID, confirm, "")
+}
+
+// GrabReleaseTo is GrabRelease sent to one download client; an empty key
+// picks the first usable client for the release's protocol.
+func (s *Service) GrabReleaseTo(ctx context.Context, seriesID int64, releaseID string, confirm bool, to domain.ObjectKey) (domain.Grab, automation.Decided, error) {
 	sc, err := s.scopeOf(ctx, seriesID)
 	if err != nil {
 		return domain.Grab{}, automation.Decided{}, err
@@ -64,6 +70,6 @@ func (s *Service) GrabRelease(ctx context.Context, seriesID int64, releaseID str
 	if err := automation.OverrideAllowed(d.Decision, confirm); err != nil {
 		return domain.Grab{}, d, err
 	}
-	g, err := s.grab(ctx, sc, d, domain.OriginInteractive, !d.Decision.Accepted)
+	g, err := s.grab(ctx, sc, d, domain.OriginInteractive, !d.Decision.Accepted, to)
 	return g, d, err
 }

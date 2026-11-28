@@ -160,7 +160,7 @@ func (s *Service) Search(ctx context.Context, movieID int64, origin domain.Searc
 	ds, sum := s.collect(ctx, m, origin, nopEmitter{})
 	if top, n, ok := best(ds); ok {
 		sum.Accepted = n
-		switch _, err := s.grab(ctx, m, top, origin, false); {
+		switch _, err := s.grab(ctx, m, top, origin, false, ""); {
 		case err == nil:
 			sum.Grabbed = top.Release.Title
 		case errors.Is(err, ErrShadowed):
@@ -187,18 +187,18 @@ func (s *Service) searchable() error {
 
 // grab sends a decided release to the queue. In shadow mode it records the
 // would-be grab as decision.shadowed instead.
-func (s *Service) grab(ctx context.Context, m domain.Movie, d Decided, origin domain.SearchOrigin, override bool) (domain.Grab, error) {
+func (s *Service) grab(ctx context.Context, m domain.Movie, d Decided, origin domain.SearchOrigin, override bool, to domain.ObjectKey) (domain.Grab, error) {
 	items := []domain.EventItem{m.EventItem()}
 	switch mode := s.d.Modes.Of(domain.KindMovie); mode {
 	case domain.ModeShadow:
 		s.publish(domain.EvDecisionShadowed, actorOf(origin), items, domain.GrabEventData{Release: d.Release, Decision: d.Decision,
-			Origin: origin, Override: override})
+			Origin: origin, Override: override, Downloader: to})
 		return domain.Grab{}, ErrShadowed
 	case domain.ModeDisabled:
 		return domain.Grab{}, domain.ModeError{Kind: domain.KindMovie, Mode: mode}
 	}
 	g, err := s.d.Queue.Grab(ctx, queue.GrabRequest{Kind: domain.KindMovie, Items: items,
-		Release: d.Release, Decision: d.Decision, Origin: origin, Override: override})
+		Release: d.Release, Decision: d.Decision, Origin: origin, Override: override, Downloader: to})
 	if err == nil {
 		s.refresh(ctx, m.ID)
 	}
@@ -231,6 +231,12 @@ var (
 // "allowed" overrides go straight through, "confirm" needs confirm=true,
 // "never" is refused.
 func (s *Service) GrabRelease(ctx context.Context, movieID int64, releaseID string, confirm bool) (domain.Grab, Decided, error) {
+	return s.GrabReleaseTo(ctx, movieID, releaseID, confirm, "")
+}
+
+// GrabReleaseTo is GrabRelease sent to one download client; an empty key
+// picks the first usable client for the release's protocol.
+func (s *Service) GrabReleaseTo(ctx context.Context, movieID int64, releaseID string, confirm bool, to domain.ObjectKey) (domain.Grab, Decided, error) {
 	m, err := s.d.Movies.Get(ctx, movieID)
 	if err != nil {
 		return domain.Grab{}, Decided{}, err
@@ -246,7 +252,7 @@ func (s *Service) GrabRelease(ctx context.Context, movieID int64, releaseID stri
 	if err := overrideAllowed(d.Decision, confirm); err != nil {
 		return domain.Grab{}, d, err
 	}
-	g, err := s.grab(ctx, m, d, domain.OriginInteractive, !d.Decision.Accepted)
+	g, err := s.grab(ctx, m, d, domain.OriginInteractive, !d.Decision.Accepted, to)
 	return g, d, err
 }
 

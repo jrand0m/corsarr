@@ -119,7 +119,7 @@ func (s *Service) run(ctx context.Context, sc scope, origin domain.SearchOrigin)
 	ds, sum := s.collect(ctx, sc, req, automation.NopEmitter)
 	if top, n, ok := automation.Best(ds); ok {
 		sum.Accepted = n
-		switch _, err := s.grab(ctx, sc, top, origin, false); {
+		switch _, err := s.grab(ctx, sc, top, origin, false, ""); {
 		case err == nil:
 			sum.Grabbed = top.Release.Title
 		case errors.Is(err, automation.ErrShadowed):
@@ -135,18 +135,18 @@ func (s *Service) run(ctx context.Context, sc scope, origin domain.SearchOrigin)
 
 // grab sends a decided release to the queue linked to the album; in shadow
 // mode it records decision.shadowed instead.
-func (s *Service) grab(ctx context.Context, sc scope, d automation.Decided, origin domain.SearchOrigin, override bool) (domain.Grab, error) {
+func (s *Service) grab(ctx context.Context, sc scope, d automation.Decided, origin domain.SearchOrigin, override bool, to domain.ObjectKey) (domain.Grab, error) {
 	items := []domain.EventItem{sc.album.EventItem(sc.artist.Name)}
 	switch mode := s.d.Modes.Of(domain.KindMusic); mode {
 	case domain.ModeShadow:
 		s.publish(domain.EvDecisionShadowed, automation.ActorOf(origin), items, domain.GrabEventData{Release: d.Release,
-			Decision: d.Decision, Origin: origin, Override: override})
+			Decision: d.Decision, Origin: origin, Override: override, Downloader: to})
 		return domain.Grab{}, automation.ErrShadowed
 	case domain.ModeDisabled:
 		return domain.Grab{}, domain.ModeError{Kind: domain.KindMusic, Mode: mode}
 	}
 	g, err := s.d.Queue.Grab(ctx, queue.GrabRequest{Kind: domain.KindMusic, Items: items, Release: d.Release,
-		Decision: d.Decision, Origin: origin, Override: override})
+		Decision: d.Decision, Origin: origin, Override: override, Downloader: to})
 	if err == nil {
 		s.refreshAlbum(ctx, sc.album.ID)
 	}
@@ -204,6 +204,12 @@ func (s *Service) Interactive(ctx context.Context, albumID int64, em automation.
 // the release is decided again; accepted and "allowed" overrides go
 // through, "confirm" needs confirm, "never" is refused.
 func (s *Service) GrabRelease(ctx context.Context, albumID int64, releaseID string, confirm bool) (domain.Grab, automation.Decided, error) {
+	return s.GrabReleaseTo(ctx, albumID, releaseID, confirm, "")
+}
+
+// GrabReleaseTo is GrabRelease sent to one download client; an empty key
+// picks the first usable client for the release's protocol.
+func (s *Service) GrabReleaseTo(ctx context.Context, albumID int64, releaseID string, confirm bool, to domain.ObjectKey) (domain.Grab, automation.Decided, error) {
 	sc, err := s.scopeOf(ctx, albumID)
 	if err != nil {
 		return domain.Grab{}, automation.Decided{}, err
@@ -216,6 +222,6 @@ func (s *Service) GrabRelease(ctx context.Context, albumID int64, releaseID stri
 	if err := automation.OverrideAllowed(d.Decision, confirm); err != nil {
 		return domain.Grab{}, d, err
 	}
-	g, err := s.grab(ctx, sc, d, domain.OriginInteractive, !d.Decision.Accepted)
+	g, err := s.grab(ctx, sc, d, domain.OriginInteractive, !d.Decision.Accepted, to)
 	return g, d, err
 }

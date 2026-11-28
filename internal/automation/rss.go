@@ -35,7 +35,7 @@ func (s *Service) syncOne(ctx context.Context, ix Indexer) error {
 		return err
 	}
 	for _, pick := range s.bestPerMovie(ctx, rels) {
-		if _, err := s.grab(ctx, pick.movie, pick.d, domain.OriginRSS, false); !errors.Is(err, ErrShadowed) {
+		if _, err := s.grab(ctx, pick.movie, pick.d, domain.OriginRSS, false, ""); !errors.Is(err, ErrShadowed) {
 			s.warn("rss grab", err, "movie", pick.movie.ID)
 		}
 	}

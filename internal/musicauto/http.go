@@ -64,6 +64,8 @@ func (s *Service) releases(w http.ResponseWriter, r *http.Request) {
 type grabBody struct {
 	ReleaseID string `json:"releaseId"`
 	Confirm   bool   `json:"confirm"`
+	// Downloader is the client to send it to; empty picks one.
+	Downloader domain.ObjectKey `json:"downloader"`
 }
 
 func (s *Service) grabRelease(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +74,7 @@ func (s *Service) grabRelease(w http.ResponseWriter, r *http.Request) {
 	if !ok || !api.DecodeJSON(w, r, &b) {
 		return
 	}
-	g, d, err := s.GrabRelease(r.Context(), id, b.ReleaseID, b.Confirm)
+	g, d, err := s.GrabReleaseTo(r.Context(), id, b.ReleaseID, b.Confirm, b.Downloader)
 	refusal := map[error]struct {
 		status int
 		code   string
