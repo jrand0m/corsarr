@@ -8,6 +8,7 @@ import (
 
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/parse"
 	"github.com/jrand0m/corsarr/internal/plugin"
 )
@@ -126,18 +127,18 @@ func TestChooseEditionPrefersOfficialDigitalCommonEarliest(t *testing.T) {
 
 func TestPathsUseArtistAlbumYearAndDiscFolders(t *testing.T) {
 	ar := domain.Artist{Name: "Example Artist", Path: "/music/Example Artist"}
-	if ArtistFolder(ar) != "Example Artist" {
-		t.Fatal(ArtistFolder(ar))
+	if ArtistFolder(ar, naming.DefaultMusic()) != "Example Artist" {
+		t.Fatal(ArtistFolder(ar, naming.DefaultMusic()))
 	}
 	al := domain.Album{Title: "First: Album", ReleaseDate: date(2020, 3), MediumCount: 1}
 	tr := domain.Track{Medium: 1, Number: 3, Title: "Third Song"}
 	want := filepath.Join("/music/Example Artist", "First - Album (2020)", "Example Artist - First - Album - 03 - Third Song.flac")
-	if got := TrackPath(ar, al, tr, ".flac"); got != want {
+	if got := TrackPath(ar, al, tr, ".flac", "", naming.DefaultMusic()); got != want {
 		t.Fatalf("%s want %s", got, want)
 	}
 	al.MediumCount = 2
 	tr.Medium, tr.MediumFormat = 2, "CD"
-	if got := filepath.Base(filepath.Dir(TrackPath(ar, al, tr, ".flac"))); got != "CD 02" {
+	if got := filepath.Base(filepath.Dir(TrackPath(ar, al, tr, ".flac", "", naming.DefaultMusic()))); got != "CD 02" {
 		t.Fatalf("medium folder %q", got)
 	}
 	tr.MediumFormat = "Digital Media"
@@ -148,7 +149,7 @@ func TestPathsUseArtistAlbumYearAndDiscFolders(t *testing.T) {
 	if got := MediumFolder(al, tr); got != "Disc 12" {
 		t.Fatal(got)
 	}
-	if AlbumPath(ar, al) != filepath.Join(ar.Path, "First - Album (2020)") {
+	if AlbumPath(ar, al, naming.DefaultMusic()) != filepath.Join(ar.Path, "First - Album (2020)") {
 		t.Fatal("album path")
 	}
 }

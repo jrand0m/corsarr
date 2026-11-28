@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/plugin"
 )
 
@@ -52,13 +53,14 @@ type RootFolder struct {
 
 // Instance is one configured plugin instance.
 type Instance struct {
-	Section  string           `json:"section"`
-	Key      domain.ObjectKey `json:"key"`
-	Type     string           `json:"type"`
-	Name     string           `json:"name"`
-	Enabled  bool             `json:"enabled"`
-	Settings plugin.Settings  `json:"-"` // secrets resolved to plain strings for the plugin
-	Loc      Location         `json:"location"`
+	Section  string            `json:"section"`
+	Key      domain.ObjectKey  `json:"key"`
+	Type     string            `json:"type"`
+	Name     string            `json:"name"`
+	Enabled  bool              `json:"enabled"`
+	Settings plugin.Settings   `json:"-"` // secrets resolved to plain strings for the plugin
+	Refs     map[string]string `json:"-"` // setting key → the reference a secret was given as (${env:…}, ${file:…})
+	Loc      Location          `json:"location"`
 }
 
 // Config is the validated configuration. Bootstrap values are typed fields;
@@ -87,6 +89,8 @@ type Config struct {
 	MCP MCP
 	// Plugins is the plugin-module section.
 	Plugins Plugins
+	// Naming is each kind's folder and file naming.
+	Naming map[domain.MediaKind]naming.Scheme
 	// Instances maps section (indexers, downloadClients, …) → key → instance.
 	Instances map[string]map[domain.ObjectKey]Instance
 	Source    Source
@@ -298,7 +302,49 @@ func build(s *Schema, t tree) *Config {
 	c.MCP = mcpOf(t)
 	c.Cache = cacheOf(t)
 	c.Plugins = pluginsOf(t)
+	c.Naming = namingOf(t)
 	return c
+}
+
+// namingDefaults are the built-in schemes of the kinds the naming section covers.
+var namingDefaults = map[domain.MediaKind]func() naming.Scheme{
+	domain.KindTV: naming.DefaultTV, domain.KindMovie: naming.DefaultMovie, domain.KindMusic: naming.DefaultMusic,
+}
+
+func namingOf(t tree) map[domain.MediaKind]naming.Scheme {
+	out := map[domain.MediaKind]naming.Scheme{}
+	section, _ := t["naming"].(tree)
+	for _, k := range namingKinds {
+		kt, _ := section[string(k)].(tree)
+		tmpl := namingTemplates[k]
+		s := naming.Scheme{}
+		s.Rename, _ = kt["rename"].(bool)
+		colon, _ := kt["colon"].(string)
+		s.Colon = naming.ColonMode(colon)
+		slots := []*string{&s.Folder, &s.Sub, &s.File}
+		if len(tmpl) == 2 { // no inner folder
+			slots = []*string{&s.Folder, &s.File}
+		}
+		for i, f := range tmpl {
+			*slots[i], _ = kt[f.name].(string)
+		}
+		out[k] = s.Or(namingDefaults[k]())
+	}
+	return out
+}
+
+// NamingFor is a kind's naming; the built-in naming when there is no config
+// or the kind has none.
+func (c *Config) NamingFor(k domain.MediaKind) naming.Scheme {
+	if c != nil {
+		if s, ok := c.Naming[k]; ok {
+			return s
+		}
+	}
+	if def, ok := namingDefaults[k]; ok {
+		return def()
+	}
+	return naming.Scheme{Rename: true, Colon: naming.ColonSmart}
 }
 
 func ruleModes(t tree) map[string]string {
@@ -387,11 +433,15 @@ func instances(section string, t tree) map[domain.ObjectKey]Instance {
 	out := map[domain.ObjectKey]Instance{}
 	for key, v := range t {
 		f := v.(tree)
-		inst := Instance{Section: section, Key: domain.ObjectKey(key), Type: f["type"].(string), Enabled: f["enabled"].(bool), Settings: plugin.Settings{}}
+		inst := Instance{Section: section, Key: domain.ObjectKey(key), Type: f["type"].(string), Enabled: f["enabled"].(bool),
+			Settings: plugin.Settings{}, Refs: map[string]string{}}
 		inst.Name, _ = f["name"].(string)
 		for k, fv := range f {
 			if k != "type" && k != "name" && k != "enabled" {
 				inst.Settings[k] = plainSetting(fv)
+			}
+			if s, ok := fv.(Secret); ok && s.Ref != "" {
+				inst.Refs[k] = s.Ref
 			}
 		}
 		out[inst.Key] = inst

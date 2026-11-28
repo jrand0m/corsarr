@@ -17,6 +17,7 @@ import (
 
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/rootfolders"
 	"github.com/jrand0m/corsarr/internal/rules"
 	"github.com/jrand0m/corsarr/internal/store"
@@ -77,8 +78,10 @@ type Deps struct {
 	// root folder's health updates at once; may be nil.
 	NoSpace func(root string)
 	Modes   domain.Modes // media-kind modes; nil = all active
-	Now     func() time.Time
-	Log     *slog.Logger
+	// Naming is each kind's file naming; nil = the built-in naming.
+	Naming func(domain.MediaKind) naming.Scheme
+	Now    func() time.Time
+	Log    *slog.Logger
 }
 
 // Service is the import module.
@@ -316,4 +319,18 @@ func (s *Service) linkedMovie(ctx context.Context, d store.StoredDownload) (doma
 		}
 	}
 	return domain.Movie{}, errors.New("download has no linked movie")
+}
+
+// naming is the file naming in effect for a kind.
+func (s *Service) naming(k domain.MediaKind) naming.Scheme {
+	if s.d.Naming != nil {
+		return s.d.Naming(k)
+	}
+	switch k {
+	case domain.KindTV:
+		return naming.DefaultTV()
+	case domain.KindMusic:
+		return naming.DefaultMusic()
+	}
+	return naming.DefaultMovie()
 }

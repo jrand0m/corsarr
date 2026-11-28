@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/plugin"
 )
 
@@ -56,6 +57,7 @@ type Deps struct {
 	Pub         Publisher
 	Metadata    func() (plugin.SeriesMetadata, bool) // first running TV metadata plugin
 	RootFolders func() []string                      // tv root folders from config
+	Naming      func() naming.Scheme                 // series folder naming; nil = built-in
 	Modes       domain.Modes                         // media-kind modes; nil = all active
 	Art         domain.ArtLink                       // artwork addresses in API answers; nil = unchanged
 	Now         func() time.Time
@@ -169,7 +171,7 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (domain.Series, bool,
 		return ser, false, err
 	}
 	ApplyRecord(&ser, rec)
-	ser.Path = filepath.Join(ser.RootFolder, FolderName(ser))
+	ser.Path = filepath.Join(ser.RootFolder, FolderName(ser, s.naming()))
 	eps, seasons := ApplyMode(mode, Episodes(rec), s.d.Now())
 	if req.Seasons != nil {
 		eps, seasons = ApplySeasons(req.Seasons, Episodes(rec))
@@ -325,4 +327,12 @@ func (s *Service) Delete(ctx context.Context, id int64, deleteFiles bool) error 
 	}
 	s.publish(domain.EvItemDeleted, "user", items, domain.ItemEventData{Path: ser.Path, Monitored: ser.Monitored, FilesDeleted: deleteFiles})
 	return nil
+}
+
+// naming is the TV naming in effect.
+func (s *Service) naming() naming.Scheme {
+	if s.d.Naming == nil {
+		return naming.DefaultTV()
+	}
+	return s.d.Naming()
 }

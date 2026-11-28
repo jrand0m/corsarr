@@ -159,11 +159,14 @@ func TestParseScope(t *testing.T) {
 
 func TestQualityMapping(t *testing.T) {
 	cases := map[string]string{"WEBDL-1080p": "webdl-1080p", "Bluray-2160p Remux": "remux-2160p", "Remux-1080p": "remux-1080p",
-		"SDTV": "sdtv", "Raw-HD": "unknown"}
+		"SDTV": "sdtv", "Raw-HD": "unknown", "Bluray-576p": "bluray-576p"}
 	for in, want := range cases {
 		if got, _ := qualityID(in); string(got) != want {
 			t.Errorf("%s → %s, want %s", in, got, want)
 		}
+	}
+	if _, exact := qualityID("Bluray-576p"); !exact {
+		t.Error("Bluray-576p must map exactly")
 	}
 	if _, exact := qualityID("Raw-HD"); exact {
 		t.Error("unknown quality reported exact")
@@ -271,7 +274,7 @@ downloadClients:
 	}
 	v := configView(cfg)
 	if !v.RootFolders["/media/tv"] || !v.Indexers["http://idx/torznab"] || !v.Clients["http://qbit:8080"] ||
-		!v.KindExplicit["tv"] || v.KindExplicit["movie"] {
+		!v.KindExplicit["tv"] || v.KindExplicit["movie"] || v.KindMode["tv"] != "active" || v.KindMode["movie"] != "" {
 		t.Fatalf("%+v", v)
 	}
 	if e := configView(nil); len(e.RootFolders) != 0 {
@@ -287,5 +290,113 @@ func TestKeysAreUniqueAndWellFormed(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("%v", got)
 		}
+	}
+}
+
+func TestConfigModeReasonReadsTheEffectiveMode(t *testing.T) {
+	cases := []struct {
+		cur  string
+		want domain.KindMode
+		has  string
+		not  string
+	}{
+		{"shadow", domain.ModeShadow, "already sets shadow; nothing to change", "set mediaKinds"},
+		{"active", domain.ModeShadow, "set mediaKinds.movie.mode: shadow", "already"},
+		{"active", domain.ModeActive, "already sets active", "set mediaKinds"},
+		{"disabled", domain.ModeActive, "set mediaKinds.movie.mode: active", "already"},
+	}
+	for _, c := range cases {
+		got := configModeReason(domain.KindMovie, c.cur, c.want)
+		if !strings.Contains(got, c.has) || strings.Contains(got, c.not) {
+			t.Errorf("%s→%s: %q", c.cur, c.want, got)
+		}
+	}
+}
+
+func TestKindModeEntryForAConfigThatAlreadySaysShadow(t *testing.T) {
+	r := newRig(t)
+	snaps := r.svc.read(context.Background(), r.req, func(Progress) {})
+	st, err := r.svc.state(context.Background(), snaps, r.req.Options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Config.KindExplicit = map[string]bool{"tv": true, "movie": true}
+	st.Config.KindMode = map[string]string{"tv": "shadow", "movie": "active"}
+	rep := BuildPlan(snaps, st, r.req.Options)
+	if e := entry(t, rep, "corsarr:mode:tv"); e.Outcome != OutManaged || !strings.Contains(e.Reason, "nothing to change") {
+		t.Errorf("tv: %+v", e)
+	}
+	if e := entry(t, rep, "corsarr:mode:movie"); e.Outcome != OutManaged || !strings.Contains(e.Reason, "mediaKinds.movie.mode: shadow") {
+		t.Errorf("movie: %+v", e)
+	}
+}
+
+func managerSnap(url string, ids ...int) Snapshot {
+	s := Snapshot{Source: SourceInfo{App: Prowlarr, URL: url, Instance: "p-" + url}}
+	for _, id := range ids {
+		s.Indexers = append(s.Indexers, SrcIndexer{ID: id, Name: fmt.Sprintf("Tracker %d", id), Impl: "Cardigann", Protocol: "torrent", Enabled: true})
+	}
+	return s
+}
+
+func TestRoutedIndexersShareOneManagerSecret(t *testing.T) {
+	direct := SrcIndexer{ID: 9, Name: "Own feed", Impl: "Torznab", Protocol: "torrent", Enabled: true, BaseURL: "http://feed/torznab", KeyMasked: true}
+	snap := managerSnap("http://manager:9696", 1, 2, 3)
+	snap.Indexers = append(snap.Indexers, direct)
+	rep := BuildPlan([]Snapshot{snap}, State{}, Options{})
+	if got := strings.Join(rep.Env, ","); got != "CORSARR_SECRET_INDEXERS_OWNFEED_APIKEY,CORSARR_SECRET_PROWLARR_APIKEY" {
+		t.Fatalf("env %s\n%s", got, rep.Config)
+	}
+	if n := strings.Count(rep.Config, "${env:CORSARR_SECRET_PROWLARR_APIKEY}"); n != 3 {
+		t.Fatalf("%d routed indexers use the shared key\n%s", n, rep.Config)
+	}
+	for _, id := range []string{"prowlarr:indexer:1", "prowlarr:indexer:2", "prowlarr:indexer:3"} {
+		if e := entry(t, rep, id); e.Outcome != OutApproximate || !strings.Contains(e.Reason, "set CORSARR_SECRET_PROWLARR_APIKEY") {
+			t.Errorf("%s: %+v", id, e)
+		}
+	}
+	if strings.Count(rep.Config, "enabled: false") != 1 {
+		t.Fatalf("routed indexers follow the source's enabled state; the direct one waits for its key:\n%s", rep.Config)
+	}
+}
+
+func TestRoutedIndexersReuseTheConfigsManagerReference(t *testing.T) {
+	st := State{Config: ConfigView{ManagerRefs: map[string]string{"manager": "${env:PROWLARR_API_KEY}"}}}
+	rep := BuildPlan([]Snapshot{managerSnap("http://manager:9696", 1, 2)}, st, Options{})
+	if len(rep.Env) != 0 || strings.Count(rep.Config, "${env:PROWLARR_API_KEY}") != 2 {
+		t.Fatalf("env %v\n%s", rep.Env, rep.Config)
+	}
+	if e := entry(t, rep, "prowlarr:indexer:1"); !strings.Contains(e.Reason, "already references (${env:PROWLARR_API_KEY})") {
+		t.Error(e.Reason)
+	}
+}
+
+func TestEachManagerGetsItsOwnSecret(t *testing.T) {
+	rep := BuildPlan([]Snapshot{managerSnap("http://one:9696", 1), managerSnap("http://two:9696", 1)}, State{}, Options{})
+	if got := strings.Join(rep.Env, ","); got != "CORSARR_SECRET_PROWLARR_APIKEY,CORSARR_SECRET_PROWLARR_TWO_APIKEY" {
+		t.Fatalf("env %s", got)
+	}
+}
+
+func TestConfigViewFindsTheManagerReference(t *testing.T) {
+	yml := `indexers:
+  one:
+    type: torznab
+    url: http://manager:9696/1
+    apiKey: ${env:PROWLARR_API_KEY}
+  two:
+    type: torznab
+    url: http://other/torznab
+    apiKey: plain
+`
+	in := config.Inputs{ReadFile: func(string) ([]byte, error) { return []byte(yml), nil },
+		Resolver: config.Resolver{Getenv: func(string) (string, bool) { return "x", true }}}
+	cfg, err := config.LoadFrom(config.Source{Kind: config.SourceFile, Path: "c.yml"}, in, plugin.Default)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := configView(cfg)
+	if v.ManagerRefs["manager"] != "${env:PROWLARR_API_KEY}" || v.ManagerRefs["other"] != "" {
+		t.Fatalf("%v", v.ManagerRefs)
 	}
 }

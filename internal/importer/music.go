@@ -196,7 +196,7 @@ func (s *Service) placeTracks(ctx context.Context, in musicImport, m music.FileM
 		}
 		done = append(done, r)
 	}
-	return musicOutcome(in, done, len(m.Missing))
+	return musicOutcome(in, done, len(m.Missing), music.AlbumPath(in.artist, in.album, s.naming(domain.KindMusic)))
 }
 
 // placeTrack runs the upgrade check for one track, places the file and links
@@ -212,7 +212,7 @@ func (s *Service) placeTrack(ctx context.Context, in musicImport, t domain.Track
 			return trackResult{outcome: "skipped", reason: why}, nil
 		}
 	}
-	dest := music.TrackPath(in.artist, in.album, t, filepath.Ext(f.Path))
+	dest := music.TrackPath(in.artist, in.album, t, filepath.Ext(f.Path), f.Path, s.naming(domain.KindMusic))
 	replaced, err := s.put(ctx, f.Path, dest, cur, hasCur)
 	if err != nil {
 		return trackResult{}, err
@@ -243,7 +243,7 @@ func (s *Service) trackFile(ctx context.Context, t domain.Track) (domain.Library
 // musicOutcome folds the track results into the album's import item:
 // imported (or upgraded) when any track was placed, with missing tracks
 // named in the reason; blocked as not an upgrade when every track was skipped.
-func musicOutcome(in musicImport, done []trackResult, missing int) result {
+func musicOutcome(in musicImport, done []trackResult, missing int, folder string) result {
 	it := domain.ImportItem{Item: in.album.Ref()}
 	placed, upgraded := 0, false
 	var skipped string
@@ -265,7 +265,7 @@ func musicOutcome(in musicImport, done []trackResult, missing int) result {
 	it.Outcome = map[bool]string{true: "upgraded", false: "imported"}[upgraded]
 	it.Reason = importNotes(in.edition, missing)
 	o := domain.ImportOutcome{DownloadID: in.d.ID, Status: domain.ImportImported, Items: []domain.ImportItem{it}}
-	return result{outcome: o, folders: []string{music.AlbumPath(in.artist, in.album)}, items: in.items}
+	return result{outcome: o, folders: []string{folder}, items: in.items}
 }
 
 // importNotes joins what a person should know about an album import.

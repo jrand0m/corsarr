@@ -137,6 +137,53 @@ mediaKinds:
 #     # Which kind of media lives in this folder. One of: tv, movie, music, book.
 #     kind:
 
+# Folder and file names per kind of media; tokens in braces, e.g. {Movie Title}{ (Release
+# Year)}, with text inside the braces written only when the token has a value.
+naming:
+  # How TV series folders and files are named.
+  tv:
+    # Rename imported files with the file template; false keeps each file's own name inside the
+    # item's folder. true or false.
+    rename: true
+    # What replaces a colon in names: delete drops it, dash writes -, spaceDash writes " - ",
+    # smart writes " - " after a word and drops it between digits. One of: delete, dash,
+    # spaceDash, smart.
+    colon: smart
+    # Folder of a series added from now on, inside its root folder.
+    seriesFolder: '{Series Title}{ (Release Year)}'
+    # Season folder inside the series folder (series that use season folders).
+    seasonFolder: Season {Season}
+    # Name of an imported episode file, without the extension.
+    episodeFile: '{Series Title} - S{Season}E{Episode}{ - Episode Title}{ [Quality Full]}'
+  # How movies folders and files are named.
+  movie:
+    # Rename imported files with the file template; false keeps each file's own name inside the
+    # item's folder. true or false.
+    rename: true
+    # What replaces a colon in names: delete drops it, dash writes -, spaceDash writes " - ",
+    # smart writes " - " after a word and drops it between digits. One of: delete, dash,
+    # spaceDash, smart.
+    colon: smart
+    # Folder of a movie added from now on, inside its root folder.
+    movieFolder: '{Movie Title}{ (Release Year)}'
+    # Name of an imported movie file, without the extension.
+    movieFile: '{Movie Title}{ (Release Year)}{ - Edition}{ [Quality Full]}{ - Release Group}'
+  # How music folders and files are named.
+  music:
+    # Rename imported files with the file template; false keeps each file's own name inside the
+    # item's folder. true or false.
+    rename: true
+    # What replaces a colon in names: delete drops it, dash writes -, spaceDash writes " - ",
+    # smart writes " - " after a word and drops it between digits. One of: delete, dash,
+    # spaceDash, smart.
+    colon: smart
+    # Folder of an artist added from now on, inside its root folder.
+    artistFolder: '{Artist Name}'
+    # Album folder inside the artist folder.
+    albumFolder: '{Album Title}{ (Release Year)}'
+    # Name of an imported track file, without the extension.
+    trackFile: '{Artist Name} - {Album Title} - {Track} - {Track Title}'
+
 # Automatic clean-up and upgrade rules.
 # automation:
 #   # One entry per rule, keyed by rule id (upgradereplace, itemdelete, recyclepurge, …).

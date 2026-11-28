@@ -43,6 +43,7 @@ type Deps struct {
 	Cache       MetaCache                           // metadata cache; nil = no caching
 	Folders     Folders                             // moves item folders (the importer owns files)
 	RootFolders func() []string                     // movie root folders from config
+	Naming      func() naming.Scheme                // movie folder and file naming; nil = built-in
 	Modes       domain.Modes                        // media-kind modes; nil = all active
 	Art         domain.ArtLink                      // artwork addresses in API answers; nil = unchanged
 	Now         func() time.Time
@@ -118,7 +119,7 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (domain.Movie, bool, 
 		return m, false, err
 	}
 	applyRecord(&m, rec)
-	m.Path = filepath.Join(m.RootFolder, FolderName(m))
+	m.Path = filepath.Join(m.RootFolder, FolderName(m, s.naming()))
 	m, created, err := s.d.Repo.Add(ctx, m)
 	if err != nil || !created {
 		return m, false, err
@@ -175,10 +176,17 @@ func applyRecord(m *domain.Movie, rec plugin.MovieRecord) {
 	m.PosterURL, m.FanartURL = rec.PosterURL, rec.FanartURL
 }
 
-// FolderName renders the movie folder from the default template.
-func FolderName(m domain.Movie) string {
-	name, _ := naming.Preview(naming.DefaultMovieFolder, naming.Values{MovieTitle: m.Title, ReleaseYear: m.Year})
-	return name
+// FolderName renders the movie folder from the naming's folder template.
+func FolderName(m domain.Movie, sch naming.Scheme) string {
+	return sch.FolderName(naming.Values{MovieTitle: m.Title, ReleaseYear: m.Year, IMDbID: m.IMDBID}, naming.DefaultMovieFolder)
+}
+
+// naming is the movie naming in effect.
+func (s *Service) naming() naming.Scheme {
+	if s.d.Naming == nil {
+		return naming.DefaultMovie()
+	}
+	return s.d.Naming()
 }
 
 func (s *Service) afterAdd(ctx context.Context, m domain.Movie, searchNow bool) {

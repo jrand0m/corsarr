@@ -318,10 +318,18 @@ describe('path check', () => {
 
 describe('config-managed notice', () => {
   const modes: KindState[] = [
-    { kind: 'tv', mode: 'shadow', managedByConfig: true },
+    { kind: 'tv', mode: 'active', managedByConfig: true },
     { kind: 'movie', mode: 'active', managedByConfig: false },
     { kind: 'music', mode: 'active', managedByConfig: true },
   ];
+
+  it('leaves out a managed kind the config already sets to the wanted mode', () => {
+    const f = defaultForm();
+    f.sources[0].include = true;
+    expect(configNotice(f, [{ kind: 'tv', mode: 'shadow', managedByConfig: true }]).kinds).toEqual([]);
+    f.activate = true;
+    expect(configNotice(f, modes).kinds).toEqual([]);
+  });
 
   it('names managed kinds of the chosen sources with the snippet, and what still imports', () => {
     const f = defaultForm();
@@ -333,8 +341,6 @@ describe('config-managed notice', () => {
     expect(n.importing).toEqual(['Library', 'Profiles', 'In-flight downloads', 'Blocklist']);
     expect(n.nothingWritten).toBe(false);
     expect(hasConfigNotice(n)).toBe(true);
-    f.activate = true;
-    expect(configNotice(f, modes).kinds[0].snippet).toContain('mode: active');
   });
 
   it('warns when every chosen category is config-only, and stays quiet when nothing is managed', () => {

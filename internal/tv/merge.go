@@ -26,10 +26,9 @@ func nonNil(xs []string) []string {
 	return xs
 }
 
-// FolderName renders the series folder from the default template.
-func FolderName(s domain.Series) string {
-	name, _ := naming.Preview(naming.DefaultSeriesFolder, naming.Values{SeriesTitle: s.Title, ReleaseYear: s.Year})
-	return name
+// FolderName renders the series folder from the naming's folder template.
+func FolderName(s domain.Series, sch naming.Scheme) string {
+	return sch.FolderName(naming.Values{SeriesTitle: s.Title, ReleaseYear: s.Year}, naming.DefaultSeriesFolder)
 }
 
 // Episodes turns a record's episodes into library episodes (unmonitored).
@@ -118,15 +117,14 @@ func (m *Merge) gone(e domain.Episode) {
 
 // SeasonFolder is the folder of a season inside the series folder ("" when
 // the series keeps every episode in its own folder).
-func SeasonFolder(s domain.Series, season int) string {
+func SeasonFolder(s domain.Series, season int, sch naming.Scheme) string {
 	switch {
 	case !s.SeasonFolders:
 		return ""
 	case season == 0:
 		return naming.DefaultSpecialFolder
 	}
-	name, _ := naming.Preview(naming.DefaultSeasonFolder, naming.Values{Season: pad(season)})
-	return name
+	return sch.SubName(naming.Values{SeriesTitle: s.Title, ReleaseYear: s.Year, Season: pad(season)}, naming.DefaultSeasonFolder)
 }
 
 func pad(n int) string {
@@ -146,13 +144,16 @@ func EpisodeNumbers(eps []domain.Episode) string {
 }
 
 // FilePath is where an episode file goes: series folder, season folder and
-// the default episode file name.
-func FilePath(s domain.Series, eps []domain.Episode, quality, ext string) string {
-	title := ""
+// the episode file name (the original file's own name when renaming is off).
+func FilePath(s domain.Series, eps []domain.Episode, quality, ext, original string, sch naming.Scheme) string {
+	title, air := "", ""
 	if len(eps) == 1 {
 		title = eps[0].Title
 	}
-	name, _ := naming.Options{Extension: ext}.Preview(naming.DefaultEpisodeFile, naming.Values{SeriesTitle: s.Title,
-		Season: pad(eps[0].Season), Episode: EpisodeNumbers(eps), EpisodeTitle: title, QualityFull: quality})
-	return filepath.Join(s.Path, SeasonFolder(s, eps[0].Season), name)
+	if eps[0].AirAt != nil {
+		air = eps[0].AirAt.Format("2006-01-02")
+	}
+	name := sch.FileName(naming.Values{SeriesTitle: s.Title, ReleaseYear: s.Year, Season: pad(eps[0].Season),
+		Episode: EpisodeNumbers(eps), EpisodeTitle: title, QualityFull: quality, AirDate: air}, naming.DefaultEpisodeFile, ext, original)
+	return filepath.Join(s.Path, SeasonFolder(s, eps[0].Season, sch), name)
 }

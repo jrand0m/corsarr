@@ -146,9 +146,21 @@ type wProvider struct {
 }
 
 type wNaming struct {
-	RenameEpisodes *bool
-	RenameMovies   *bool
-	RenameTracks   *bool
+	RenameEpisodes         *bool
+	RenameMovies           *bool
+	RenameTracks           *bool
+	ColonReplacementFormat json.RawMessage
+	StandardEpisodeFormat  string
+	DailyEpisodeFormat     string
+	AnimeEpisodeFormat     string
+	SeriesFolderFormat     string
+	SeasonFolderFormat     string
+	SpecialsFolderFormat   string
+	StandardMovieFormat    string
+	MovieFolderFormat      string
+	StandardTrackFormat    string
+	MultiDiscTrackFormat   string
+	ArtistFolderFormat     string
 }
 
 type wPage[T any] struct {

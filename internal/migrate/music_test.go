@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
 )
 
@@ -45,8 +44,9 @@ func lidarrRoutes(day time.Time) map[string]any {
 				"secondaryAlbumTypes": []any{allowedType("Studio", true), allowedType("Live", true)},
 				"releaseStatuses":     []any{allowedStatus("Official", true), allowedStatus("Bootleg", true)}},
 		},
-		"/rootfolder":    []any{map[string]any{"id": 1, "path": src("music/")}},
-		"/config/naming": map[string]any{"renameTracks": true},
+		"/rootfolder": []any{map[string]any{"id": 1, "path": src("music/")}},
+		"/config/naming": map[string]any{"renameTracks": true, "colonReplacementFormat": "dash", "artistFolderFormat": "{Artist Name}",
+			"standardTrackFormat": "{Album Title} ({Release Year})/{track:00} {Track Title}"},
 		"/downloadclient": []any{map[string]any{"id": 1, "name": "qbit", "implementation": "QBittorrent", "protocol": "torrent",
 			"enable": true, "fields": []any{field("host", "qbit"), field("port", 8080), field("musicCategory", "music")}}},
 		"/artist": []any{
@@ -111,12 +111,12 @@ func TestLidarrPlanOutcomesPerObject(t *testing.T) {
 	r.lidarr.onlyGets(t)
 	want := map[string]Outcome{
 		"lidarr:artist:1": OutCreate, "lidarr:artist:2": OutUnsupported,
-		"lidarr:trackfile:900": OutCreate, "lidarr:trackfile:901": OutApproximate, "lidarr:trackfile:902": OutSkip,
+		"lidarr:trackfile:900": OutCreate, "lidarr:trackfile:901": OutCreate, "lidarr:trackfile:902": OutSkip,
 		"lidarr:profile:1": OutUnchanged, "lidarr:profile:2": OutApproximate,
 		"lidarr:metadataprofile:1": OutUnchanged, "lidarr:metadataprofile:2": OutApproximate,
-		"lidarr:naming:rename": OutUnsupported, "lidarr:downloadclient:1": OutManaged,
+		"lidarr:naming:music": OutManaged, "lidarr:downloadclient:1": OutManaged,
 		"lidarr:download:dddd": OutCreate, "lidarr:blocklist:5": OutCreate,
-		"lidarr:history:80": OutCreate, "lidarr:history:81": OutCreate, "lidarr:history:82": OutSkip,
+		"lidarr:history:80": OutCreate, "lidarr:history:81": OutCreate, "lidarr:history:82": OutCreate,
 		"corsarr:mode:music": OutCreate, "corsarr:rules:all": OutCreate,
 	}
 	for id, out := range want {
@@ -128,7 +128,6 @@ func TestLidarrPlanOutcomesPerObject(t *testing.T) {
 		"lidarr:profile:2":         "MP3-96",
 		"lidarr:metadataprofile:2": "release status",
 		"lidarr:artist:1":          "1 monitored albums outside the metadata profile",
-		"lidarr:trackfile:901":     `"AAC-VBR"`,
 	}
 	for id, part := range reasons {
 		if e := entry(t, rep, id); !strings.Contains(e.Reason, part) {
@@ -177,7 +176,7 @@ func TestLidarrApplyAdoptsArtistsAlbumsAndFiles(t *testing.T) {
 	if f.Quality != "flac" || f.Group != "GRP" || f.Item.Kind != domain.KindMusic || f.Item.ID != tracks[0].ID {
 		t.Fatalf("file %+v", f)
 	}
-	if f2, _, _ := r.st.Library().File(ctx, tracks[1].FileID); f2.Quality != string(decide.AudioUnknown) {
+	if f2, _, _ := r.st.Library().File(ctx, tracks[1].FileID); f2.Quality != "aac-vbr" {
 		t.Fatalf("file %+v", f2)
 	}
 	dls, _ := r.st.Queue().Downloads(ctx, domain.StateQueued)
@@ -192,8 +191,17 @@ func TestLidarrApplyAdoptsArtistsAlbumsAndFiles(t *testing.T) {
 		t.Fatalf("overrides %+v", ov)
 	}
 	hist, _, _ := r.st.History().List(ctx, 0, 10)
-	if len(hist) != 2 {
+	if len(hist) != 3 {
 		t.Fatalf("history %+v", hist)
+	}
+	for _, h := range hist {
+		ev := h.Event
+		if !ev.Imported || ev.Actor != "import:lidarr" {
+			t.Fatalf("history row not marked imported: %+v", h)
+		}
+		if data, _ := ev.Data.(map[string]any); ev.Type == domain.EvImportFailed && data["incomplete"] != true {
+			t.Fatalf("incomplete album import lost its mark: %+v", h)
+		}
 	}
 }
 
@@ -279,13 +287,16 @@ func TestLidarrReadsUseTheV1API(t *testing.T) {
 
 func TestAudioQualityMapping(t *testing.T) {
 	cases := map[string]string{"FLAC": "flac", "FLAC 24bit": "flac-24", "MP3-320": "mp3-320", "mp3-vbr-v0": "mp3-vbr-v0",
-		"OGG Vorbis Q8": "vorbis", "MP3-8": "mp3-low", "Unknown": "audio-unknown", "AAC-VBR": "audio-unknown"}
+		"OGG Vorbis Q8": "vorbis", "MP3-8": "mp3-low", "Unknown": "audio-unknown", "AAC-VBR": "aac-vbr", "Weird Codec": "audio-unknown"}
 	for in, want := range cases {
 		if got, _ := audioQualityID(in); string(got) != want {
 			t.Errorf("%s → %s, want %s", in, got, want)
 		}
 	}
-	if _, exact := audioQualityID("AAC-VBR"); exact {
+	if _, exact := audioQualityID("AAC-VBR"); !exact {
+		t.Error("AAC-VBR must map exactly")
+	}
+	if _, exact := audioQualityID("Weird Codec"); exact {
 		t.Error("unknown quality reported exact")
 	}
 	if got := belowMusicFloor([]string{"MP3-96", "MP3-128", "FLAC", "Unknown"}); strings.Join(got, ",") != "MP3-96,Unknown" {

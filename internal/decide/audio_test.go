@@ -105,3 +105,24 @@ func TestMusicDecisionUsesTheAudioLadderAndAlbumSizes(t *testing.T) {
 		t.Fatal("audio definitions")
 	}
 }
+
+func TestAACVBRRungSitsAfterAAC256(t *testing.T) {
+	l := AudioLadder()
+	var at int
+	for i, q := range l {
+		if q.ID == "aac-vbr" {
+			at = i
+		}
+	}
+	if at == 0 || l[at].Name != "AAC-VBR" || l[at-1].ID != "aac-256" {
+		t.Fatalf("aac-vbr at %d", at)
+	}
+	if tier, _ := AudioTierOf("aac-vbr"); tier != AudioLossy || DefaultDefinitions().For("aac-vbr").Max() != 3 {
+		t.Fatal("aac-vbr must be lossy with lossy bounds")
+	}
+	for _, p := range DefaultProfiles(domain.KindMusic)[:2] {
+		if _, ok := p.Rank("aac-vbr"); !ok {
+			t.Errorf("%s must allow aac-vbr", p.Spec().Name)
+		}
+	}
+}
