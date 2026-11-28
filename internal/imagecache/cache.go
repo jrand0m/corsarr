@@ -204,7 +204,7 @@ func (c *Cache) fill(ctx context.Context, key string, role Role, origin string) 
 	now := c.d.Now()
 	data, err := fetch(ctx, c.d.HTTP, origin)
 	if errors.Is(err, ErrMissing) {
-		miss := store.ImageEntry{Key: key, Origin: origin, Role: role.String(), LastAccess: now, MissUntil: now.Add(missFor), CreatedAt: now}
+		miss := store.ImageEntry{Key: key, Origin: origin, Role: roleName(role), LastAccess: now, MissUntil: now.Add(missFor), CreatedAt: now}
 		c.mu.Lock()
 		perr := c.d.Index.Put(ctx, miss)
 		c.mu.Unlock()
@@ -217,7 +217,7 @@ func (c *Cache) fill(ctx context.Context, key string, role Role, origin string) 
 	if err != nil {
 		return store.ImageEntry{}, err
 	}
-	e := entryOf(key, 0, origin, role.String(), enc, now)
+	e := entryOf(key, 0, origin, roleName(role), enc, now)
 	return e, c.store(ctx, e, enc.Data)
 }
 

@@ -111,3 +111,14 @@ func TestModes(t *testing.T) {
 		t.Fatal("AllActive")
 	}
 }
+
+func TestArtLink(t *testing.T) {
+	var none ArtLink
+	if none.Of(ArtPoster, "https://a/p.jpg") != "https://a/p.jpg" {
+		t.Fatal("nil link must keep the address")
+	}
+	link := ArtLink(func(r ArtRole, o string) string { return string(r) + ":" + o })
+	if link.Of(ArtBackdrop, "x") != "b:x" || link.Of(ArtPoster, "") != "" {
+		t.Fatal("link")
+	}
+}

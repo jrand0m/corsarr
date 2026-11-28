@@ -15,18 +15,19 @@ import (
 	"encoding/hex"
 	"net/url"
 	"strings"
+
+	"github.com/jrand0m/corsarr/internal/domain"
 )
 
 // Role says how an image is used, which decides its stored width.
-type Role byte
+type Role = domain.ArtRole
 
 const (
-	RolePoster   Role = 'p' // posters and covers
-	RoleBackdrop Role = 'b' // fanart and backdrops
+	RolePoster   = domain.ArtPoster
+	RoleBackdrop = domain.ArtBackdrop
 )
 
-// String is the role's name in the index.
-func (r Role) String() string {
+func roleName(r Role) string {
 	if r == RoleBackdrop {
 		return "backdrop"
 	}

@@ -40,7 +40,7 @@ func TestLinks(t *testing.T) {
 	if Key("https://a/x") == Key("https://a/y") || len(Key("x")) != 64 {
 		t.Fatal("keys")
 	}
-	if RolePoster.String() != "poster" || RoleBackdrop.String() != "backdrop" {
+	if roleName(RolePoster) != "poster" || roleName(RoleBackdrop) != "backdrop" {
 		t.Fatal("role names")
 	}
 }

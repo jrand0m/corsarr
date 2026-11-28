@@ -36,6 +36,35 @@ func TestMergeStoresArtwork(t *testing.T) {
 	}
 }
 
+func TestMetadataEvictionKeepsLibraryRecords(t *testing.T) {
+	e := newEnv(t)
+	if _, _, err := e.svc.Add(ctx, AddRequest{TMDBID: 603}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Lookup(ctx, "tmdb:700"); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := e.svc.MetadataBytes(ctx)
+	n, freed, err := e.svc.EvictMetadata(ctx, 1)
+	after, _ := e.svc.MetadataBytes(ctx)
+	if err != nil || n != 1 || freed == 0 || after != before-freed {
+		t.Fatal(n, freed, err, before, after)
+	}
+	if n, _, _ := e.svc.EvictMetadata(ctx, 1<<20); n != 0 {
+		t.Fatal("library record evicted")
+	}
+	if n, _, _ := e.svc.EvictMetadata(ctx, 0); n != 0 {
+		t.Fatal("nothing wanted")
+	}
+	none := New(Deps{})
+	if b, _ := none.MetadataBytes(ctx); b != 0 {
+		t.Fatal(b)
+	}
+	if n, _, _ := none.EvictMetadata(ctx, 5); n != 0 {
+		t.Fatal(n)
+	}
+}
+
 func TestNextRefreshIsStaggered(t *testing.T) {
 	at := time.Unix(0, 0)
 	if NextRefresh(at, 24).Sub(at) != RefreshEvery || NextRefresh(at, 5).Sub(at) != RefreshEvery+5*time.Hour {

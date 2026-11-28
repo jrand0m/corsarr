@@ -60,7 +60,8 @@ func newEnv(t *testing.T) *env {
 	t.Helper()
 	e := &env{st: testkit.Store(t), rec: &testkit.Recorder{}, root: t.TempDir(), now: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)}
 	e.meta = &fakeMeta{recs: map[string]plugin.MovieRecord{
-		"603": {IDs: map[string]string{"tmdb": "603", "imdb": "tt0133093"}, Title: "The Matrix", Year: 1999, RuntimeMin: 136, Digital: day(1999, 9, 1)},
+		"603": {IDs: map[string]string{"tmdb": "603", "imdb": "tt0133093"}, Title: "The Matrix", Year: 1999, RuntimeMin: 136, Digital: day(1999, 9, 1),
+			PosterURL: "https://img.example/603.jpg", FanartURL: "https://img.example/603b.jpg"},
 		"700": {IDs: map[string]string{"tmdb": "700"}, Title: "Future Film", Year: 2024, InCinemas: day(2024, 6, 10)},
 	}}
 	e.svc = New(Deps{Repo: e.st.Movies(), Pub: e.rec, RootFolders: func() []string { return []string{e.root} },

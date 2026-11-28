@@ -147,7 +147,7 @@ func (g *degrader) lowerQuality(e *store.ImageEntry) (bool, error) {
 func (g *degrader) lowerWidth(e *store.ImageEntry) (bool, error) {
 	s := g.c.d.Settings
 	role := RolePoster
-	if e.Role == RoleBackdrop.String() {
+	if e.Role == roleName(RoleBackdrop) {
 		role = RoleBackdrop
 	}
 	w := nextWidth(e.Width, s.widthFloor(role), s.Degrade.WidthStep)

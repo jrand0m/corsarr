@@ -44,6 +44,7 @@ type Deps struct {
 	Folders     Folders                             // moves item folders (the importer owns files)
 	RootFolders func() []string                     // movie root folders from config
 	Modes       domain.Modes                        // media-kind modes; nil = all active
+	Art         domain.ArtLink                      // artwork addresses in API answers; nil = unchanged
 	Now         func() time.Time
 	Log         *slog.Logger
 }
