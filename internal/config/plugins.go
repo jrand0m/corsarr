@@ -86,20 +86,21 @@ var (
 	moduleVersionRe = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]{1,32})?$`)
 )
 
-func checkModuleID(s string) error {
-	if !moduleIDRe.MatchString(s) {
-		return errors.New("must be a plugin id: 2 to 32 lower-case letters and digits, starting with a letter")
-	}
-	return nil
-}
+var (
+	checkModuleID = matching(moduleIDRe, "must be a plugin id: 2 to 32 lower-case letters and digits, starting with a letter")
+	// checkModuleVersion never sees an empty version: the decoder skips
+	// checks on unset values.
+	checkModuleVersion = matching(moduleVersionRe, "must be a version such as 1.2.0")
+)
 
-// checkModuleVersion never sees an empty version: the decoder skips checks
-// on unset values.
-func checkModuleVersion(s string) error {
-	if !moduleVersionRe.MatchString(s) {
-		return errors.New("must be a version such as 1.2.0")
+// matching is a check that refuses a value the pattern does not match.
+func matching(re *regexp.Regexp, problem string) func(string) error {
+	return func(s string) error {
+		if !re.MatchString(s) {
+			return errors.New(problem)
+		}
+		return nil
 	}
-	return nil
 }
 
 func checkCatalogueURL(s string) error {
