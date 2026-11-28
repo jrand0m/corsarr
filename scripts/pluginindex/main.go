@@ -1,7 +1,7 @@
 // Command pluginindex writes, signs and checks the plugin index a release
 // publishes, and describes plugin modules as SBOMs.
 //
-//	go run ./scripts/pluginindex build -release vX.Y.Z -epoch <unix> -o plugins-index.json <module.wasm>…
+//	go run ./scripts/pluginindex build -release vX.Y.Z [-min-corsarr X.Y.Z] -epoch <unix> -o plugins-index.json <module.wasm>…
 //	go run ./scripts/pluginindex sign -key index-key.pem -o plugins-index.json.sig plugins-index.json
 //	go run ./scripts/pluginindex verify -pub <keyId>.pub plugins-index.json plugins-index.json.sig
 //	go run ./scripts/pluginindex keygen -o index-key.pem    (prints the key id and the public key line)
@@ -46,7 +46,7 @@ func usage() {
 }
 
 func epoch(v int64) (time.Time, error) {
-	if v <= 0 {
+	if v < 0 {
 		return time.Time{}, errors.New("-epoch must be the source date in Unix seconds")
 	}
 	return time.Unix(v, 0), nil
@@ -55,7 +55,8 @@ func epoch(v int64) (time.Time, error) {
 func build(args []string) error {
 	fs := flag.NewFlagSet("build", flag.ExitOnError)
 	rel := fs.String("release", "", "release tag")
-	ep := fs.Int64("epoch", 0, "source date (SOURCE_DATE_EPOCH)")
+	minVersion := fs.String("min-corsarr", "", "oldest corsarr that runs the modules (the version being released, without v)")
+	ep := fs.Int64("epoch", -1, "source date (SOURCE_DATE_EPOCH)")
 	out := fs.String("o", "plugins-index.json", "output file")
 	_ = fs.Parse(args)
 	when, err := epoch(*ep)
@@ -70,7 +71,7 @@ func build(args []string) error {
 		}
 		files = append(files, release.ModuleFile{Name: filepath.Base(p), Data: b})
 	}
-	idx, err := release.BuildIndex(*rel, when, files)
+	idx, err := release.BuildIndex(*rel, *minVersion, when, files)
 	if err != nil {
 		return err
 	}
@@ -171,7 +172,7 @@ func keygen(args []string) error {
 
 func sbom(args []string) error {
 	fs := flag.NewFlagSet("sbom", flag.ExitOnError)
-	ep := fs.Int64("epoch", 0, "source date (SOURCE_DATE_EPOCH)")
+	ep := fs.Int64("epoch", -1, "source date (SOURCE_DATE_EPOCH)")
 	ns := fs.String("namespace", "", "SPDX document namespace (a URL unique to this file)")
 	out := fs.String("o", "", "output file (default: <module>.spdx.json)")
 	_ = fs.Parse(args)

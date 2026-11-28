@@ -24,7 +24,7 @@ func moduleFile(t *testing.T, id, version string, mutate ...func(*abi.Manifest))
 var sourceDate = time.Unix(1764320400, 0)
 
 func TestBuildIndex(t *testing.T) {
-	b, err := BuildIndex("v1.4.0", sourceDate, []ModuleFile{
+	b, err := BuildIndex("v1.4.0", "1.4.0", sourceDate, []ModuleFile{
 		moduleFile(t, "zeta", "2.0.0"),
 		moduleFile(t, "alpha", "1.0.0", func(m *abi.Manifest) { m.Description, m.License = "Does things.", "MIT" }),
 	})
@@ -48,7 +48,7 @@ func TestBuildIndex(t *testing.T) {
 	if strings.Contains(string(b), `"author"`) || strings.Contains(string(b), `"attestation"`) || !strings.HasSuffix(string(b), "}\n") {
 		t.Errorf("empty fields must be left out:\n%s", b)
 	}
-	again, _ := BuildIndex("v1.4.0", sourceDate, []ModuleFile{moduleFile(t, "alpha", "1.0.0", func(m *abi.Manifest) {
+	again, _ := BuildIndex("v1.4.0", "1.4.0", sourceDate, []ModuleFile{moduleFile(t, "alpha", "1.0.0", func(m *abi.Manifest) {
 		m.Description, m.License = "Does things.", "MIT"
 	}), moduleFile(t, "zeta", "2.0.0")})
 	if !bytes.Equal(b, again) {
@@ -57,7 +57,10 @@ func TestBuildIndex(t *testing.T) {
 }
 
 func TestBuildIndexRefuses(t *testing.T) {
-	dev, err := BuildIndex("v1.4.0-3-gabc-dirty", sourceDate, nil)
+	if _, err := BuildIndex("v1.4.0", "v1.4.0", sourceDate, nil); err == nil {
+		t.Error("minimum version with a v accepted")
+	}
+	dev, err := BuildIndex("v1.4.0-3-gabc-dirty", "", sourceDate, nil)
 	if err != nil || strings.Contains(string(dev), "minCorsarr") || !strings.Contains(string(dev), `"plugins": []`) {
 		t.Errorf("dev build: %s %v", dev, err)
 	}
@@ -71,7 +74,7 @@ func TestBuildIndexRefuses(t *testing.T) {
 		"no manifest":  {{Name: "x-1.0.0.wasm", Data: wasmtest.Assemble(nil, nil)}},
 		"too many":     make([]ModuleFile, MaxIndexPlugins+1),
 	} {
-		if _, err := BuildIndex("v1.0.0", sourceDate, files); err == nil {
+		if _, err := BuildIndex("v1.0.0", "", sourceDate, files); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}

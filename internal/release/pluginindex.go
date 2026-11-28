@@ -67,21 +67,20 @@ type ModuleFile struct {
 	Data []byte
 }
 
-var releaseRe = regexp.MustCompile(`^v(\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?)$`)
+var semverRe = regexp.MustCompile(`^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)
 
 // BuildIndex writes the index of a release: one entry per module, copied
 // from the manifest embedded in it (validated as corsarr validates it on
-// load), sorted by id. generated is the release's source date. The oldest
-// corsarr that can run the modules is the release itself when release is a
-// version tag; other builds name none.
-func BuildIndex(release string, generated time.Time, files []ModuleFile) ([]byte, error) {
+// load), sorted by id. generated is the release's source date; minCorsarr,
+// the oldest corsarr that can run the modules (a version without "v", or ""
+// for none), is the version being released.
+func BuildIndex(release, minCorsarr string, generated time.Time, files []ModuleFile) ([]byte, error) {
 	if len(files) > MaxIndexPlugins {
 		return nil, fmt.Errorf("%d modules; an index holds at most %d", len(files), MaxIndexPlugins)
 	}
 	idx := PluginIndex{Schema: IndexSchema, Release: release, Generated: generated.UTC().Format(time.RFC3339), Plugins: []PluginEntry{}}
-	minVersion := ""
-	if m := releaseRe.FindStringSubmatch(release); m != nil {
-		minVersion = m[1]
+	if minCorsarr != "" && !semverRe.MatchString(minCorsarr) {
+		return nil, fmt.Errorf("minimum corsarr version %q is not a version such as 1.4.0", minCorsarr)
 	}
 	seen := map[string]bool{}
 	for _, f := range files {
@@ -93,7 +92,7 @@ func BuildIndex(release string, generated time.Time, files []ModuleFile) ([]byte
 			return nil, fmt.Errorf("%s: plugin %s is listed twice", f.Name, e.ID)
 		}
 		seen[e.ID] = true
-		e.MinCorsarr = minVersion
+		e.MinCorsarr = minCorsarr
 		idx.Plugins = append(idx.Plugins, e)
 	}
 	sort.Slice(idx.Plugins, func(i, j int) bool { return idx.Plugins[i].ID < idx.Plugins[j].ID })
