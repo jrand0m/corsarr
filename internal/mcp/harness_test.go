@@ -133,6 +133,9 @@ func (h *harness) callOn(t *testing.T, sess *Session, name string, args any) cal
 		IsError    bool           `json:"isError"`
 	}
 	_ = json.Unmarshal(out.Result, &r)
+	if !r.IsError {
+		checkOutput(t, h.s.byName[name], r.Structured)
+	}
 	return callOut{Text: r.Content[0].Text, Data: r.Structured, IsError: r.IsError}
 }
 

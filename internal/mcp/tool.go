@@ -15,6 +15,7 @@ type Tool struct {
 	Title       string
 	Description string
 	Input       schema
+	Output      schema // the structuredContent's shape (outputOf the result type)
 	Write       bool
 	Destructive bool
 	Idempotent  bool
@@ -30,11 +31,12 @@ type Result struct {
 }
 
 type toolInfo struct {
-	Name        string      `json:"name"`
-	Title       string      `json:"title,omitempty"`
-	Description string      `json:"description"`
-	InputSchema schema      `json:"inputSchema"`
-	Annotations annotations `json:"annotations"`
+	Name         string      `json:"name"`
+	Title        string      `json:"title,omitempty"`
+	Description  string      `json:"description"`
+	InputSchema  schema      `json:"inputSchema"`
+	OutputSchema schema      `json:"outputSchema,omitempty"`
+	Annotations  annotations `json:"annotations"`
 }
 
 type annotations struct {
@@ -46,7 +48,7 @@ type annotations struct {
 }
 
 func (t Tool) info() toolInfo {
-	return toolInfo{Name: t.Name, Title: t.Title, Description: t.Description, InputSchema: t.Input,
+	return toolInfo{Name: t.Name, Title: t.Title, Description: t.Description, InputSchema: t.Input, OutputSchema: t.Output,
 		Annotations: annotations{Title: t.Title, ReadOnlyHint: !t.Write, DestructiveHint: t.Destructive,
 			IdempotentHint: t.Idempotent || !t.Write, OpenWorldHint: t.OpenWorld}}
 }

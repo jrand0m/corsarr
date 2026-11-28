@@ -168,20 +168,20 @@ func actionResult(what string, err error) (Result, error) {
 	switch {
 	case errors.Is(err, queue.ErrShadowed):
 		return Result{Text: what + ": recorded, not sent (shadow mode)",
-			Data: map[string]any{"action": what, "sent": false, "recorded": true, "reason": err.Error()}}, nil
+			Data: ActionOut{Action: what, Recorded: true, Reason: err.Error()}}, nil
 	case errors.Is(err, plugin.ErrUnsupported):
 		return Result{}, unsupported(err.Error())
 	case err != nil:
 		return Result{}, err
 	}
-	return Result{Text: what + ": done", Data: map[string]any{"action": what, "sent": true}}, nil
+	return Result{Text: what + ": done", Data: ActionOut{Action: what, Sent: true}}, nil
 }
 
 // ── reads ────────────────────────────────────────────────────────────────────
 
 func (s *Service) listDownloaders(ctx context.Context, _ struct{}) (Result, error) {
 	list := s.d.Downloaders.Clients(ctx)
-	return Result{Text: fmt.Sprintf("%d download clients", len(list)), Data: map[string]any{"downloaders": list}}, nil
+	return Result{Text: fmt.Sprintf("%d download clients", len(list)), Data: DownloadersOut{Downloaders: list}}, nil
 }
 
 type queueArgs struct {
@@ -221,7 +221,7 @@ func (s *Service) testDownloader(ctx context.Context, in idArgs) (Result, error)
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Text: in.Downloader + ": ok", Data: map[string]any{"downloader": in.Downloader, "ok": true}}, nil
+	return Result{Text: in.Downloader + ": ok", Data: TestOut{Downloader: in.Downloader, OK: true}}, nil
 }
 
 // ── writes with arguments ────────────────────────────────────────────────────
@@ -285,8 +285,9 @@ func (s *Service) toggleAltSpeed(ctx context.Context, in altArgs) (Result, error
 	}
 	on, err := s.d.Downloaders.SetAltSpeed(ctx, key, in.On)
 	res, err := actionResult("toggle_alt_speed", err)
-	if m, ok := res.Data.(map[string]any); ok {
-		m["on"] = on
+	if out, ok := res.Data.(ActionOut); ok {
+		out.On = &on
+		res.Data = out
 	}
 	return res, err
 }
@@ -310,11 +311,11 @@ func (s *Service) grabRelease(ctx context.Context, in grabArgs) (Result, error) 
 	g, d, err := grabber.GrabReleaseTo(ctx, in.ID, in.ReleaseID, in.Override, domain.ObjectKey(in.Downloader))
 	if errors.Is(err, automation.ErrShadowed) {
 		return Result{Text: "grab recorded, not sent (shadow mode): " + d.Release.Title,
-			Data: map[string]any{"sent": false, "recorded": true, "release": d.Release, "decision": d.Decision}}, nil
+			Data: GrabOut{Recorded: true, Release: &d.Release, Decision: d.Decision}}, nil
 	}
 	if err != nil {
 		return Result{}, err
 	}
 	return Result{Text: fmt.Sprintf("grabbed %s on %s", d.Release.Title, g.Downloader),
-		Data: map[string]any{"sent": true, "grab": g, "decision": d.Decision}}, nil
+		Data: GrabOut{Sent: true, Grab: &g, Decision: d.Decision}}, nil
 }

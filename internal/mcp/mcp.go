@@ -196,6 +196,12 @@ func New(d Deps) *Service {
 	s.register(s.requestTools()...)
 	s.register(s.libraryTools()...)
 	s.register(s.downloaderTools()...)
+	outputs := toolOutputs()
+	for i := range s.tools {
+		if s.tools[i].Output == nil {
+			s.tools[i].Output = outputs[s.tools[i].Name]
+		}
+	}
 	return s
 }
 

@@ -132,9 +132,9 @@ func (s *Service) findMedia(ctx context.Context, in findArgs) (Result, error) {
 		}
 		out = append(out, found...)
 	}
-	data := map[string]any{"candidates": out}
+	data := FindOut{Candidates: out}
 	if len(notes) > 0 {
-		data["notes"] = notes
+		data.Notes = notes
 	}
 	return Result{Text: candidatesText(out, notes), Data: data}, nil
 }
@@ -501,7 +501,7 @@ func (s *Service) cancelRequest(ctx context.Context, in cancelArgs) (Result, err
 	st.Downloads = []DownloadView{}
 	judge(&st)
 	text := fmt.Sprintf("cancelled %s: unmonitored, %d downloads removed", st.Title, removed)
-	return Result{Text: text, Data: map[string]any{"status": st, "removedDownloads": removed}}, err
+	return Result{Text: text, Data: CancelOut{Status: st, RemovedDownloads: removed}}, err
 }
 
 func (s *Service) unmonitor(ctx context.Context, kind domain.MediaKind, t target) error {

@@ -36,7 +36,7 @@ func (s *Service) setMonitored(ctx context.Context, in monitorArgs) (Result, err
 	if in.Monitored {
 		verb = "monitored"
 	}
-	return Result{Text: verb + " " + what, Data: map[string]any{"kind": kind, "monitored": in.Monitored, "changed": what}}, nil
+	return Result{Text: verb + " " + what, Data: MonitoredOut{Kind: kind, Monitored: in.Monitored, Changed: what}}, nil
 }
 
 func (s *Service) monitorMovie(ctx context.Context, in monitorArgs) (string, error) {
@@ -88,7 +88,7 @@ func (s *Service) startSearch(_ context.Context, in searchArgs) (Result, error) 
 	if s.d.Modes.Of(kind) == domain.ModeShadow {
 		note = "; the kind is in shadow mode, so the decision is recorded and nothing is grabbed"
 	}
-	return Result{Text: "search started" + note, Data: map[string]any{"started": true, "kind": kind, "mode": s.d.Modes.Of(kind)}}, nil
+	return Result{Text: "search started" + note, Data: StartedOut{Started: true, Kind: kind, Mode: s.d.Modes.Of(kind)}}, nil
 }
 
 // searchFor picks the search the arguments ask for.
@@ -136,5 +136,5 @@ func (s *Service) rescanItem(_ context.Context, in rescanArgs) (Result, error) {
 		domain.KindMusic: func(ctx context.Context) error { _, err := s.d.Music.Refresh(ctx, in.ID); return err },
 	}[kind]
 	s.d.Go(func(ctx context.Context) { s.logErr("refresh", run(ctx)) })
-	return Result{Text: "refresh started", Data: map[string]any{"started": true, "kind": kind, "id": in.ID}}, nil
+	return Result{Text: "refresh started", Data: StartedOut{Started: true, Kind: kind, ID: in.ID}}, nil
 }

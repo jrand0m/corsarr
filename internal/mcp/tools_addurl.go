@@ -55,14 +55,14 @@ func (s *Service) addDownloadURL(ctx context.Context, in addURLArgs) (Result, er
 	switch {
 	case errors.Is(err, queue.ErrShadowed):
 		return Result{Text: "add_download_url: recorded, not sent (shadow mode)",
-			Data: map[string]any{"sent": false, "recorded": true, "items": len(items)}}, nil
+			Data: AddURLOut{Recorded: true, Items: len(items)}}, nil
 	case errors.Is(err, queue.ErrBadURL):
 		return Result{}, invalidArg("url", err.Error())
 	case err != nil:
 		return Result{}, err
 	}
 	return Result{Text: fmt.Sprintf("sent %s to %s for %d items", g.Release.Title, g.Downloader, len(items)),
-		Data: map[string]any{"sent": true, "grab": g, "items": len(items)}}, nil
+		Data: AddURLOut{Sent: true, Grab: &g, Items: len(items)}}, nil
 }
 
 // urlItems are the library items the download is for.
