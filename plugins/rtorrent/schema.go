@@ -13,25 +13,11 @@ var pathRule = abi.TextRule{Pattern: abi.PatternPathAbsolute}
 
 // fieldOf turns one of the client's setting descriptions into a schema field.
 func fieldOf(f client.Field) *plugin.Field {
-	var out *plugin.Field
-	switch f.Type {
-	case "url":
-		out = plugin.String(f.Key, f.Label).Pattern(abi.PatternURLHTTP)
-	case "secret":
-		out = plugin.SecretField(f.Key, f.Label)
-	case "enum":
-		opts := make([]abi.Option, len(f.Options))
-		for i, o := range f.Options {
-			opts[i] = plugin.Opt(o, o)
-		}
-		out = plugin.Enum(f.Key, f.Label, opts...)
-	case "duration":
-		out = plugin.Duration(f.Key, f.Label).Between("1s", "60s")
-	case "map":
-		out = plugin.Map(f.Key, f.Label).Entries(maxPathMaps, pathRule, pathRule)
-	default:
-		out = plugin.String(f.Key, f.Label)
+	build, ok := fieldKinds[f.Type]
+	if !ok {
+		build = textField
 	}
+	out := build(f)
 	if f.Help != "" {
 		out.Describe(f.Help)
 	}
@@ -42,6 +28,40 @@ func fieldOf(f client.Field) *plugin.Field {
 		out.Default(f.Default)
 	}
 	return out
+}
+
+// fieldKinds builds the schema field for each description type; any other
+// type is plain text.
+var fieldKinds = map[string]func(client.Field) *plugin.Field{
+	"url":      urlField,
+	"secret":   secretField,
+	"enum":     enumField,
+	"duration": durationField,
+	"map":      pathMapField,
+}
+
+func textField(f client.Field) *plugin.Field { return plugin.String(f.Key, f.Label) }
+
+func urlField(f client.Field) *plugin.Field {
+	return plugin.String(f.Key, f.Label).Pattern(abi.PatternURLHTTP)
+}
+
+func secretField(f client.Field) *plugin.Field { return plugin.SecretField(f.Key, f.Label) }
+
+func enumField(f client.Field) *plugin.Field {
+	opts := make([]abi.Option, len(f.Options))
+	for i, o := range f.Options {
+		opts[i] = plugin.Opt(o, o)
+	}
+	return plugin.Enum(f.Key, f.Label, opts...)
+}
+
+func durationField(f client.Field) *plugin.Field {
+	return plugin.Duration(f.Key, f.Label).Between("1s", "60s")
+}
+
+func pathMapField(f client.Field) *plugin.Field {
+	return plugin.Map(f.Key, f.Label).Entries(maxPathMaps, pathRule, pathRule)
 }
 
 // settingsSchema is the settings form, built from the client's descriptions.

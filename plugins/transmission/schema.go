@@ -18,26 +18,11 @@ func ptr(n int) *int { return &n }
 
 // fieldOf turns one of the client's setting descriptions into a schema field.
 func fieldOf(f client.Field) *plugin.Field {
-	var out *plugin.Field
-	switch f.Type {
-	case client.FieldURL:
-		out = plugin.String(f.Key, f.Label).Pattern(abi.PatternURLHTTP)
-	case client.FieldSecret:
-		out = plugin.SecretField(f.Key, f.Label)
-	case client.FieldBool:
-		out = plugin.Bool(f.Key, f.Label)
-	case client.FieldDuration:
-		out = plugin.Duration(f.Key, f.Label).Between("1s", "60s")
-	case client.FieldMap:
-		key := anyKey
-		if f.Key == client.KeyPathMap {
-			key = pathRule
-		}
-		out = plugin.Map(f.Key, f.Label).Entries(maxMapEntries, key, pathRule)
-	default:
-		out = plugin.String(f.Key, f.Label)
+	build, ok := fieldKinds[f.Type]
+	if !ok {
+		build = textField
 	}
-	out.Describe(f.Help)
+	out := build(f).Describe(f.Help)
 	if f.Required {
 		out.Required()
 	}
@@ -45,6 +30,39 @@ func fieldOf(f client.Field) *plugin.Field {
 		out.Default(f.Default)
 	}
 	return out
+}
+
+// fieldKinds builds the schema field for each description type; any other
+// type is plain text.
+var fieldKinds = map[client.FieldType]func(client.Field) *plugin.Field{
+	client.FieldURL:      urlField,
+	client.FieldSecret:   secretField,
+	client.FieldBool:     boolField,
+	client.FieldDuration: durationField,
+	client.FieldMap:      mapField,
+}
+
+func textField(f client.Field) *plugin.Field { return plugin.String(f.Key, f.Label) }
+
+func urlField(f client.Field) *plugin.Field {
+	return plugin.String(f.Key, f.Label).Pattern(abi.PatternURLHTTP)
+}
+
+func secretField(f client.Field) *plugin.Field { return plugin.SecretField(f.Key, f.Label) }
+
+func boolField(f client.Field) *plugin.Field { return plugin.Bool(f.Key, f.Label) }
+
+func durationField(f client.Field) *plugin.Field {
+	return plugin.Duration(f.Key, f.Label).Between("1s", "60s")
+}
+
+// mapField takes any short key, except the path mapping whose keys are paths.
+func mapField(f client.Field) *plugin.Field {
+	key := anyKey
+	if f.Key == client.KeyPathMap {
+		key = pathRule
+	}
+	return plugin.Map(f.Key, f.Label).Entries(maxMapEntries, key, pathRule)
 }
 
 // settingsSchema is the settings form, built from the client's descriptions.
