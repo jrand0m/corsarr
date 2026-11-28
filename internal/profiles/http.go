@@ -33,8 +33,10 @@ func writeErr(w http.ResponseWriter, err error) {
 	var use InUseError
 	switch {
 	case errors.As(err, &inv):
-		first := inv.Errs[0]
-		api.WriteError(w, http.StatusUnprocessableEntity, "invalid", inv.Error(), first.Path)
+		api.WriteJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"error":  api.ErrorDetail{Code: "invalid", Message: inv.Error(), Field: inv.Errs[0].Path},
+			"fields": inv.Errs,
+		})
 	case errors.As(err, &use):
 		api.WriteError(w, http.StatusConflict, "in_use", err.Error(), "")
 	case errors.Is(err, ErrNotFound):

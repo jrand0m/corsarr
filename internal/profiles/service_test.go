@@ -210,7 +210,7 @@ func TestHTTP(t *testing.T) {
 		contains           string
 	}{
 		{"POST", "/api/v1/customformats", `{"name":"PS5","conditions":[{"kind":"audio","values":["aac"]}]}`, 201, `"key":"ps5"`},
-		{"POST", "/api/v1/customformats", `{"name":"Bad","conditions":[{"kind":"title","pattern":"("}]}`, 422, `"field":"conditions.0.pattern"`},
+		{"POST", "/api/v1/customformats", `{"name":"Bad","conditions":[{"kind":"title","pattern":"("}]}`, 422, `"fields":[{"field":"conditions.0.pattern"`},
 		{"GET", "/api/v1/customformats", "", 200, `"usedBy":[]`},
 		{"POST", "/api/v1/qualityprofiles", `{"name":"P","kinds":["movie"],"groups":[{"qualities":["webdl-1080p"]}],"cutoff":"webdl-1080p","formats":[{"format":"ps5","score":5}]}`, 201, `"key":"p"`},
 		{"GET", "/api/v1/qualityprofiles?kind=movie", "", 200, `"isDefault":true`},
