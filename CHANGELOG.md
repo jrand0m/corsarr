@@ -5,6 +5,12 @@ Short notes per release. Each release's assets, checksums and how to verify them
 ## Unreleased
 
 - Migration plan: copy the shown rows as text or JSON, or download them.
+- Naming settings per kind (`naming.tv|movie|music`): rename on or off, colon replacement, folder and file templates; unset values keep today's names.
+- Migration: the sources' naming comes across as a `naming` snippet with a per-token report (exact, approximate, or no equivalent).
+- Migration: indexers served through an indexer manager share one API key variable, reusing the reference your config already has for that manager.
+- Migration: a kind whose mode the config file already sets as wanted is reported with nothing to change.
+- Migration: Bluray-576p and AAC-VBR files keep their quality (new ladder rungs); downloadImported and albumImportIncomplete history rows are imported.
+- Migration report: real start and finish times and how long each source took to read.
 - Migration plan: the config-file snippet folds away as optional, and the environment variables for API keys are listed one per line with a copy button.
 - Interactive search leads with the decision: each result says what automatic search would do (the single pick, accepted but outranked and why, or rejected with the main reason in one line); the full reason list folds under "Why it was rejected?", and the separate override notice is gone.
 - Interactive search shows seeders against leechers with a ratio bar and health word, whether the whole payload is available (with file count, times downloaded and the tracker's seed ratio when the indexer reports them), and how close each release is to the profile, above or below target.
