@@ -97,7 +97,7 @@
     keyError = identRe.test(draftKey) ? undefined : 'Use a lower-case letter followed by letters or digits, for example upstairs';
     const problems = (await onvalidate?.(values)) ?? [];
     if (!problems.length && !keyError && m) {
-      snippet = configSnippet({ section: sectionFor(m.kind), key: draftKey, plugin: m.id, name: draftName.trim() || undefined, fields: m.manifest.settings.fields, values });
+      snippet = configSnippet({ section: (m.configSection ?? sectionFor(m.kind)), key: draftKey, plugin: m.id, name: draftName.trim() || undefined, fields: m.manifest.settings.fields, values });
     }
     return problems;
   }
@@ -165,7 +165,7 @@
 
     <section class="block" aria-labelledby="pm-new">
       <h2 id="pm-new">New instance</h2>
-      <p class="help">Fill in the settings and check them. corsarr validates them with the module's rules and shows the YAML to add under <span class="mono">{sectionFor(m.kind)}</span> in the config; secrets become environment references.</p>
+      <p class="help">Fill in the settings and check them. corsarr validates them with the module's rules and shows the YAML to add under <span class="mono">{(m.configSection ?? sectionFor(m.kind))}</span> in the config; secrets become environment references.</p>
       <div class="card draft">
         <div class="names">
           <TextField label="Key" required mono help="Its name in the config, for example upstairs." error={keyError} bind:value={draftKey} />

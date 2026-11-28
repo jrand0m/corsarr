@@ -571,6 +571,8 @@ export interface ModuleInfo {
   manifest: ModuleManifest;
   usedBy: InstanceRef[] | null;
   source: 'catalogue' | 'file';
+  /** Config section that holds instances of this module's kind. */
+  configSection?: string;
 }
 
 export interface PluginPolicy {
