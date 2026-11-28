@@ -254,3 +254,21 @@ func (r Music) MarkAvailable(ctx context.Context, ids []int64) error {
 		return nil
 	})
 }
+
+// AlbumMBIDs lists the MusicBrainz id of every album in the library.
+func (r Music) AlbumMBIDs(ctx context.Context) ([]string, error) {
+	rows, err := r.s.R().QueryContext(ctx, "SELECT DISTINCT mbid FROM albums")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var mbid string
+		if err := rows.Scan(&mbid); err != nil {
+			return nil, err
+		}
+		out = append(out, mbid)
+	}
+	return out, rows.Err()
+}

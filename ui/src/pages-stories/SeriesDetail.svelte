@@ -18,7 +18,7 @@
   import DataTable, { type Column } from '../lib/components/organisms/DataTable/DataTable.svelte';
   import DecisionPanel from '../lib/components/organisms/DecisionPanel/DecisionPanel.svelte';
   import Drawer from '../lib/components/organisms/Drawer/Drawer.svelte';
-  import { docksideDecisions, docksideHistory, downloads, NOW, nowDate, searchSources } from '../lib/storybook/fixtures';
+  import { artSwatch, docksideDecisions, docksideHistory, downloads, NOW, nowDate, searchSources } from '../lib/storybook/fixtures';
   import { bayCells, longHaulSeasons, type EpisodeRow, type SeasonFixture } from '../lib/storybook/tv-fixtures';
 
   let { search = false }: { search?: boolean } = $props();
@@ -41,7 +41,7 @@
   ];
 
   const entity = {
-    title: 'The Long Haul', kind: 'tv' as const, art: null, meta: '2019 · Harbourline · Continuing · 52m', monitor: 'monitored' as const,
+    title: 'The Long Haul', kind: 'tv' as const, art: artSwatch(30), meta: '2019 · Harbourline · Continuing · 52m', monitor: 'monitored' as const,
     status: [{ family: 'item' as const, value: 'queued', detail: '1 download' }],
     facts: [{ label: 'Profile', value: 'HD' }, { label: 'Episodes', value: '21 of 23 on disk' }, { label: 'Next airing', value: '26 Nov 2026' }, { label: 'Folder', value: '/data/media/tv/The Long Haul' }],
     back: { href: '#/library/tv', label: 'TV' },

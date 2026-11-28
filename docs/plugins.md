@@ -17,6 +17,21 @@ module downloader is used exactly like a built-in one: the queue, the
 download-client screens and the assistant tools see the same operations and
 the same optional capabilities.
 
+## Official modules
+
+These modules live in this repository under `plugins/<id>/` and are built,
+attested and published with every release (see [Publishing](#building-and-publishing)):
+
+| Module | Client | Notes |
+| --- | --- | --- |
+| [`transmission`](../plugins/transmission/README.md) | Transmission 3.x and 4.x, RPC over HTTP | categories as labels (3.00+) or download directories |
+| [`rtorrent`](../plugins/rtorrent/README.md) | rTorrent 0.9.8 and 0.10, XML-RPC over HTTP (`/RPC2`) | labels in a custom field; removes keep the data unless a front end can erase it |
+
+Each asks for one network permission, the host of its own address setting
+(`$setting:url`), and one secret, its password. Download the
+`<id>-<version>.wasm` of your release and install it like any module, or
+build it yourself with `just build plugins <id>`.
+
 ## Installing a module
 
 - **Drop-in**: copy `mymodule.wasm` (and `mymodule.json` when the manifest is
@@ -107,8 +122,10 @@ URLs without credentials are accepted.
 
 The SDK lives in this repository under `sdk/go`:
 
-- `sdk/go/plugin`: host functions, the HTTP helper, the settings-schema
-  builder and `Main`;
+- `sdk/go/plugin`: host functions, the HTTP helpers (`Client` for JSON APIs,
+  `Doer` for protocol clients that take single-valued headers and the whole
+  body, both capped at the host's message size), the settings-schema builder
+  and `Main`;
 - `sdk/go/plugin/downloader`: implement `downloader.Downloader` (plus any
   optional interfaces) and call `downloader.Serve` from `init`;
 - `sdk/go/plugintest`: run your module's operations natively in `go test`;
@@ -186,6 +203,45 @@ Point it at a test client: it adds a paused magnet in the
 In unit tests, `plugintest.New(plugintest.Host{Settings: …, Secrets: …})`
 installs an in-process host so `Call(op, req, &resp)` runs your handlers
 natively, with real HTTP to a test server.
+
+### Building and publishing
+
+`just build plugins [id|all]` builds the modules under `plugins/` into
+`dist/plugins/<id>-<version>.wasm` (manifest embedded) plus the manifest as
+`<id>-<version>.json` for reading. The build is reproducible: `-trimpath`,
+no VCS stamp, no build id and stripped symbols, so the same commit and Go
+version give the same bytes on any machine. Directories named `example-*` are
+examples and are not published.
+
+The release builds every module inside the pinned builder next to the
+binaries, so the two independent release builds must agree on the modules
+byte for byte. The release lists each module in `SHA256SUMS`, attests it
+(build provenance and an SPDX SBOM of the Go modules linked into it) and
+publishes it with `plugins-index.json`, the catalogue corsarr reads:
+
+```json
+{
+  "schema": 1,
+  "release": "v1.4.0",
+  "generated": "2026-11-28T10:00:00Z",
+  "plugins": [
+    { "id": "transmission", "name": "Transmission", "version": "1.0.0", "kind": "downloader",
+      "abiVersion": 1, "description": "…", "author": "corsarr", "license": "AGPL-3.0-or-later",
+      "homepage": "https://github.com/jrand0m/corsarr",
+      "permissions": { "http": { "hosts": ["$setting:url"] }, "secrets": ["password"] },
+      "minCorsarr": "1.4.0", "size": 7131778, "sha256": "…", "url": "transmission-1.0.0.wasm" }
+  ]
+}
+```
+
+Entries are copied from each module's embedded manifest and sorted by id;
+`generated` is the release's commit time, so the index is reproducible too.
+`plugins-index.json.sig` signs the line `corsarr-plugin-index-v1` followed by
+the exact index bytes with Ed25519:
+`{"schema":1,"alg":"ed25519","keyId":"<16 hex>","signature":"<base64>"}`,
+where the key id is the start of the SHA-256 of the raw public key.
+`go run ./scripts/pluginindex build|sign|verify|keygen|sbom` does each step by
+hand.
 
 ## The ABI (version 1)
 

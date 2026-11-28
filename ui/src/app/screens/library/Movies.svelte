@@ -20,6 +20,7 @@
   import { applyList, facetCounts } from '../../list';
   import AddMovie from './AddMovie.svelte';
   import type { ScreenProps } from '../../screen';
+  import { artSrc } from '../../art';
 
   let { screen }: ScreenProps = $props();
   const { api, live, movies, profiles, toasts, navigate } = app();
@@ -66,7 +67,7 @@
     { id: 'profile', label: 'Profile', width: '7rem', phone: 'meta', value: (r) => profileName(profiles.data, r.profileKey) },
     { id: 'added', label: 'Added', width: '7rem', sortable: true, phone: 'hidden', value: (r) => r.addedAt },
   ];
-  const poster = (r: Movie) => ({ id: String(r.id), title: r.title, kind: 'movie' as const, year: r.year || undefined, status: { family: 'item' as const, value: statusOf(r) } });
+  const poster = (r: Movie) => ({ id: String(r.id), title: r.title, kind: 'movie' as const, src: artSrc(r.posterUrl, 240), year: r.year || undefined, status: { family: 'item' as const, value: statusOf(r) } });
 
   async function setMonitored(m: Movie, on: boolean) {
     try {

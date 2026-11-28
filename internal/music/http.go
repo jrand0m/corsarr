@@ -74,6 +74,9 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
+	for i := range items {
+		items[i].CoverURL = s.d.Art.Of(domain.ArtPoster, items[i].CoverURL)
+	}
 	api.WritePage(w, items, next)
 }
 
@@ -119,6 +122,10 @@ func (s *Service) writeDetail(w http.ResponseWriter, r *http.Request, id int64) 
 	if err != nil {
 		WriteErr(w, err)
 		return
+	}
+	d.Artist.CoverURL = s.d.Art.Of(domain.ArtPoster, d.Artist.CoverURL)
+	for i := range d.Albums {
+		d.Albums[i].CoverURL = s.d.Art.Of(domain.ArtPoster, d.Albums[i].CoverURL)
 	}
 	api.WriteJSON(w, http.StatusOK, d)
 }
@@ -171,6 +178,7 @@ func (s *Service) album(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
+	d.Album.CoverURL = s.d.Art.Of(domain.ArtPoster, d.Album.CoverURL)
 	api.WriteJSON(w, http.StatusOK, d)
 }
 

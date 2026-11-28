@@ -19,7 +19,7 @@ func TestQualityOf(t *testing.T) {
 		{"Movie.2020.2160p.UHD.BluRay.x265-GRP", "bluray-2160p", true},
 		{"Movie.2020.1080p.BluRay.REMUX.AVC-GRP", "remux-1080p", true},
 		{"Movie.2020.720p.HDTV.x264-GRP", "hdtv-720p", true},
-		{"Movie.2020.576p.BluRay.x264-GRP", "bluray-480p", true},
+		{"Movie.2020.576p.BluRay.x264-GRP", "bluray-576p", true},
 		{"Movie.2020.480p.WEB.x264-GRP", "webdl-480p", true},
 		{"Movie.2020.DVDRip.XviD-GRP", "dvd", false},
 		{"Movie.2020.HDCAM.x264-GRP", "cam", false},
@@ -117,5 +117,29 @@ func TestBounds(t *testing.T) {
 	}
 	if LimitsFor(domain.KindTV).DefaultRuntime != 45 || LimitsFor("comic").CeilingBytes != 50*gb {
 		t.Fatal("kind limits")
+	}
+}
+
+func TestBluray576pRungSitsAfterBluray480p(t *testing.T) {
+	q480, _ := LookupQuality("bluray-480p")
+	q576, ok := LookupQuality("bluray-576p")
+	hdtv720, _ := LookupQuality("hdtv-720p")
+	if !ok || q576.Name != "Bluray-576p" || q576.Rank != q480.Rank+1 || hdtv720.Rank != q576.Rank+1 || q576.Tier != TierSD {
+		t.Fatalf("576p rung %+v", q576)
+	}
+	cases := map[string]QualityID{
+		"Movie.2001.576p.BluRay.x264-GRP": "bluray-576p",
+		"Movie.2001.480p.BluRay.x264-GRP": "bluray-480p",
+		"Movie.2001.BluRay.x264-GRP":      "bluray-480p",
+		"Movie.2001.576p.WEB-DL.x264-GRP": "webdl-480p",
+	}
+	for title, want := range cases {
+		if got, _ := QualityOf(parse.ParseRelease(title)); got.ID != want {
+			t.Errorf("%s → %s, want %s", title, got.ID, want)
+		}
+	}
+	any := DefaultProfiles(domain.KindMovie)[0]
+	if _, ok := any.Rank("bluray-576p"); !ok {
+		t.Fatal("Any must allow bluray-576p like bluray-480p")
 	}
 }

@@ -21,6 +21,7 @@
   import { count, seriesItemStatus, seriesStatusLabel } from '../../tv';
   import AddSeries from './AddSeries.svelte';
   import type { ScreenProps } from '../../screen';
+  import { artSrc } from '../../art';
 
   let { screen }: ScreenProps = $props();
   const { api, live, profiles, toasts, navigate } = app();
@@ -72,7 +73,7 @@
     { id: 'next', label: 'Next airing', width: '8rem', sortable: true, phone: 'meta', value: (r) => r.stats?.nextAiring ?? '—' },
   ];
   const poster = (r: SeriesSummary) => ({
-    id: String(r.id), title: r.title, kind: 'tv' as const, src: r.posterUrl || null, year: r.year || undefined,
+    id: String(r.id), title: r.title, kind: 'tv' as const, src: artSrc(r.posterUrl, 240), year: r.year || undefined,
     detail: `${r.stats?.episodeFileCount ?? 0} of ${count(r.stats?.episodeCount ?? 0, 'episode')}`,
     status: { family: 'item' as const, value: seriesItemStatus(r) },
   });

@@ -8,7 +8,23 @@ Short notes per release. Each release's assets, checksums and how to verify them
 - Custom quality profiles: allowed qualities and groups, cutoff, upgrade-until score and step, and size limits per quality; one profile can serve TV and movies. Edit both under Settings › Profiles and Settings › Custom formats (built-in profiles duplicate into editable copies), or as config-as-code under `customFormats` and `qualityProfiles`.
 - Migration carries Sonarr and Radarr custom formats and profiles over exactly: identical ones from both apps become one, items keep their profile, and anything that cannot be carried over is listed per condition.
 - Indexers: halfleech, partial freeleech and double upload flags are read from Torznab feeds.
+
+## v0.5.6 — 2026-11-28
+
+- v0.5.5 was tagged but never published (its build failed); everything below ships here.
+- Fix: `mcp stdio` relay could read the session id while it changed.
+- Movies now show their posters: the movie list, poster grid, detail page and add dialog use the movie's artwork (posters of movies already in the library are filled in from stored metadata on upgrade).
+- Artwork is served by corsarr from its own cache (`/api/v1/images/…`): fetched once through the shared client, shrunk and re-encoded, still shown when the provider is offline; the browser no longer contacts the metadata provider. Albums and artists get Cover Art Archive covers.
+- New `cache` settings: on/off, folder, size cap, stored quality and widths, and how artwork shrinks near the cap (lower quality, then smaller, then the least recently viewed is removed, library artwork last).
+- System › Health shows the artwork cache's use against its cap, hit rate and last shrink, with a Clear cache action.
+- Movies and series keep the provider's backdrop as fanart.
 - Migration plan: copy the shown rows as text or JSON, or download them.
+- Naming settings per kind (`naming.tv|movie|music`): rename on or off, colon replacement, folder and file templates; unset values keep today's names.
+- Migration: the sources' naming comes across as a `naming` snippet with a per-token report (exact, approximate, or no equivalent).
+- Migration: indexers served through an indexer manager share one API key variable, reusing the reference your config already has for that manager.
+- Migration: a kind whose mode the config file already sets as wanted is reported with nothing to change.
+- Migration: Bluray-576p and AAC-VBR files keep their quality (new ladder rungs); downloadImported and albumImportIncomplete history rows are imported.
+- Migration report: real start and finish times and how long each source took to read.
 - Migration plan: the config-file snippet folds away as optional, and the environment variables for API keys are listed one per line with a copy button.
 - Interactive search leads with the decision: each result says what automatic search would do (the single pick, accepted but outranked and why, or rejected with the main reason in one line); the full reason list folds under "Why it was rejected?", and the separate override notice is gone.
 - Interactive search shows seeders against leechers with a ratio bar and health word, whether the whole payload is available (with file count, times downloaded and the tracker's seed ratio when the indexer reports them), and how close each release is to the profile, above or below target.
@@ -19,6 +35,10 @@ Short notes per release. Each release's assets, checksums and how to verify them
 - Go SDK for modules (`sdk/go`) with a test harness and an example download client.
 - New `plugins` settings: plugins folder, built-ins to switch off, and memory, time, concurrency and size limits for modules.
 - Plugin settings forms are typed data checked on the server: a closed set of field types, plain text with a small emoji set, per-field errors.
+- Transmission (3.x, 4.x) and rTorrent (0.9.8, 0.10, XML-RPC over HTTP) download clients as installable plugin modules, with every optional capability; see `plugins/transmission` and `plugins/rtorrent`.
+- `just build plugins [id|all]` builds plugin modules reproducibly; the SDK gains a request adapter for protocol clients.
+- Releases include the plugin modules (`<id>-<version>.wasm`) and `plugins-index.json` with its Ed25519 signature; modules are rebuilt on both release runners and compared, listed in `SHA256SUMS`, and attested with provenance and an SBOM.
+- Release builds include the plugin SDK sources the binary needs.
 
 ## v0.5.4 — 2026-11-28
 

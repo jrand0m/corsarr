@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/testkit"
 )
 
@@ -49,6 +50,25 @@ func TestHTTPEndpoints(t *testing.T) {
 	e.meta = nil
 	if code, _ := testkit.Do(t, srv, "GET", "/api/v1/movies/lookup?term=zzz", ""); code != 503 {
 		t.Errorf("no metadata: %d", code)
+	}
+}
+
+func TestAnswersPointArtworkAtTheCache(t *testing.T) {
+	e := newEnv(t)
+	e.svc.d.Art = func(r domain.ArtRole, o string) string { return "cache/" + string(r) + "/" + o }
+	srv := testkit.Serve(t, func(m testkit.Mux) { e.svc.Mount(m) })
+	poster, fanart := `"posterUrl":"cache/p/https://img.example/603.jpg"`, `"fanartUrl":"cache/b/https://img.example/603b.jpg"`
+	for _, s := range []struct{ method, path, body string }{
+		{"POST", "/api/v1/movies", `{"tmdbId":603}`}, {"GET", "/api/v1/movies", ""}, {"GET", "/api/v1/movies/1", ""},
+		{"PUT", "/api/v1/movies/1", `{"monitored":false}`}, {"GET", "/api/v1/movies/lookup?term=tmdb:603", ""},
+	} {
+		_, body := testkit.Do(t, srv, s.method, s.path, s.body)
+		if !strings.Contains(body, poster) || !strings.Contains(body, fanart) {
+			t.Errorf("%s %s: %s", s.method, s.path, body)
+		}
+	}
+	if m, _ := e.svc.Get(ctx, 1); m.PosterURL != "https://img.example/603.jpg" {
+		t.Fatal("stored address must stay the provider's", m.PosterURL)
 	}
 }
 

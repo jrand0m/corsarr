@@ -16,7 +16,7 @@ func tvFake(t *testing.T) *httptest.Server {
 	t.Helper()
 	answers := map[string]string{
 		"/configuration": `{"images":{"secure_base_url":"https://img.example/"}}`,
-		"/search/tv":     `{"results":[{"id":77,"name":"Example Show","first_air_date":"2019-04-02","overview":"o","poster_path":"/p.jpg"},{"id":78,"name":"Other"}]}`,
+		"/search/tv":     `{"results":[{"id":77,"name":"Example Show","first_air_date":"2019-04-02","overview":"o","poster_path":"/p.jpg","backdrop_path":"/b.jpg"},{"id":78,"name":"Other"}]}`,
 		"/tv/77": `{"id":77,"name":"Example Show","original_name":"Beispiel","first_air_date":"2019-04-02","status":"Returning Series",
 			"episode_run_time":[42],"number_of_seasons":2,"seasons":[{"season_number":0},{"season_number":1}],
 			"networks":[{"name":"Net"}],"genres":[{"name":"Drama"}],"external_ids":{"tvdb_id":321,"imdb_id":"tt0077"},
@@ -46,7 +46,8 @@ func TestSearchSeries(t *testing.T) {
 	if err != nil || len(res) != 2 {
 		t.Fatalf("%v %d", err, len(res))
 	}
-	if r := res[0]; r.IDs["tmdb"] != "77" || r.Title != "Example Show" || r.Year != 2019 || r.PosterURL != "https://img.example/w500/p.jpg" {
+	if r := res[0]; r.IDs["tmdb"] != "77" || r.Title != "Example Show" || r.Year != 2019 || r.PosterURL != "https://img.example/w500/p.jpg" ||
+		r.FanartURL != "https://img.example/w1280/b.jpg" || res[1].FanartURL != "" {
 		t.Fatalf("%+v", r)
 	}
 }

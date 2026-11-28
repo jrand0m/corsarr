@@ -46,6 +46,8 @@ type Movie struct {
 	Path            string          `json:"path"`
 	FileID          int64           `json:"fileId,omitempty"` // 0 = no file
 	AddedAt         time.Time       `json:"addedAt"`
+	PosterURL       string          `json:"posterUrl,omitempty"` // provider address; served through the image cache
+	FanartURL       string          `json:"fanartUrl,omitempty"`
 }
 
 // Ref is the movie's item reference.

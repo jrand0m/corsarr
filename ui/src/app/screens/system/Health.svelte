@@ -8,23 +8,28 @@
   import Link from '../../../lib/components/atoms/Link/Link.svelte';
   import StatusBadge from '../../../lib/components/atoms/StatusBadge/StatusBadge.svelte';
   import Timestamp from '../../../lib/components/atoms/Timestamp/Timestamp.svelte';
+  import Meter from '../../../lib/components/atoms/Meter/Meter.svelte';
   import PropertyList from '../../../lib/components/molecules/PropertyList/PropertyList.svelte';
+  import ConfirmDialog from '../../../lib/components/organisms/ConfirmDialog/ConfirmDialog.svelte';
   import DataTable, { type Column } from '../../../lib/components/organisms/DataTable/DataTable.svelte';
   import { formatAbsolute } from '../../../lib/format/time';
   import { app } from '../../context.svelte';
   import { Resource } from '../../resource.svelte';
   import { refetchOn } from '../../live.svelte';
   import { toApiError } from '../../api/client';
-  import type { IntegrationHealth, RateLimits, RateLimitStatus } from '../../api/types';
+  import type { CacheStatus, IntegrationHealth, RateLimits, RateLimitStatus } from '../../api/types';
+  import { cacheProperties, usageText } from '../../cache';
   import { ceilingText, noCheckReason, paceText, serviceName } from '../../ratelimits';
   import { healthRank, integrationName, integrationType, isProblem, settingsFor } from '../../model';
 
   const { api, live, toasts } = app();
   const health = new Resource((s) => api.list<IntegrationHealth>('health/integrations', undefined, s));
   const limits = new Resource((s) => api.get<RateLimits>('system/ratelimits', undefined, s));
+  const cache = new Resource((s) => api.get<CacheStatus>('system/cache', undefined, s));
   onMount(() => {
     void health.load();
     void limits.load();
+    void cache.load();
     return refetchOn(live, ['health.changed'], () => void health.load(true), 300);
   });
 
@@ -65,6 +70,22 @@
     { id: 'throttle', label: 'Last throttle', width: '8rem', value: (r) => r.lastThrottle, phone: 'hidden' },
     { id: 'check', label: 'Next check', width: '10rem', value: (r) => r.nextCheck, phone: 'hidden' },
   ];
+  let clearOpen = $state(false);
+  let clearing = $state(false);
+  async function clearCache() {
+    clearing = true;
+    try {
+      await api.del('system/cache');
+      clearOpen = false;
+      toasts.push({ message: 'Artwork cache cleared', detail: 'Artwork is fetched again the next time it is shown.', tone: 'ok' });
+      void cache.load(true);
+    } catch (e) {
+      toasts.push({ message: 'The cache was not cleared', detail: toApiError(e).message, tone: 'error' });
+    } finally {
+      clearing = false;
+    }
+  }
+
   const lastCheck = $derived(Math.max(0, ...rows.map((r) => Date.parse(r.lastOkAt ?? '') || 0)));
 </script>
 
@@ -118,7 +139,31 @@
     noun="service" loading={limits.loading && !limits.data} error={limits.error?.message} errorCode={limits.error?.label} onretry={limits.retry} />
 </section>
 
+<section class="limits" aria-labelledby="artwork-cache">
+  <div class="limits-head">
+    <h2 id="artwork-cache">Artwork cache</h2>
+    <p>{cache.data && !cache.data.enabled ? 'The cache is off: artwork is fetched from the provider on every view and nothing is stored.'
+      : 'Posters and covers corsarr stored so pages load without contacting the provider; near the cap it lowers quality, then size, then removes the least viewed.'}</p>
+  </div>
+  {#if cache.data}
+    <div class="cache">
+      <Meter label="Artwork cache use" value={cache.data.usage} max={cache.data.maxSize} warnAt={cache.data.maxSize * cache.data.highWater}
+        valueText={usageText(cache.data)} showValue />
+      <PropertyList density="compact" label="Artwork cache details" items={cacheProperties(cache.data)} />
+      <div class="acts"><Button size="sm" icon="trash" onclick={() => (clearOpen = true)}>Clear cache</Button></div>
+    </div>
+  {:else if cache.error}
+    <p class="cache-error">{cache.error.message}</p>
+  {/if}
+</section>
+
+<ConfirmDialog bind:open={clearOpen} title="Clear the artwork cache?" confirmLabel="Clear cache" loading={clearing}
+  consequences={['Every stored poster and cover is deleted from the cache folder.', 'Artwork is fetched from the provider again the next time a page shows it.']}
+  undoable="Nothing in the library changes; artwork comes back as it is viewed." onconfirm={() => void clearCache()} oncancel={() => (clearOpen = false)} />
+
 <style>
+  .cache { display: grid; gap: var(--space-3); max-width: 48rem; }
+  .cache-error { color: var(--tone-error-ink); font-size: var(--text-md); }
   .limits { display: grid; gap: var(--space-3); margin-top: var(--space-6); }
   .limits-head { display: grid; gap: var(--space-1); }
   .limits-head h2 { font-size: var(--text-lg); line-height: var(--leading-tight); }

@@ -40,6 +40,7 @@ type AlbumView struct {
 	SizeOnDisk int64  `json:"sizeOnDisk"`
 	Quality    string `json:"quality,omitempty"` // the lowest quality among its files
 	CutoffMet  bool   `json:"cutoffMet"`
+	CoverURL   string `json:"coverUrl,omitempty"`
 }
 
 // Stats summarise an artist for the list.
@@ -57,8 +58,41 @@ type Stats struct {
 // Summary is an artist with its stats.
 type Summary struct {
 	domain.Artist
-	Stats Stats `json:"stats"`
+	Stats    Stats  `json:"stats"`
+	CoverURL string `json:"coverUrl,omitempty"` // the cover of the newest album
 }
+
+// coverArchive serves release-group front covers by MusicBrainz id, keyless.
+const coverArchive = "https://coverartarchive.org/release-group/"
+
+// CoverURL is the provider address of a release group's front cover.
+func CoverURL(mbid string) string {
+	if mbid == "" {
+		return ""
+	}
+	return coverArchive + mbid + "/front-500"
+}
+
+// ArtistCover picks the cover of the newest album of primary type album;
+// undated albums count as oldest (pure).
+func ArtistCover(albums []domain.Album) string {
+	var best *domain.Album
+	for i := range albums {
+		a := &albums[i]
+		if a.PrimaryType != domain.AlbumTypeAlbum || a.MBID == "" {
+			continue
+		}
+		if best == nil || newer(a.ReleaseDate, best.ReleaseDate) {
+			best = a
+		}
+	}
+	if best == nil {
+		return ""
+	}
+	return CoverURL(best.MBID)
+}
+
+func newer(a, b *time.Time) bool { return a != nil && (b == nil || a.After(*b)) }
 
 // Detail is the artist page: the artist and every album.
 type Detail struct {
@@ -119,7 +153,8 @@ func Current(p decide.QualityProfile, files []domain.LibraryFile) *decide.Curren
 func albumView(ar domain.Artist, al domain.Album, files []domain.LibraryFile, now time.Time) AlbumView {
 	profile, _ := ProfileByKey(ar.ProfileKey)
 	meta, _ := domain.MetadataProfileByKey(ar.MetadataProfile)
-	v := AlbumView{Album: al, InProfile: InProfile(meta, al), FileCount: len(files), Status: Status(al, len(files), now)}
+	v := AlbumView{Album: al, InProfile: InProfile(meta, al), FileCount: len(files), Status: Status(al, len(files), now),
+		CoverURL: CoverURL(al.MBID)}
 	for _, f := range files {
 		v.SizeOnDisk += f.Size
 	}
@@ -212,7 +247,7 @@ func (s *Service) detailOf(ctx context.Context, ar domain.Artist) (Detail, error
 		return Detail{}, err
 	}
 	now := s.d.Now()
-	d := Detail{Artist: Summary{Artist: ar}, Albums: make([]AlbumView, len(albums))}
+	d := Detail{Artist: Summary{Artist: ar, CoverURL: ArtistCover(albums)}, Albums: make([]AlbumView, len(albums))}
 	for i, al := range albums {
 		files, err := s.AlbumFiles(ctx, al.ID)
 		if err != nil {

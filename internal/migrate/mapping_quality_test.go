@@ -254,3 +254,14 @@ func TestConfigQuality(t *testing.T) {
 		t.Fatalf("%+v", q)
 	}
 }
+
+func TestCustomProfileKeepsTheBluray576pRung(t *testing.T) {
+	p := SrcProfile{ID: 1, Name: "SD", CutoffID: 22, Items: []SrcQualityItem{{ID: 22, Name: "Bluray-576p", Allowed: true, Members: []string{"Bluray-576p"}}}}
+	doc, notes := mapCustomProfile(p, domain.KindMovie, nil, map[string]SrcSize{"Bluray-576p": {Min: f64p(2), Preferred: f64p(8), Max: f64p(20)}})
+	if len(notes) != 0 || doc.Cutoff != "bluray-576p" || len(doc.Sizes) != 1 || doc.Sizes[0].Quality != "bluray-576p" || doc.Sizes[0].Max != 20 {
+		t.Fatalf("doc %+v notes %v", doc, notes)
+	}
+	if _, errs := decide.CompileProfile(decide.ProfileDoc{Key: "sd", Name: doc.Name, Kinds: doc.Kinds, Groups: doc.Groups, Cutoff: doc.Cutoff, Sizes: doc.Sizes}, nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+}

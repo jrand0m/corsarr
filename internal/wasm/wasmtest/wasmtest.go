@@ -117,6 +117,52 @@ func Embed(module, manifest []byte) []byte {
 	return append(out, body...)
 }
 
+var (
+	modMu    sync.Mutex
+	modBuilt = map[string][]byte{}
+)
+
+// Module builds the module in package pkg (for example ./plugins/rtorrent)
+// once per test process, with its manifest embedded as a release build has
+// it.
+func Module(t testing.TB, pkg string) []byte {
+	t.Helper()
+	modMu.Lock()
+	defer modMu.Unlock()
+	if b, ok := modBuilt[pkg]; ok {
+		return b
+	}
+	b, err := buildModule(pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	modBuilt[pkg] = b
+	return b
+}
+
+func buildModule(pkg string) ([]byte, error) {
+	out, err := os.CreateTemp("", "corsarr-module-*.wasm")
+	if err != nil {
+		return nil, err
+	}
+	_ = out.Close()
+	defer os.Remove(out.Name())
+	root := rootFn()
+	cmd := exec.Command("go", "build", "-buildmode=c-shared", "-trimpath", "-o", out.Name(), pkg)
+	cmd.Dir, cmd.Env = root, append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm")
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("build %s: %v\n%s", pkg, err, b)
+	}
+	cmd = exec.Command("go", "run", pkg)
+	cmd.Dir = root
+	manifest, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("manifest of %s: %v", pkg, err)
+	}
+	raw, err := os.ReadFile(out.Name())
+	return Embed(raw, manifest), err
+}
+
 // Import is one function import of an assembled module.
 type Import struct{ Module, Name string }
 

@@ -16,7 +16,7 @@ type Movies struct{ s *Store }
 func (s *Store) Movies() Movies { return Movies{s} }
 
 const movieCols = `id, tmdb_id, imdb_id, title, original_title, year, alt_titles, runtime_min, in_cinemas, digital,
-	physical, monitored, min_availability, profile_key, root_folder, path, file_id, added_at`
+	physical, monitored, min_availability, profile_key, root_folder, path, file_id, added_at, poster_url, fanart_url`
 
 type scanner interface{ Scan(dest ...any) error }
 
@@ -26,7 +26,7 @@ func scanMovie(sc scanner) (domain.Movie, error) {
 	var cin, dig, phy sql.NullInt64
 	var added int64
 	err := sc.Scan(&m.ID, &m.TMDBID, &m.IMDBID, &m.Title, &m.OriginalTitle, &m.Year, &alt, &m.RuntimeMin, &cin, &dig,
-		&phy, &m.Monitored, &avail, &m.ProfileKey, &m.RootFolder, &m.Path, &m.FileID, &added)
+		&phy, &m.Monitored, &avail, &m.ProfileKey, &m.RootFolder, &m.Path, &m.FileID, &added, &m.PosterURL, &m.FanartURL)
 	m.InCinemas, m.Digital, m.Physical = ptrMS(cin), ptrMS(dig), ptrMS(phy)
 	m.MinAvailability, m.AddedAt = domain.MinAvailability(avail), fromMS(added)
 	_ = json.Unmarshal([]byte(alt), &m.AltTitles) // written by this repository as a JSON list
@@ -45,10 +45,11 @@ func (r Movies) Add(ctx context.Context, m domain.Movie) (domain.Movie, bool, er
 	err := r.s.Write(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `INSERT INTO movies (tmdb_id, imdb_id, title, original_title, year, alt_titles,
 			runtime_min, in_cinemas, digital, physical, monitored, min_availability, profile_key, root_folder, path,
-			added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (tmdb_id) DO NOTHING`,
+			added_at, poster_url, fanart_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (tmdb_id) DO NOTHING`,
 			m.TMDBID, m.IMDBID, m.Title, m.OriginalTitle, m.Year, jsonText(m.AltTitles), m.RuntimeMin, nullMS(m.InCinemas),
 			nullMS(m.Digital), nullMS(m.Physical), m.Monitored, string(m.MinAvailability), m.ProfileKey, m.RootFolder,
-			m.Path, ms(m.AddedAt))
+			m.Path, ms(m.AddedAt), m.PosterURL, m.FanartURL)
 		if err != nil {
 			return err
 		}
@@ -115,9 +116,9 @@ func (r Movies) query(ctx context.Context, fn func(domain.Movie) error, q string
 func (r Movies) Update(ctx context.Context, m domain.Movie) error {
 	return r.exec(ctx, `UPDATE movies SET imdb_id = ?, title = ?, original_title = ?, year = ?, alt_titles = ?,
 		runtime_min = ?, in_cinemas = ?, digital = ?, physical = ?, monitored = ?, min_availability = ?, profile_key = ?,
-		root_folder = ?, path = ? WHERE id = ?`, m.IMDBID, m.Title, m.OriginalTitle, m.Year, jsonText(m.AltTitles),
-		m.RuntimeMin, nullMS(m.InCinemas), nullMS(m.Digital), nullMS(m.Physical), m.Monitored, string(m.MinAvailability),
-		m.ProfileKey, m.RootFolder, m.Path, m.ID)
+		root_folder = ?, path = ?, poster_url = ?, fanart_url = ? WHERE id = ?`, m.IMDBID, m.Title, m.OriginalTitle, m.Year,
+		jsonText(m.AltTitles), m.RuntimeMin, nullMS(m.InCinemas), nullMS(m.Digital), nullMS(m.Physical), m.Monitored,
+		string(m.MinAvailability), m.ProfileKey, m.RootFolder, m.Path, m.PosterURL, m.FanartURL, m.ID)
 }
 
 // SetFile links the movie's current library file (0 = none).

@@ -19,6 +19,7 @@ type tvDoc struct {
 	Overview     string `json:"overview"`
 	Status       string `json:"status"`
 	PosterPath   string `json:"poster_path"`
+	BackdropPath string `json:"backdrop_path"`
 	RunTimes     []int  `json:"episode_run_time"`
 	Seasons      []struct {
 		Number int `json:"season_number"`
@@ -155,7 +156,7 @@ func (c *Client) findTV(ctx context.Context, ext, source string) (string, error)
 func (d tvDoc) record(images string) plugin.SeriesRecord {
 	r := plugin.SeriesRecord{IDs: map[string]string{"tmdb": strconv.Itoa(d.ID)}, Title: d.Name, Year: yearOf(d.FirstAirDate),
 		Status: seriesStatus(d.Status), Overview: d.Overview, PosterURL: posterURL(images, d.PosterPath),
-		SeasonCount: d.NumberOfSeasons, AltTitles: d.altTitles()}
+		FanartURL: imageURL(images, backdropSize, d.BackdropPath), SeasonCount: d.NumberOfSeasons, AltTitles: d.altTitles()}
 	if d.ExternalIDs.TVDBID > 0 {
 		r.IDs["tvdb"] = strconv.Itoa(d.ExternalIDs.TVDBID)
 	}

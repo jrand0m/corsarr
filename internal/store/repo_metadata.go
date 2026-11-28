@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"time"
 
@@ -74,4 +75,52 @@ func (r Metadata) list(ctx context.Context, q string, args ...any) ([]MetadataEn
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// Bytes is the size of every cached record.
+func (r Metadata) Bytes(ctx context.Context) (int64, error) {
+	var n sql.NullInt64
+	err := r.s.R().QueryRowContext(ctx, "SELECT SUM(length(record)) FROM metadata_cache").Scan(&n)
+	return n.Int64, err
+}
+
+// unusedMeta selects records of items that are not in the library, oldest first.
+const unusedMeta = `SELECT rowid, length(record) FROM metadata_cache m WHERE NOT (
+	(m.kind = 'movie' AND EXISTS (SELECT 1 FROM movies WHERE CAST(movies.tmdb_id AS TEXT) = m.external_id)) OR
+	(m.kind = 'tv' AND EXISTS (SELECT 1 FROM series WHERE CAST(series.tmdb_id AS TEXT) = m.external_id)) OR
+	(m.kind = 'music' AND EXISTS (SELECT 1 FROM artists WHERE artists.mbid = m.external_id)))
+	ORDER BY fetched_at, rowid`
+
+// EvictUnused deletes the oldest records of items not in the library until at
+// least want bytes are freed or none are left; it returns the rows and bytes freed.
+func (r Metadata) EvictUnused(ctx context.Context, want int64) (int, int64, error) {
+	var n int
+	var freed int64
+	err := r.s.Write(ctx, func(tx *sql.Tx) error {
+		n, freed = 0, 0
+		rows, err := tx.QueryContext(ctx, unusedMeta)
+		if err != nil {
+			return err
+		}
+		var ids []int64
+		for rows.Next() && freed < want {
+			var id, size int64
+			if err := rows.Scan(&id, &size); err != nil {
+				rows.Close()
+				return err
+			}
+			ids, freed = append(ids, id), freed+size
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		for _, id := range ids {
+			if _, err := tx.ExecContext(ctx, "DELETE FROM metadata_cache WHERE rowid = ?", id); err != nil {
+				return err
+			}
+		}
+		n = len(ids)
+		return nil
+	})
+	return n, freed, err
 }

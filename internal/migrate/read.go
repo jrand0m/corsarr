@@ -176,7 +176,14 @@ func readNaming(ctx context.Context, c *Client, s *Snapshot, _ ReadOptions) erro
 	if err := c.get(ctx, "/config/naming", nil, &n); err != nil {
 		return err
 	}
-	s.Rename = map[App]*bool{Sonarr: n.RenameEpisodes, Radarr: n.RenameMovies, Lidarr: n.RenameTracks}[c.ep.App]
+	s.Naming = &SrcNaming{Rename: map[App]*bool{Sonarr: n.RenameEpisodes, Radarr: n.RenameMovies, Lidarr: n.RenameTracks}[c.ep.App],
+		Colon: colonName(n.ColonReplacementFormat), Formats: map[string]string{
+			"standardEpisodeFormat": n.StandardEpisodeFormat, "dailyEpisodeFormat": n.DailyEpisodeFormat,
+			"animeEpisodeFormat": n.AnimeEpisodeFormat, "seriesFolderFormat": n.SeriesFolderFormat,
+			"seasonFolderFormat": n.SeasonFolderFormat, "specialsFolderFormat": n.SpecialsFolderFormat,
+			"standardMovieFormat": n.StandardMovieFormat, "movieFolderFormat": n.MovieFolderFormat,
+			"standardTrackFormat": n.StandardTrackFormat, "multiDiscTrackFormat": n.MultiDiscTrackFormat,
+			"artistFolderFormat": n.ArtistFolderFormat}}
 	return nil
 }
 

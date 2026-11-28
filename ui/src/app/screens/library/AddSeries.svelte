@@ -4,6 +4,7 @@
   (Enter) or add and search missing episodes (Ctrl/Cmd+Enter).
 -->
 <script lang="ts">
+  import { artSrc } from '../../art';
   import { onMount } from 'svelte';
   import Artwork from '../../../lib/components/atoms/Artwork/Artwork.svelte';
   import Button from '../../../lib/components/atoms/Button/Button.svelte';
@@ -156,7 +157,7 @@
           <label class={['opt', { chosen: picked === idOf(m), dim: own }]}>
             <input type="radio" name="match" value={idOf(m)} bind:group={picked} disabled={own} />
             <span class="rank num" aria-hidden="true">{i + 1}</span>
-            <Artwork src={m.posterUrl ?? null} title={m.title} kind="tv" width={40} />
+            <Artwork src={artSrc(m.posterUrl, 40)} title={m.title} kind="tv" width={40} />
             <span class="text">
               <span class="top"><span class="name">{m.title}{#if m.year}{' '}<span class="year num">({m.year})</span>{/if}</span>
                 {#if own}<StatusBadge family="item" value="cutoff-met" size="sm" detail="in library" />{/if}</span>

@@ -6,6 +6,7 @@ import (
 
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/parse"
 )
 
@@ -108,7 +109,7 @@ func TestProfiles(t *testing.T) {
 	if _, ok := ProfileByKey("nope"); ok {
 		t.Fatal("unknown")
 	}
-	if FolderName(example) != "The Matrix (1999)" {
-		t.Fatal(FolderName(example))
+	if FolderName(example, naming.DefaultMovie()) != "The Matrix (1999)" {
+		t.Fatal(FolderName(example, naming.DefaultMovie()))
 	}
 }

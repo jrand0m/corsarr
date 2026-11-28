@@ -41,6 +41,7 @@
     count, episodeCode, episodeRange, episodeState, itemStatusOf, monitorModes, queuedEpisodes, seasonName, seasonOrder, seriesItemStatus, seriesStatusLabel,
   } from '../../tv';
   import type { ScreenProps } from '../../screen';
+  import { artSrc } from '../../art';
 
   let { params = {} }: ScreenProps = $props();
   const { api, live, profiles, toasts, navigate } = app();
@@ -87,7 +88,7 @@
   const runtime = (min?: number) => (min ? (min >= 60 ? `${Math.floor(min / 60)}h ${min % 60}m` : `${min}m`) : undefined);
 
   const entity = $derived(show ? {
-    title: show.title, kind: 'tv' as const, art: show.posterUrl || null,
+    title: show.title, kind: 'tv' as const, art: artSrc(show.posterUrl, 128),
     meta: [show.year || undefined, show.network, seriesStatusLabel[show.status || ''], runtime(show.runtimeMin)].filter(Boolean).join(' · '),
     monitor: (show.monitored ? 'monitored' : 'unmonitored') as MonitorState,
     status: [{ family: 'item' as const, value: downloads.length ? 'queued' : seriesItemStatus(show), detail: downloads.length ? count(downloads.length, 'download') : undefined }],

@@ -25,7 +25,14 @@ export interface PlanEntry {
   target?: string;
 }
 
-export interface SourceInfo { app: SourceApp; url: string; name?: string; version?: string; supported: string; error?: string }
+export interface SourceInfo {
+  app: SourceApp; url: string; name?: string; version?: string; supported: string; error?: string;
+  /** How long reading this source took. */
+  readMs?: number;
+}
+
+/** How one source naming token maps onto corsarr's templates. */
+export interface TokenMapping { source: SourceApp; field: string; token: string; target?: string; status: 'exact' | 'approximate' | 'none'; note?: string }
 
 export interface MigrationReport {
   runId?: number;
@@ -35,7 +42,10 @@ export interface MigrationReport {
   counts: Partial<Record<Outcome, number>> | null;
   config?: string;
   env?: string[];
+  naming?: TokenMapping[];
   planHash: string;
+  startedAt?: string;
+  finishedAt?: string;
 }
 
 export interface MigrationRun {
@@ -73,7 +83,7 @@ export const categories: { value: string; label: string; description: string }[]
   { value: 'rootFolders', label: 'Root folders', description: 'Written to the config snippet' },
   { value: 'indexers', label: 'Indexers', description: 'Written to the config snippet' },
   { value: 'clients', label: 'Download clients', description: 'Written to the config snippet' },
-  { value: 'naming', label: 'Naming', description: 'Reported only' },
+  { value: 'naming', label: 'Naming', description: 'Written to the config snippet, with a token report' },
   { value: 'downloads', label: 'In-flight downloads', description: 'Tracked by hash; the client is not touched' },
   { value: 'blocklist', label: 'Blocklist', description: 'Kept from grabbing again' },
   { value: 'history', label: 'History', description: 'Recent rows, marked as imported' },
@@ -443,7 +453,7 @@ const appKind: Partial<Record<SourceApp, string>> = { sonarr: 'tv', radarr: 'mov
 const kindLabel: Record<string, string> = { tv: 'TV', movie: 'Movies', music: 'Music', book: 'Books' };
 
 export interface ConfigNotice {
-  /** Media kinds whose mode the config file sets, with the snippet to put there instead. */
+  /** Media kinds whose mode the config file sets to another mode, with the snippet to put there instead. */
   kinds: { kind: string; label: string; snippet: string }[];
   /** Chosen categories that only become a config snippet or a report. */
   snippetOnly: string[];
@@ -458,7 +468,7 @@ export function configNotice(f: RunForm, modes: KindState[]): ConfigNotice {
   const mode = f.activate ? 'active' : 'shadow';
   const chosenKinds = new Set(f.sources.filter((s) => s.include).map((s) => appKind[s.app]));
   const kinds = f.scope.includes('library')
-    ? modes.filter((k) => k.managedByConfig && chosenKinds.has(k.kind))
+    ? modes.filter((k) => k.managedByConfig && k.mode !== mode && chosenKinds.has(k.kind))
       .map((k) => ({ kind: k.kind, label: kindLabel[k.kind] ?? k.kind, snippet: `mediaKinds:\n  ${k.kind}:\n    mode: ${mode}\n` }))
     : [];
   const snippetOnly = f.scope.filter((c) => configOnly.has(c)).map(categoryLabel);

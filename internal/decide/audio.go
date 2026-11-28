@@ -39,6 +39,7 @@ var audioLadder = func() []Quality {
 		{"mp3-224", "MP3-224", AudioLossy},
 		{"mp3-256", "MP3-256", AudioLossy},
 		{"aac-256", "AAC-256", AudioLossy},
+		{"aac-vbr", "AAC-VBR", AudioLossy},
 		{"opus", "Opus", AudioLossy},
 		{"mp3-vbr-v0", "MP3-VBR-V0", AudioLossy},
 		{"mp3-320", "MP3-320", AudioLossy},
@@ -174,7 +175,7 @@ func musicSpecs() []ProfileSpec {
 	for _, q := range audioLadder[floor:] {
 		above = append(above, q.ID)
 	}
-	lossy := group("Lossy high", "mp3-192", "aac-192", "vorbis", "mp3-vbr-v2", "mp3-224", "mp3-256", "aac-256", "opus")
+	lossy := group("Lossy high", "mp3-192", "aac-192", "vorbis", "mp3-vbr-v2", "mp3-224", "mp3-256", "aac-256", "aac-vbr", "opus")
 	lossless := group("Lossless", "wav", "ape", "wavpack", "alac", "flac")
 	return []ProfileSpec{
 		{Name: "Any", Kind: domain.KindMusic, Groups: single(above...), Cutoff: "flac", Upgrades: true},

@@ -15,6 +15,7 @@ type SourceInfo struct {
 	Version  string `json:"version,omitempty"`
 	Range    string `json:"supported"`
 	Error    string `json:"error,omitempty"`
+	ReadMs   int64  `json:"readMs"` // how long reading this source took
 }
 
 // Snapshot is everything read from one source, parsed once at the boundary.
@@ -34,7 +35,7 @@ type Snapshot struct {
 	Tags        map[int]string
 	Clients     []SrcClient
 	Indexers    []SrcIndexer
-	Rename      *bool // nil = not read
+	Naming      *SrcNaming // nil = not read
 	Queue       []SrcQueue
 	Blocklist   []SrcBlock
 	History     []SrcHistory

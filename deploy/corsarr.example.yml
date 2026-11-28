@@ -42,6 +42,41 @@ data:
   # write, 022 keeps files writable by corsarr only.
   umask: "002"
 
+# Artwork cache: posters and covers are fetched once, stored and served by corsarr (applies at
+# start).
+cache:
+  # Keep fetched artwork on disk; turn off to fetch artwork from the provider on every view.
+  # true or false.
+  enabled: true
+  # Folder for cached artwork; leave empty to use the cache folder inside the data folder.
+  # dir:
+  # Most disk space the cache may use, with a unit such as 500MiB or 2GiB.
+  maxSize: 1GiB
+  # How artwork is stored.
+  images:
+    # JPEG quality of stored artwork, from 30 to 95; lower saves space, higher looks sharper.
+    quality: 82
+    # Widest a stored poster or cover may be, in pixels, from 100 to 2000.
+    maxWidth: 600
+    # Widest a stored backdrop may be, in pixels, from 100 to 4000.
+    backdropMaxWidth: 1280
+    # How artwork shrinks when the cache nears its size cap: lower quality first, then smaller
+    # sizes, then the least recently viewed is removed.
+    degrade:
+      # Lowest JPEG quality artwork is reduced to before it is made smaller.
+      qualityFloor: 60
+      # How much the JPEG quality drops in each reduction step.
+      qualityStep: 10
+      # Narrowest a poster or cover is made, in pixels, before it is removed instead.
+      widthFloor: 300
+      # Share of its width artwork keeps in each size reduction step, between 0.5 and 0.95.
+      widthStep: 0.75
+      # Share of the size cap at which shrinking starts, between 0.5 and 1.
+      highWater: 0.9
+      # Share of the size cap at which shrinking stops, between 0.3 and 0.95; keep it below
+      # highWater.
+      lowWater: 0.8
+
 # Logging (applies at start).
 log:
   # How much is logged; use debug while tracking down a problem, warn or error to keep logs
@@ -156,19 +191,19 @@ mediaKinds:
 #     #     # Quality ids in this group, for example [webdl-1080p, webrip-1080p].
 #     #     qualities:
 #     #       # One of: unknown, cam, telesync, telecine, screener, dvd, sdtv, webrip-480p, webdl-480p,
-#     #       # bluray-480p, hdtv-720p, webrip-720p, webdl-720p, bluray-720p, hdtv-1080p, webrip-1080p,
-#     #       # webdl-1080p, bluray-1080p, remux-1080p, disc-1080p, hdtv-2160p, webrip-2160p, webdl-2160p,
-#     #       # bluray-2160p, remux-2160p, disc-2160p, audio-unknown, mp3-low, mp3-96, mp3-128, mp3-160,
-#     #       # wma, mp3-192, aac-192, vorbis, mp3-vbr-v2, mp3-224, mp3-256, aac-256, opus, mp3-vbr-v0,
-#     #       # mp3-320, aac-320, wav, ape, wavpack, alac, flac, alac-24, flac-24.
+#     #       # bluray-480p, bluray-576p, hdtv-720p, webrip-720p, webdl-720p, bluray-720p, hdtv-1080p,
+#     #       # webrip-1080p, webdl-1080p, bluray-1080p, remux-1080p, disc-1080p, hdtv-2160p, webrip-2160p,
+#     #       # webdl-2160p, bluray-2160p, remux-2160p, disc-2160p, audio-unknown, mp3-low, mp3-96, mp3-128,
+#     #       # mp3-160, wma, mp3-192, aac-192, vorbis, mp3-vbr-v2, mp3-224, mp3-256, aac-256, aac-vbr,
+#     #       # opus, mp3-vbr-v0, mp3-320, aac-320, wav, ape, wavpack, alac, flac, alac-24, flac-24.
 #     #       -
 #     # Upgrades stop once a file has this quality (or one ranked the same or higher). One of:
 #     # unknown, cam, telesync, telecine, screener, dvd, sdtv, webrip-480p, webdl-480p, bluray-480p,
-#     # hdtv-720p, webrip-720p, webdl-720p, bluray-720p, hdtv-1080p, webrip-1080p, webdl-1080p,
-#     # bluray-1080p, remux-1080p, disc-1080p, hdtv-2160p, webrip-2160p, webdl-2160p, bluray-2160p,
-#     # remux-2160p, disc-2160p, audio-unknown, mp3-low, mp3-96, mp3-128, mp3-160, wma, mp3-192,
-#     # aac-192, vorbis, mp3-vbr-v2, mp3-224, mp3-256, aac-256, opus, mp3-vbr-v0, mp3-320, aac-320,
-#     # wav, ape, wavpack, alac, flac, alac-24, flac-24.
+#     # bluray-576p, hdtv-720p, webrip-720p, webdl-720p, bluray-720p, hdtv-1080p, webrip-1080p,
+#     # webdl-1080p, bluray-1080p, remux-1080p, disc-1080p, hdtv-2160p, webrip-2160p, webdl-2160p,
+#     # bluray-2160p, remux-2160p, disc-2160p, audio-unknown, mp3-low, mp3-96, mp3-128, mp3-160,
+#     # wma, mp3-192, aac-192, vorbis, mp3-vbr-v2, mp3-224, mp3-256, aac-256, aac-vbr, opus,
+#     # mp3-vbr-v0, mp3-320, aac-320, wav, ape, wavpack, alac, flac, alac-24, flac-24.
 #     # cutoff:
 #     # Replace files with better releases until the cutoff and the cutoff format score are met.
 #     # true or false.
@@ -193,12 +228,12 @@ mediaKinds:
 #     # sizes:
 #     #   -
 #     #     # An allowed quality id. One of: unknown, cam, telesync, telecine, screener, dvd, sdtv,
-#     #     # webrip-480p, webdl-480p, bluray-480p, hdtv-720p, webrip-720p, webdl-720p, bluray-720p,
-#     #     # hdtv-1080p, webrip-1080p, webdl-1080p, bluray-1080p, remux-1080p, disc-1080p, hdtv-2160p,
-#     #     # webrip-2160p, webdl-2160p, bluray-2160p, remux-2160p, disc-2160p, audio-unknown, mp3-low,
-#     #     # mp3-96, mp3-128, mp3-160, wma, mp3-192, aac-192, vorbis, mp3-vbr-v2, mp3-224, mp3-256,
-#     #     # aac-256, opus, mp3-vbr-v0, mp3-320, aac-320, wav, ape, wavpack, alac, flac, alac-24,
-#     #     # flac-24.
+#     #     # webrip-480p, webdl-480p, bluray-480p, bluray-576p, hdtv-720p, webrip-720p, webdl-720p,
+#     #     # bluray-720p, hdtv-1080p, webrip-1080p, webdl-1080p, bluray-1080p, remux-1080p, disc-1080p,
+#     #     # hdtv-2160p, webrip-2160p, webdl-2160p, bluray-2160p, remux-2160p, disc-2160p, audio-unknown,
+#     #     # mp3-low, mp3-96, mp3-128, mp3-160, wma, mp3-192, aac-192, vorbis, mp3-vbr-v2, mp3-224,
+#     #     # mp3-256, aac-256, aac-vbr, opus, mp3-vbr-v0, mp3-320, aac-320, wav, ape, wavpack, alac,
+#     #     # flac, alac-24, flac-24.
 #     #     quality:
 #     #     # Smallest size in MB per minute.
 #     #     min:
@@ -210,6 +245,53 @@ mediaKinds:
 #     allowDiscImage: false
 #     # Allow 3D releases. true or false.
 #     allow3D: false
+
+# Folder and file names per kind of media; tokens in braces, e.g. {Movie Title}{ (Release
+# Year)}, with text inside the braces written only when the token has a value.
+naming:
+  # How TV series folders and files are named.
+  tv:
+    # Rename imported files with the file template; false keeps each file's own name inside the
+    # item's folder. true or false.
+    rename: true
+    # What replaces a colon in names: delete drops it, dash writes -, spaceDash writes " - ",
+    # smart writes " - " after a word and drops it between digits. One of: delete, dash,
+    # spaceDash, smart.
+    colon: smart
+    # Folder of a series added from now on, inside its root folder.
+    seriesFolder: '{Series Title}{ (Release Year)}'
+    # Season folder inside the series folder (series that use season folders).
+    seasonFolder: Season {Season}
+    # Name of an imported episode file, without the extension.
+    episodeFile: '{Series Title} - S{Season}E{Episode}{ - Episode Title}{ [Quality Full]}'
+  # How movies folders and files are named.
+  movie:
+    # Rename imported files with the file template; false keeps each file's own name inside the
+    # item's folder. true or false.
+    rename: true
+    # What replaces a colon in names: delete drops it, dash writes -, spaceDash writes " - ",
+    # smart writes " - " after a word and drops it between digits. One of: delete, dash,
+    # spaceDash, smart.
+    colon: smart
+    # Folder of a movie added from now on, inside its root folder.
+    movieFolder: '{Movie Title}{ (Release Year)}'
+    # Name of an imported movie file, without the extension.
+    movieFile: '{Movie Title}{ (Release Year)}{ - Edition}{ [Quality Full]}{ - Release Group}'
+  # How music folders and files are named.
+  music:
+    # Rename imported files with the file template; false keeps each file's own name inside the
+    # item's folder. true or false.
+    rename: true
+    # What replaces a colon in names: delete drops it, dash writes -, spaceDash writes " - ",
+    # smart writes " - " after a word and drops it between digits. One of: delete, dash,
+    # spaceDash, smart.
+    colon: smart
+    # Folder of an artist added from now on, inside its root folder.
+    artistFolder: '{Artist Name}'
+    # Album folder inside the artist folder.
+    albumFolder: '{Album Title}{ (Release Year)}'
+    # Name of an imported track file, without the extension.
+    trackFile: '{Artist Name} - {Album Title} - {Track} - {Track Title}'
 
 # Automatic clean-up and upgrade rules.
 # automation:

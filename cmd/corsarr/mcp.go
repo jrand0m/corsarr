@@ -127,7 +127,7 @@ func (r *relay) listen(ctx context.Context) {
 		return
 	}
 	r.listening = true
-	session := r.session // read here: later sends may set it while the stream runs
+	session := r.session // read here: send may replace r.session while the stream runs
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()

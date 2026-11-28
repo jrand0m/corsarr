@@ -8,7 +8,7 @@
   import MonitorToggle from '../lib/components/molecules/MonitorToggle/MonitorToggle.svelte';
   import type { Column } from '../lib/components/organisms/DataTable/DataTable.svelte';
   import type { ListView } from '../lib/route/hash';
-  import { movies, type MovieRow } from '../lib/storybook/fixtures';
+  import { artSwatch, movies, type MovieRow } from '../lib/storybook/fixtures';
 
   let { view = 'table', selected = [] }: { view?: ListView; selected?: string[] } = $props();
 
@@ -30,7 +30,8 @@
     { id: 'profile', label: 'Profile', options: [{ value: 'HD', label: 'HD', count: 90 }, { value: 'UHD', label: 'UHD', count: 30 }] },
     { id: 'tag', label: 'Tag', options: [{ value: 'kids', label: 'kids' }, { value: 'classics', label: 'classics' }] },
   ];
-  const poster = (r: MovieRow) => ({ id: r.id, title: r.title, kind: 'movie' as const, year: r.year, status: { family: 'item' as const, value: r.status } });
+  const poster = (r: MovieRow, i = Number(r.id.replace(/\D/g, '')) || 0) => ({ id: r.id, title: r.title, kind: 'movie' as const, year: r.year,
+    src: i % 5 === 4 ? null : artSwatch((i * 47) % 360), status: { family: 'item' as const, value: r.status } });
 </script>
 
 {#snippet cell(r: MovieRow, c: Column<MovieRow>)}

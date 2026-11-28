@@ -17,7 +17,7 @@ func (s *Store) TV() TV { return TV{s} }
 
 const seriesCols = `id, tmdb_id, tvdb_id, imdb_id, title, sort_title, year, status, network, overview, genres,
 	runtime_min, alt_titles, poster_url, root_folder, path, profile_key, tags, series_type, season_folders, monitor_new,
-	monitored, added_at`
+	monitored, added_at, fanart_url`
 
 func scanSeries(sc scanner) (domain.Series, error) {
 	var s domain.Series
@@ -25,7 +25,7 @@ func scanSeries(sc scanner) (domain.Series, error) {
 	var added int64
 	err := sc.Scan(&s.ID, &s.TMDBID, &s.TVDBID, &s.IMDBID, &s.Title, &s.SortTitle, &s.Year, &s.Status, &s.Network,
 		&s.Overview, &genres, &s.RuntimeMin, &alt, &s.PosterURL, &s.RootFolder, &s.Path, &s.ProfileKey, &tags, &typ,
-		&s.SeasonFolders, &monNew, &s.Monitored, &added)
+		&s.SeasonFolders, &monNew, &s.Monitored, &added, &s.FanartURL)
 	s.Type, s.MonitorNew, s.AddedAt = domain.SeriesType(typ), domain.MonitorNew(monNew), fromMS(added)
 	s.Genres, s.AltTitles, s.Tags = jsonList(genres), jsonList(alt), jsonList(tags)
 	return s, err
@@ -57,11 +57,11 @@ func (r TV) AddSeries(ctx context.Context, s domain.Series, seasons []domain.Sea
 	err := r.s.Write(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `INSERT INTO series (tmdb_id, tvdb_id, imdb_id, title, sort_title, year, status,
 			network, overview, genres, runtime_min, alt_titles, poster_url, root_folder, path, profile_key, tags,
-			series_type, season_folders, monitor_new, monitored, added_at, refreshed_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (tmdb_id) DO NOTHING`,
+			series_type, season_folders, monitor_new, monitored, added_at, refreshed_at, fanart_url)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (tmdb_id) DO NOTHING`,
 			s.TMDBID, s.TVDBID, s.IMDBID, s.Title, s.SortTitle, s.Year, s.Status, s.Network, s.Overview, jsonText(s.Genres),
 			s.RuntimeMin, jsonText(s.AltTitles), s.PosterURL, s.RootFolder, s.Path, s.ProfileKey, jsonText(s.Tags),
-			string(s.Type), s.SeasonFolders, string(s.MonitorNew), s.Monitored, ms(s.AddedAt), ms(s.AddedAt))
+			string(s.Type), s.SeasonFolders, string(s.MonitorNew), s.Monitored, ms(s.AddedAt), ms(s.AddedAt), s.FanartURL)
 		if err != nil {
 			return err
 		}
@@ -113,10 +113,10 @@ func (r TV) Sync(ctx context.Context, s domain.Series, seasons []domain.Season, 
 	return r.s.Write(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `UPDATE series SET tvdb_id = ?, imdb_id = ?, title = ?, sort_title = ?, year = ?,
 			status = ?, network = ?, overview = ?, genres = ?, runtime_min = ?, alt_titles = ?, poster_url = ?,
-			root_folder = ?, path = ?, profile_key = ?, tags = ?, series_type = ?, season_folders = ?, monitor_new = ?,
-			monitored = ? WHERE id = ?`, s.TVDBID, s.IMDBID, s.Title, s.SortTitle, s.Year, s.Status, s.Network, s.Overview,
-			jsonText(s.Genres), s.RuntimeMin, jsonText(s.AltTitles), s.PosterURL, s.RootFolder, s.Path, s.ProfileKey,
-			jsonText(s.Tags), string(s.Type), s.SeasonFolders, string(s.MonitorNew), s.Monitored, s.ID); err != nil {
+			fanart_url = ?, root_folder = ?, path = ?, profile_key = ?, tags = ?, series_type = ?, season_folders = ?,
+			monitor_new = ?, monitored = ? WHERE id = ?`, s.TVDBID, s.IMDBID, s.Title, s.SortTitle, s.Year, s.Status, s.Network,
+			s.Overview, jsonText(s.Genres), s.RuntimeMin, jsonText(s.AltTitles), s.PosterURL, s.FanartURL, s.RootFolder, s.Path,
+			s.ProfileKey, jsonText(s.Tags), string(s.Type), s.SeasonFolders, string(s.MonitorNew), s.Monitored, s.ID); err != nil {
 			return err
 		}
 		return syncChildren(ctx, tx, s.ID, seasons, eps, drop)
