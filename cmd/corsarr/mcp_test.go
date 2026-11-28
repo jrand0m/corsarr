@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -97,4 +99,87 @@ func TestRelayReadsEventStreamsAndReportsUnreachable(t *testing.T) {
 	if mcpURL(":8090", "/c") != "http://127.0.0.1:8090/c/mcp" {
 		t.Fatal(mcpURL(":8090", "/c"))
 	}
+}
+
+// lockedBuffer is a bytes.Buffer safe for the relay's two writers.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}
+
+// The relay forwards the session's notification stream to stdout,
+// reconnecting after a server error and stopping when the session is gone.
+func TestRelayForwardsNotifications(t *testing.T) {
+	old := streamRetry
+	streamRetry = time.Millisecond
+	t.Cleanup(func() { streamRetry = old })
+	var gets atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.Header().Set("Mcp-Session-Id", "s1")
+			_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":1,"result":{}}`)
+			return
+		}
+		if r.Header.Get("Mcp-Session-Id") != "s1" || r.Header.Get("Authorization") != "Bearer k" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		switch gets.Add(1) {
+		case 1:
+			w.WriteHeader(http.StatusBadGateway)
+		case 2:
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = io.WriteString(w, ": keep-alive\n\nevent: message\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/resources/updated\",\"params\":{\"uri\":\"corsarr://queue\"}}\n\n")
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	out := &lockedBuffer{}
+	r := &relay{url: srv.URL, key: "k", client: srv.Client(), streamer: srv.Client(), out: out}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := r.send(ctx, []byte(`{"jsonrpc":"2.0","id":1,"method":"initialize"}`)); err != nil {
+		t.Fatal(err)
+	}
+	_ = r.send(ctx, []byte(`{"jsonrpc":"2.0","id":2,"method":"ping"}`)) // one stream per session
+	r.wait()
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 3 || !strings.Contains(out.String(), `"uri":"corsarr://queue"`) || gets.Load() != 3 {
+		t.Fatalf("%d gets: %q", gets.Load(), out.String())
+	}
+}
+
+// A cancelled relay stops listening.
+func TestRelayStreamStopsWithTheContext(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.Header().Set("Mcp-Session-Id", "s1")
+			_, _ = io.WriteString(w, `{}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+	r := &relay{url: srv.URL, client: srv.Client(), streamer: srv.Client(), out: &lockedBuffer{}}
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := r.send(ctx, []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	r.wait()
 }
