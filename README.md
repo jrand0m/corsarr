@@ -125,6 +125,13 @@ printf '%s\n' "$NEW_PASSWORD" | corsarr admin reset-password      # add --userna
 printf '%s\n' "$NEW_PASSWORD" | docker exec -i corsarr /corsarr admin reset-password
 ```
 
+## Plugin modules
+
+Download clients that are not built in can be added as sandboxed WebAssembly modules, without a
+new corsarr build: drop the `.wasm` file into `<data>/plugins` or run `corsarr plugin load
+mymodule.wasm`. `corsarr plugin list|test|unload|rollback` manage them. How to write one with the
+Go SDK, the limits and the settings rules are in [`docs/plugins.md`](docs/plugins.md).
+
 ## Using corsarr with Jellyseerr or Homepage
 
 corsarr can answer the parts of the Sonarr, Radarr, Lidarr and Prowlarr APIs that request

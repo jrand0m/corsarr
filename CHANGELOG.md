@@ -2,6 +2,14 @@
 
 Short notes per release. Each release's assets, checksums and how to verify them are on its GitHub release page.
 
+## Unreleased
+
+- Plugin modules: add download clients as sandboxed WebAssembly files without a new corsarr build; drop them into the plugins folder or use `corsarr plugin load`, hot-swapped on upgrade with rollback to the previous version. See `docs/plugins.md`.
+- `corsarr plugin list|test|load|unload|rollback`; `plugin test` verifies a module and runs the download-client conformance suite against it.
+- Go SDK for modules (`sdk/go`) with a test harness and an example download client.
+- New `plugins` settings: plugins folder, built-ins to switch off, and memory, time, concurrency and size limits for modules.
+- Plugin settings forms are typed data checked on the server: a closed set of field types, plain text with a small emoji set, per-field errors.
+
 ## v0.5.3 — 2026-11-27
 
 - Migration wizard: sources and path rewrites are checked as you type, each field has a Test button, and config-managed parts are flagged before the run.
