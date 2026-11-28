@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/plugin"
 )
@@ -86,6 +87,9 @@ type Config struct {
 	MCP MCP
 	// Plugins is the plugin-module section.
 	Plugins Plugins
+	// CustomFormats and QualityProfiles are the config-file documents, by key.
+	CustomFormats   []decide.FormatDoc
+	QualityProfiles []decide.ProfileDoc
 	// Instances maps section (indexers, downloadClients, …) → key → instance.
 	Instances map[string]map[domain.ObjectKey]Instance
 	Source    Source
@@ -151,6 +155,9 @@ func LoadFrom(src Source, in Inputs, reg *plugin.Registry) (*Config, error) {
 	}
 	c := build(s, t)
 	c.Source, c.Warnings, c.locs = src, warns, locs
+	if errs := c.checkQuality(); len(errs) > 0 {
+		return nil, errs
+	}
 	for section, m := range c.Instances {
 		for k, inst := range m {
 			inst.Loc = locs[section+"."+string(k)]
@@ -293,6 +300,7 @@ func build(s *Schema, t tree) *Config {
 	c.Legacy = legacyApps(t)
 	c.MCP = mcpOf(t)
 	c.Plugins = pluginsOf(t)
+	c.CustomFormats, c.QualityProfiles = formatDocs(t), profileDocs(t)
 	return c
 }
 

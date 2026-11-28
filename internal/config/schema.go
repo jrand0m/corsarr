@@ -111,6 +111,8 @@ func NewSchema(reg *plugin.Registry) *Schema {
 			Field{Name: "kind", Node: &Node{Kind: KindEnum, Required: true, Enum: kindNames(), Doc: "Which kind of media lives in this folder."}},
 		)}},
 	}
+	fields = append(fields, Field{Name: "customFormats", Live: true, Node: customFormatsNode()},
+		Field{Name: "qualityProfiles", Live: true, Node: qualityProfilesNode()})
 	fields = append(fields, Field{Name: "automation", Live: true, Node: obj("Automatic clean-up and upgrade rules.",
 		Field{Name: "rules", Node: &Node{Kind: KindMap, Doc: "One entry per rule, keyed by rule id (upgradereplace, itemdelete, recyclepurge, …).",
 			Elem: obj("", Field{Name: "mode", Node: &Node{Kind: KindEnum, Enum: RuleModes,

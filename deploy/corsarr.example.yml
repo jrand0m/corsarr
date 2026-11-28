@@ -102,6 +102,114 @@ mediaKinds:
 #     # Which kind of media lives in this folder. One of: tv, movie, music, book.
 #     kind:
 
+# Custom formats, one entry per key you choose (lower-case letters and digits); profiles score
+# them.
+# customFormats:
+#   <name>:
+#     # Name shown in the web UI and in decision reasons.
+#     name:
+#     # The tests a release must pass; conditions of one kind need one hit, conditions marked
+#     # required must all hold.
+#     conditions:
+#       -
+#         # What the condition looks at: title, group or edition (a pattern); source, resolution,
+#         # modifier, codec, audio, channels, hdr, language, flag or releasetype (values); size in GB or
+#         # year (min and max). One of: title, group, edition, source, resolution, modifier, codec,
+#         # audio, channels, hdr, language, flag, size, releasetype, year.
+#         kind:
+#         # Regular expression for title, group and edition conditions, matched without regard to case,
+#         # for example \bDTS\b.
+#         pattern:
+#         # Values for list conditions; the condition holds when the release has any of them, for
+#         # example [aac, ac3, eac3].
+#         values:
+#           -
+#         # Lower bound of a size (GB, exclusive) or year (inclusive) condition.
+#         min:
+#         # Upper bound of a size (GB) or year condition; 0 means no upper bound.
+#         max:
+#         # Turn the condition around: it holds when the test fails. true or false.
+#         negate: false
+#         # The format matches only when this condition holds; otherwise one condition of the same kind
+#         # is enough. true or false.
+#         required: false
+#         # Language conditions only: hold when the release has a language other than the listed ones.
+#         # true or false.
+#         except: false
+
+# Custom quality profiles, one entry per key you choose (not a built-in key such as hd1080p);
+# series, movies and artists name them by key.
+# qualityProfiles:
+#   <name>:
+#     # Name shown in the web UI.
+#     # name:
+#     # What the profile is for: tv, movie, both, or music on its own.
+#     # kinds:
+#     #   # One of: tv, movie, music.
+#     #   -
+#     # Allowed qualities from worst to best; qualities in one group count the same.
+#     # groups:
+#     #   -
+#     #     # Name of a group of several qualities, for example WEB 1080p.
+#     #     name:
+#     #     # Quality ids in this group, for example [webdl-1080p, webrip-1080p].
+#     #     qualities:
+#     #       # One of: unknown, cam, telesync, telecine, screener, dvd, sdtv, webrip-480p, webdl-480p,
+#     #       # bluray-480p, hdtv-720p, webrip-720p, webdl-720p, bluray-720p, hdtv-1080p, webrip-1080p,
+#     #       # webdl-1080p, bluray-1080p, remux-1080p, disc-1080p, hdtv-2160p, webrip-2160p, webdl-2160p,
+#     #       # bluray-2160p, remux-2160p, disc-2160p, audio-unknown, mp3-low, mp3-96, mp3-128, mp3-160,
+#     #       # wma, mp3-192, aac-192, vorbis, mp3-vbr-v2, mp3-224, mp3-256, aac-256, opus, mp3-vbr-v0,
+#     #       # mp3-320, aac-320, wav, ape, wavpack, alac, flac, alac-24, flac-24.
+#     #       -
+#     # Upgrades stop once a file has this quality (or one ranked the same or higher). One of:
+#     # unknown, cam, telesync, telecine, screener, dvd, sdtv, webrip-480p, webdl-480p, bluray-480p,
+#     # hdtv-720p, webrip-720p, webdl-720p, bluray-720p, hdtv-1080p, webrip-1080p, webdl-1080p,
+#     # bluray-1080p, remux-1080p, disc-1080p, hdtv-2160p, webrip-2160p, webdl-2160p, bluray-2160p,
+#     # remux-2160p, disc-2160p, audio-unknown, mp3-low, mp3-96, mp3-128, mp3-160, wma, mp3-192,
+#     # aac-192, vorbis, mp3-vbr-v2, mp3-224, mp3-256, aac-256, opus, mp3-vbr-v0, mp3-320, aac-320,
+#     # wav, ape, wavpack, alac, flac, alac-24, flac-24.
+#     # cutoff:
+#     # Replace files with better releases until the cutoff and the cutoff format score are met.
+#     # true or false.
+#     upgrades: true
+#     # Scores for custom formats; a release scores the sum of the formats it matches.
+#     # formats:
+#     #   -
+#     #     # Key of a custom format.
+#     #     format:
+#     #     # Points a match adds (negative to penalise).
+#     #     score: 0
+#     #     # Reject every release matching this format, whatever the scores. true or false.
+#     #     reject: false
+#     # Releases scoring below this are rejected.
+#     minFormatScore: 0
+#     # Upgrades continue until a file scores at least this (and has the cutoff quality).
+#     cutoffFormatScore: 0
+#     # Smallest score gain that counts as an upgrade at the same quality.
+#     minUpgradeFormatScore: 1
+#     # Size limits of this profile for some qualities, in MB per minute of runtime; other qualities
+#     # use the global limits.
+#     # sizes:
+#     #   -
+#     #     # An allowed quality id. One of: unknown, cam, telesync, telecine, screener, dvd, sdtv,
+#     #     # webrip-480p, webdl-480p, bluray-480p, hdtv-720p, webrip-720p, webdl-720p, bluray-720p,
+#     #     # hdtv-1080p, webrip-1080p, webdl-1080p, bluray-1080p, remux-1080p, disc-1080p, hdtv-2160p,
+#     #     # webrip-2160p, webdl-2160p, bluray-2160p, remux-2160p, disc-2160p, audio-unknown, mp3-low,
+#     #     # mp3-96, mp3-128, mp3-160, wma, mp3-192, aac-192, vorbis, mp3-vbr-v2, mp3-224, mp3-256,
+#     #     # aac-256, opus, mp3-vbr-v0, mp3-320, aac-320, wav, ape, wavpack, alac, flac, alac-24,
+#     #     # flac-24.
+#     #     quality:
+#     #     # Smallest size in MB per minute.
+#     #     min:
+#     #     # Size aimed for in MB per minute; 0 uses the global preferred size.
+#     #     preferred:
+#     #     # Largest size in MB per minute; must be above min.
+#     #     max:
+#     # Allow full disc images (ISO, BDMV). true or false.
+#     allowDiscImage: false
+#     # Allow 3D releases. true or false.
+#     allow3D: false
+
 # Automatic clean-up and upgrade rules.
 # automation:
 #   # One entry per rule, keyed by rule id (upgradereplace, itemdelete, recyclepurge, …).
