@@ -19,6 +19,9 @@ Short notes per release. Each release's assets, checksums and how to verify them
 - `plugins.uiInstall: false` locks module changes in the web UI and the API (the Kubernetes, Helm and systemd samples ship locked); `plugins.install` installs modules from the catalogue at start; `plugins.autoUpdate` takes patch or minor updates that ask for no new permissions.
 - Module installs, updates, rollbacks and uninstalls are recorded in History with version and hash; the assistant tool `list_plugins` lists plugins and modules read-only.
 - Uninstalling a module keeps its instances in the config; they report the module as not installed and run again after a reinstall.
+- Settings › Plugins & integrations › Installed modules: each module's status, version, kind, what it may reach and the instances using it, with rollback and uninstall.
+- Module pages show the module's details, permissions and the instances using it with their settings and action buttons (for example Test connection); a new-instance form is checked by the server and turns into ready-to-paste YAML, secrets as environment references.
+- Settings › Catalogue: install or update modules from the signed catalogue after reviewing their permissions; updates that ask for more wait for approval; a stale or unreachable catalogue says so. `plugins.uiInstall: false` locks these changes and the pages show where the lock is set.
 
 ## v0.5.4 — 2026-11-28
 

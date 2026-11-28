@@ -18,6 +18,9 @@ export type { FieldControl, FieldStateProps } from './Field/Field.svelte';
 export type { MapEntry } from './MapField/MapField.svelte';
 
 // Pattern molecules.
+export { default as PermissionList } from './PermissionList/PermissionList.svelte';
+export { default as PluginActionResult } from './PluginActionResult/PluginActionResult.svelte';
+export type { ActionState } from './PluginActionResult/PluginActionResult.svelte';
 export { default as InlineCheck } from './InlineCheck/InlineCheck.svelte';
 export { default as PathPicker } from './PathPicker/PathPicker.svelte';
 export type { PathLocation } from './PathPicker/PathPicker.svelte';

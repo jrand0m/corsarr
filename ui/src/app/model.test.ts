@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { availableAt, eventSubject, eventView, isAvailable, movieStatus, parseEnvExport, queuedMovieIds, toQueueCard } from './model';
+import { availableAt, eventDetail, eventSubject, eventView, isAvailable, movieStatus, parseEnvExport, queuedMovieIds, toQueueCard } from './model';
 import { applyList, facetCounts } from './list';
 import type { Download, Movie } from './api/types';
 import { instanceView, toSchemaField } from './screens/settings/plugin-form';
@@ -67,6 +67,18 @@ describe('events', () => {
       .toEqual({ label: 'movie mode: shadow', family: 'kindMode', value: 'shadow' });
     expect(eventView({ ...h, type: 'decision.shadowed', data: {} })).toMatchObject({ family: 'kindMode', value: 'shadow' });
     expect(eventSubject(h)).toBe('tmdb');
+  });
+  it('words plugin module changes', () => {
+    const ev = (data: Record<string, unknown>) => ({ eventId: 'p', type: 'plugin.changed', occurredAt: '', actor: 'user', data });
+    const up = ev({ action: 'updated', id: 'harbourdl', version: '1.3.0', previous: '1.2.0', sha256: 'ab', source: 'catalogue' });
+    expect(eventView(up)).toEqual({ label: 'Plugin updated', family: 'check', value: 'pass' });
+    expect(eventSubject(up)).toBe('harbourdl');
+    expect(eventDetail(up)).toBe('1.3.0 (was 1.2.0) · from the catalogue');
+    expect(eventView(ev({ action: 'installed', id: 'x', version: '1.0.0' })).label).toBe('Plugin installed');
+    expect(eventView(ev({ action: 'rolledback', id: 'x', version: '1.0.0' })).label).toBe('Plugin rolled back');
+    const gone = ev({ action: 'uninstalled', id: 'x', version: '1.0.0', source: 'file' });
+    expect(eventView(gone)).toEqual({ label: 'Plugin uninstalled', family: 'download', value: 'removed' });
+    expect(eventDetail(gone)).toBe('1.0.0 · from a file');
   });
   it('summarises a season of episodes in one line', () => {
     const items = [1, 2, 3].map((n) => ({ ref: { kind: 'tv' as const, id: n }, title: `Example Show S01E0${n}`, series: 'Example Show' }));

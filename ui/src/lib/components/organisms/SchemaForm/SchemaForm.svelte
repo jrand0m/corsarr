@@ -30,7 +30,7 @@
   import type { PathLocation } from '../../molecules/PathPicker/PathPicker.svelte';
   import SetupFlow, { type SetupDriver } from '../SetupFlow/SetupFlow.svelte';
   import {
-    changes, dirtyKeys, initialValues, isVisible, validate,
+    changes, dirtyKeys, fromFormValue, initialValues, isVisible, validate,
     type FieldMeta, type FormValues, type SchemaField, type SchemaOption, type SettingsSchema,
   } from '../../../forms/schema';
   import { formatCount } from '../../../format/quantity';
@@ -57,10 +57,12 @@
     now?: number;
     /** Show the "managed by config" banner; off when the page already shows one with the source. */
     managedBanner?: boolean;
+    /** Called with every visible field's current value (saved shape) whenever the draft changes. */
+    onvalues?: (values: FormValues) => void;
   }
   let {
     schema, values = {}, meta = {}, errors = {}, label, loadoptions, onsave, oncancel, setup,
-    pathLocations = [], saveLabel = 'Save', readonly = false, now, managedBanner = true,
+    pathLocations = [], saveLabel = 'Save', readonly = false, now, managedBanner = true, onvalues,
   }: Props = $props();
 
   const id = $props.id();
@@ -89,6 +91,13 @@
     });
   });
   $effect(() => { serverErrors = { ...errors }; });
+
+  $effect(() => {
+    if (!onvalues) return;
+    const snap = $state.snapshot(draft) as FormValues;
+    const out = Object.fromEntries(schema.fields.filter((f) => isVisible(f, snap, schema)).map((f) => [f.key, fromFormValue(f, snap[f.key])]));
+    untrack(() => onvalues(out));
+  });
 
   const metaOf = (key: string): FieldMeta => ({ ...meta[key], ...localMeta[key] });
   const allMeta = $derived(Object.fromEntries(schema.fields.map((f) => [f.key, metaOf(f.key)])));
