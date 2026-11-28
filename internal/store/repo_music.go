@@ -255,29 +255,6 @@ func (r Music) MarkAvailable(ctx context.Context, ids []int64) error {
 	})
 }
 
-// CoverAlbums maps each artist to the MusicBrainz id of its newest album of
-// primary type album (undated albums count as oldest).
-func (r Music) CoverAlbums(ctx context.Context) (map[int64]string, error) {
-	rows, err := r.s.R().QueryContext(ctx, `SELECT artist_id, mbid FROM albums WHERE primary_type = 'album'
-		ORDER BY artist_id, COALESCE(release_date, -9223372036854775807) DESC, id DESC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[int64]string{}
-	for rows.Next() {
-		var id int64
-		var mbid string
-		if err := rows.Scan(&id, &mbid); err != nil {
-			return nil, err
-		}
-		if _, ok := out[id]; !ok {
-			out[id] = mbid
-		}
-	}
-	return out, rows.Err()
-}
-
 // AlbumMBIDs lists the MusicBrainz id of every album in the library.
 func (r Music) AlbumMBIDs(ctx context.Context) ([]string, error) {
 	rows, err := r.s.R().QueryContext(ctx, "SELECT DISTINCT mbid FROM albums")

@@ -63,7 +63,7 @@ func TestImageIndexRoundTrip(t *testing.T) {
 	}
 }
 
-func TestArtworkOriginsAndCoverAlbums(t *testing.T) {
+func TestArtworkOriginsAndAlbumIDs(t *testing.T) {
 	ctx := context.Background()
 	st := open(t, t.TempDir())
 	m, _, err := st.Movies().Add(ctx, domain.Movie{TMDBID: 1, Title: "M", MinAvailability: domain.AvailReleased, ProfileKey: "any",
@@ -84,17 +84,13 @@ func TestArtworkOriginsAndCoverAlbums(t *testing.T) {
 		t.Fatal(got, err)
 	}
 	old, newer := time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2010, 1, 1, 0, 0, 0, 0, time.UTC)
-	art, _, err := st.Music().AddArtist(ctx, domain.Artist{MBID: "a1", Name: "A", SortName: "A", RootFolder: "/m", Path: "/m/A",
+	_, _, err = st.Music().AddArtist(ctx, domain.Artist{MBID: "a1", Name: "A", SortName: "A", RootFolder: "/m", Path: "/m/A",
 		ProfileKey: "lossless", MetadataProfile: "standard", MonitorNew: domain.MonitorNewItemsNew}, []domain.Album{
 		{MBID: "old", Title: "Old", PrimaryType: domain.AlbumTypeAlbum, ReleaseDate: &old},
 		{MBID: "undated", Title: "U", PrimaryType: domain.AlbumTypeAlbum},
 		{MBID: "single", Title: "S", PrimaryType: "single", ReleaseDate: &newer},
 		{MBID: "new", Title: "New", PrimaryType: domain.AlbumTypeAlbum, ReleaseDate: &newer}})
 	must(t, err)
-	covers, err := st.Music().CoverAlbums(ctx)
-	if err != nil || covers[art.ID] != "new" || len(covers) != 1 {
-		t.Fatal(covers, err)
-	}
 	mbids, _ := st.Music().AlbumMBIDs(ctx)
 	if len(mbids) != 4 {
 		t.Fatal(mbids)

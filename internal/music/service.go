@@ -55,6 +55,7 @@ type Deps struct {
 	Metadata    func() (plugin.MusicMetadata, bool) // first running music metadata plugin
 	RootFolders func() []string                     // music root folders from config
 	Modes       domain.Modes                        // media-kind modes; nil = all active
+	Art         domain.ArtLink                      // artwork addresses in API answers; nil = unchanged
 	Now         func() time.Time
 	Log         *slog.Logger
 }
