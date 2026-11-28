@@ -1,18 +1,27 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/json"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/jrand0m/corsarr/internal/catalogue"
 	"github.com/jrand0m/corsarr/internal/config"
+	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/plugin"
+	"github.com/jrand0m/corsarr/internal/wasm"
 	"github.com/jrand0m/corsarr/internal/wasm/wasmtest"
 	"github.com/jrand0m/corsarr/plugins/example-downloader/fakeapi"
+	"github.com/jrand0m/corsarr/sdk/go/abi"
 )
 
 func writeModule(t *testing.T, name string, data []byte) string {
@@ -124,4 +133,57 @@ func TestServerModules(t *testing.T) {
 	if limitsOf(config.Plugins{MaxModuleMiB: 2}).MaxModuleBytes != 2<<20 {
 		t.Error("limits")
 	}
+}
+
+type busLog struct{ evs []domain.Event }
+
+func (b *busLog) Publish(ev domain.Event) (domain.Event, error) { b.evs = append(b.evs, ev); return ev, nil }
+
+func TestProvisionInstallsFromTheCatalogue(t *testing.T) {
+	mod := wasmtest.Example(t)
+	priv := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{3}, 32))
+	pub := priv.Public().(ed25519.PublicKey)
+	ix, _ := json.Marshal(catalogue.Index{Schema: 1, Release: "v1.0.0", Generated: time.Date(2026, 11, 28, 0, 0, 0, 0, time.UTC),
+		Plugins: []catalogue.Entry{entryOf(t, mod)}})
+	files := map[string][]byte{"/plugins-index.json": ix, "/plugins-index.json.sig": catalogue.Sign(ix, priv), "/exampledl-1.0.0.wasm": mod}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if b, ok := files[r.URL.Path]; ok {
+			_, _ = w.Write(b)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	keys := catalogueKeys
+	catalogueKeys = func() []catalogue.Key { return []catalogue.Key{{ID: catalogue.KeyID(pub), Public: pub}} }
+	defer func() { catalogueKeys = keys; plugin.Default.Unregister("exampledl") }()
+
+	var errs bytes.Buffer
+	c := parse([]string{"--data.dir=" + t.TempDir(), "--plugins.catalogue.url=" + srv.URL + "/plugins-index.json",
+		"--plugins.install.0.id=exampledl", "--plugins.install.1.id=ghost"}, nil, os.Stdout, &errs)
+	c.prepareModules(slog.New(slog.DiscardHandler))
+	defer c.closeModules()
+	if info, ok := c.mods.mgr.Get("exampledl"); !ok || info.Status != "active" {
+		t.Fatalf("not provisioned: %+v", info)
+	}
+	if !strings.Contains(errs.String(), "plugins.install ghost") {
+		t.Fatalf("missing entry not reported: %s", errs.String())
+	}
+	bus := &busLog{}
+	c.recordProvisioned(bus)
+	if len(bus.evs) != 1 || bus.evs[0].Type != domain.EvPluginChanged {
+		t.Fatalf("history: %+v", bus.evs)
+	}
+}
+
+func entryOf(t *testing.T, mod []byte) catalogue.Entry {
+	t.Helper()
+	raw, _ := wasm.CustomSection(mod, abi.ManifestSection)
+	var m abi.Manifest
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	return catalogue.Entry{ID: m.ID, Name: m.Name, Version: m.Version, Kind: m.Kind, ABIVersion: m.ABIVersion, Description: m.Description,
+		Author: m.Author, License: m.License, Homepage: m.Homepage, Permissions: m.Permissions, Size: int64(len(mod)),
+		SHA256: wasm.SHA256(mod), URL: m.ID + "-" + m.Version + ".wasm"}
 }

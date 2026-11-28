@@ -215,7 +215,7 @@ func TestOnConfigChange(t *testing.T) {
 	c := parse([]string{"--data.dir=" + dir}, nil, &bytes.Buffer{}, &bytes.Buffer{})
 	cfg, _ := c.load()
 	var logs bytes.Buffer
-	k, err := startKernel(context.Background(), cfg, newLogger(cli{stderr: &logs}, "info"))
+	k, err := startKernel(context.Background(), cfg, newLogger(cli{stderr: &logs}, "info"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

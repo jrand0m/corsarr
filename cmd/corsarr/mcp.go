@@ -29,7 +29,7 @@ func (c cli) mcpStdio(ctx context.Context) int {
 		fmt.Fprintln(c.stderr, "mcp.enabled is false; enable it to serve assistants")
 		return 1
 	}
-	k, err := startKernel(ctx, cfg, newLogger(c, cfg.Log.Level))
+	k, err := startKernel(ctx, cfg, newLogger(c, cfg.Log.Level), c.moduleStore())
 	if errors.Is(err, store.ErrLocked) {
 		return c.relayMCP(ctx, cfg)
 	}

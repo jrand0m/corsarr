@@ -63,12 +63,13 @@ func (c cli) serve(ctx context.Context, ready func(addr string)) int {
 	}
 	c.prepareModules(log)
 	defer c.closeModules()
-	k, err := startKernel(ctx, cfg, log)
+	k, err := startKernel(ctx, cfg, log, c.moduleStore())
 	if err != nil {
 		fmt.Fprintln(c.stderr, "corsarr:", err)
 		return 1
 	}
 	defer k.close()
+	c.recordProvisioned(k.bus)
 	c.runModules(ctx, k.bus)
 	srv, ln, err := k.listen(ctx, cfg)
 	if err != nil {
@@ -123,7 +124,7 @@ func hasEnv(environ []string, name string) bool {
 	return false
 }
 
-func startKernel(ctx context.Context, cfg *config.Config, log *slog.Logger) (*kernel, error) {
+func startKernel(ctx context.Context, cfg *config.Config, log *slog.Logger, mods app.Modules) (*kernel, error) {
 	st, err := store.Open(ctx, cfg.Data.Dir)
 	if err != nil {
 		return nil, err
@@ -148,7 +149,7 @@ func startKernel(ctx context.Context, cfg *config.Config, log *slog.Logger) (*ke
 	}
 	k.hub = events.NewHub(k.bus, 15*time.Second)
 	if k.app, err = app.New(ctx, app.Deps{Config: k.cfg.Load, Store: st, Bus: k.bus, Health: k.health, Jobs: k.jobs,
-		HTTP: k.http, Plugins: plugin.Default, UIClients: k.hub.Clients, Log: log}); err != nil {
+		HTTP: k.http, Plugins: plugin.Default, UIClients: k.hub.Clients, Log: log, Modules: mods, Version: version}); err != nil {
 		k.close()
 		return nil, err
 	}

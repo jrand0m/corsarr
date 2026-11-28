@@ -477,3 +477,41 @@ func (p *PluginAdmin) forget(id string) {
 	delete(s, id)
 	p.writeSources(s)
 }
+
+// Provision installs the plugins.install entries that are missing (or at
+// another version) from the catalogue, before the configuration is
+// validated. It returns the changes made, for History once it is open, and
+// one error per entry that could not be installed.
+func (p *PluginAdmin) Provision(ctx context.Context, list []config.PluginInstall) ([]PluginChange, []error) {
+	if p.d.Modules == nil || len(list) == 0 {
+		return nil, nil
+	}
+	var (
+		changes []PluginChange
+		errs    []error
+	)
+	bus := p.d.Bus
+	rec := &changeRecorder{}
+	p.d.Bus = rec
+	defer func() { p.d.Bus = bus }()
+	for _, want := range list {
+		if info, ok := p.d.Modules.Get(want.ID); ok && info.Status != modules.StatusUninstalled && (want.Version == "" || info.Version == want.Version) {
+			continue
+		}
+		if _, err := p.installFromCatalogue(ctx, want.ID, want.Version, "system"); err != nil {
+			errs = append(errs, fmt.Errorf("plugins.install %s: %w", want.ID, err))
+		}
+	}
+	for _, ev := range rec.evs {
+		changes = append(changes, ev.Data.(PluginChange))
+	}
+	return changes, errs
+}
+
+// changeRecorder keeps the events of a provisioning run.
+type changeRecorder struct{ evs []domain.Event }
+
+func (r *changeRecorder) Publish(ev domain.Event) (domain.Event, error) {
+	r.evs = append(r.evs, ev)
+	return ev, nil
+}
