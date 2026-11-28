@@ -175,14 +175,9 @@ func readFormats(ctx context.Context, c *Client, s *Snapshot, _ ReadOptions) err
 }
 
 func readRoots(ctx context.Context, c *Client, s *Snapshot, _ ReadOptions) error {
-	var list []wRootFolder
-	if err := c.get(ctx, "/rootfolder", nil, &list); err != nil {
-		return err
-	}
-	for _, r := range list {
-		s.RootFolders = append(s.RootFolders, cleanPath(r.Path))
-	}
-	return nil
+	roots, err := readRootFolders(ctx, c)
+	s.RootFolders = append(s.RootFolders, roots...)
+	return err
 }
 
 func readNaming(ctx context.Context, c *Client, s *Snapshot, _ ReadOptions) error {

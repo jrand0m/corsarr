@@ -103,20 +103,11 @@ type Endpoint struct {
 
 // ParseEndpoint validates a source at the boundary.
 func ParseEndpoint(app, rawURL string, key Secret) (Endpoint, error) {
-	a, err := ParseApp(app)
-	if err != nil {
-		return Endpoint{}, err
+	ep, err := ParseTarget(app, rawURL, key)
+	if err == nil && key.Empty() {
+		err = fmt.Errorf("%s needs an API key", ep.App)
 	}
-	u, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return Endpoint{}, fmt.Errorf("%s address %q must be an http or https URL", a, rawURL)
-	}
-	if key.Empty() {
-		return Endpoint{}, fmt.Errorf("%s needs an API key", a)
-	}
-	u.Path = strings.TrimRight(u.Path, "/")
-	u.RawQuery, u.Fragment, u.User = "", "", nil
-	return Endpoint{App: a, URL: u, Key: key}, nil
+	return ep, err
 }
 
 // Instance is the stable id of the source: its type and canonical address.
