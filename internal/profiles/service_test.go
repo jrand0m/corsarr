@@ -1,11 +1,14 @@
 package profiles
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -15,13 +18,15 @@ import (
 	"github.com/jrand0m/corsarr/internal/config"
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/plugin"
 	"github.com/jrand0m/corsarr/internal/store"
 )
 
 type fakeRepo struct {
-	mu   sync.Mutex
-	rows map[store.QualityTable]map[string]store.QualityObject
-	use  map[string]int
+	mu      sync.Mutex
+	rows    map[store.QualityTable]map[string]store.QualityObject
+	use     map[string]int
+	listErr error
 }
 
 func newRepo() *fakeRepo {
@@ -31,6 +36,9 @@ func newRepo() *fakeRepo {
 func (r *fakeRepo) List(_ context.Context, t store.QualityTable) ([]store.QualityObject, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.listErr != nil {
+		return nil, r.listErr
+	}
 	var out []store.QualityObject
 	for _, o := range r.rows[t] {
 		out = append(out, o)
@@ -273,5 +281,182 @@ func TestFreeKeyAndUpdates(t *testing.T) {
 	}
 	if _, err := s.Profile(ctx, "nope", ""); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("get missing: %v", err)
+	}
+}
+
+func loadedConfig(t *testing.T, yml string) *config.Config {
+	t.Helper()
+	cfg, err := config.LoadFrom(config.Source{Kind: config.SourceFile, Path: "c.yml"},
+		config.Inputs{ReadFile: func(string) ([]byte, error) { return []byte(yml), nil }}, plugin.NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+const managedProfileYAML = `version: 1
+qualityProfiles:
+  cfgp:
+    name: From file
+    kinds: [tv]
+    groups:
+      - qualities: [webdl-720p]
+    cutoff: webdl-720p
+`
+
+func TestService_ProfileOriginsAndKeys(t *testing.T) {
+	ctx := context.Background()
+	s, _ := newService(t, newRepo(), loadedConfig(t, managedProfileYAML))
+	if _, err := s.CreateProfile(ctx, decide.ProfileDoc{Key: "cfgp", Name: "Mine", Kinds: []domain.MediaKind{domain.KindTV},
+		Groups: []decide.GroupDoc{{Qualities: []decide.QualityID{"webdl-720p"}}}, Cutoff: "webdl-720p"}); !errors.Is(err, ErrExists) {
+		t.Fatalf("config key reused: %v", err)
+	}
+	mine := ps5Profile("")
+	mine.Formats = nil
+	own, err := s.CreateProfile(ctx, mine)
+	if err != nil || own.Origin != "database" || own.Managed != nil {
+		t.Fatalf("own profile %+v %v", own, err)
+	}
+	if row, err := s.Profile(ctx, "cfgp", ""); err != nil || row.Origin != "config" || row.Managed == nil {
+		t.Fatalf("config profile %+v %v", row, err)
+	}
+	rows, _ := s.Profiles(ctx, "")
+	for _, r := range rows {
+		want := map[string][]domain.MediaKind{"hd1080p": {domain.KindTV, domain.KindMovie}, "standard": {domain.KindMusic}}[r.Key]
+		if !slices.Equal(r.Default, want) {
+			t.Errorf("%s defaults %v", r.Key, r.Default)
+		}
+	}
+	var inv InvalidError
+	bad := ps5Profile("")
+	bad.Formats, bad.Cutoff = nil, "bluray-1080p"
+	if _, err := s.CreateProfile(ctx, bad); !errors.As(err, &inv) || len(inv.Errs) != 1 || inv.Errs[0].Path != "cutoff" {
+		t.Fatalf("one problem: %v", err)
+	}
+}
+
+func TestService_InUseMessagesAndDeletes(t *testing.T) {
+	ctx := context.Background()
+	repo := newRepo()
+	s, _ := newService(t, repo, nil)
+	f, _ := s.CreateFormat(ctx, ps5Format)
+	if _, err := s.CreateProfile(ctx, ps5Profile(f.Key)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteFormat(ctx, f.Key); err == nil || err.Error() != "used by the profiles High - PS5" {
+		t.Fatalf("format in use: %v", err)
+	}
+	repo.use["highps5"] = 1
+	if err := s.DeleteProfile(ctx, "highps5"); err == nil || err.Error() != "used by 1 series, movies or artists; give them another profile first" {
+		t.Fatalf("profile in use: %v", err)
+	}
+	repo.use["highps5"] = 0
+	if err := s.DeleteProfile(ctx, "highps5"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteFormat(ctx, f.Key); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Format(f.Key); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted format still served: %v", err)
+	}
+	if len(repo.rows[store.TableFormats]) != 0 || len(repo.rows[store.TableProfiles]) != 0 {
+		t.Fatalf("rows left %v", repo.rows)
+	}
+}
+
+func TestService_LoadReadsTheRepo(t *testing.T) {
+	ctx := context.Background()
+	repo := newRepo()
+	s, _ := newService(t, repo, nil)
+	if _, err := s.CreateFormat(ctx, ps5Format); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := repo.rows[store.TableFormats]["audiops5safe"]; !ok {
+		t.Fatal("format not saved")
+	}
+	again, _ := newService(t, repo, nil)
+	if rows := again.Formats(); len(rows) != 1 || rows[0].Key != "audiops5safe" {
+		t.Fatalf("reloaded %+v", rows)
+	}
+	repo.listErr = errors.New("disk gone")
+	if err := New(Deps{Repo: repo}).Load(ctx); err == nil || err.Error() != "disk gone" {
+		t.Fatalf("list error: %v", err)
+	}
+}
+
+func TestService_LogsDocumentsLeftOut(t *testing.T) {
+	t.Cleanup(decide.WithCatalog(nil))
+	repo := newRepo()
+	raw, _ := json.Marshal(decide.FormatDoc{Key: "broken", Name: "Broken", Conditions: []decide.ConditionDoc{{Kind: decide.CondTitle, Pattern: "("}}})
+	repo.rows[store.TableFormats]["broken"] = store.QualityObject{Key: "broken", Doc: raw}
+	var buf bytes.Buffer
+	s := New(Deps{Repo: repo, Log: slog.New(slog.NewTextHandler(&buf, nil))})
+	if err := s.Load(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "left out") || !strings.Contains(buf.String(), "key=broken") {
+		t.Fatalf("log %q", buf.String())
+	}
+	if err := New(Deps{Repo: repo}).Load(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestService_TestBoxLimits(t *testing.T) {
+	s, _ := newService(t, newRepo(), nil)
+	var inv InvalidError
+	draft := decide.FormatDoc{Conditions: []decide.ConditionDoc{{Kind: decide.CondResolution, Values: []string{"999"}}}}
+	if _, err := s.Test(TestRequest{Titles: []string{"x"}, Format: &draft}); !errors.As(err, &inv) || len(inv.Errs) != 1 {
+		t.Fatalf("draft with one problem: %v", err)
+	}
+	titles := make([]string, maxTestTitles+1)
+	for i := range titles {
+		titles[i] = "Movie.2020.1080p.WEB-DL-GRP"
+	}
+	if res, _ := s.Test(TestRequest{Titles: titles}); len(res) != maxTestTitles {
+		t.Fatalf("results %d", len(res))
+	}
+}
+
+func TestEditorChoices(t *testing.T) {
+	c := EditorChoices()
+	video, music := c.Qualities[domain.KindTV], c.Qualities[domain.KindMusic]
+	if len(video) != len(decide.Ladder()) || video[0].ID != decide.Ladder()[0].ID || !video[0].BelowFloor {
+		t.Fatalf("video %+v", video[:2])
+	}
+	if len(music) != len(decide.AudioLadder()) || music[0].ID != decide.AudioLadder()[0].ID {
+		t.Fatalf("music %+v", music[:2])
+	}
+}
+
+func TestHTTP_DefaultsDuplicateAndUpdate(t *testing.T) {
+	s, _ := newService(t, newRepo(), nil)
+	mux := http.NewServeMux()
+	s.Mount(mounter{mux})
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, httptest.NewRequest(method, path, strings.NewReader(body)))
+		return w
+	}
+	if w := do("GET", "/api/v1/qualityprofiles", ""); w.Code != 200 || strings.Contains(w.Body.String(), `"isDefault":true`) {
+		t.Fatalf("defaults without a kind: %d %s", w.Code, w.Body)
+	}
+	if w := do("GET", "/api/v1/qualityprofiles?kind=movie", ""); w.Code != 200 || strings.Count(w.Body.String(), `"isDefault":true`) != 1 {
+		t.Fatalf("one default for movies: %d %s", w.Code, w.Body)
+	}
+	if w := do("POST", "/api/v1/qualityprofiles/hd1080p/duplicate", `{"name":"Mine"}`); w.Code != 201 || !strings.Contains(w.Body.String(), `"key":"mine"`) {
+		t.Fatalf("named duplicate: %d %s", w.Code, w.Body)
+	}
+	if w := do("POST", "/api/v1/qualityprofiles/hd1080p/duplicate", `{"nope":1}`); w.Code != 400 {
+		t.Fatalf("bad body: %d %s", w.Code, w.Body)
+	}
+	do("POST", "/api/v1/customformats", `{"name":"PS5","conditions":[{"kind":"audio","values":["aac"]}]}`)
+	if w := do("PUT", "/api/v1/customformats/ps5", `{"name":"PS5 v2","conditions":[{"kind":"audio","values":["eac3"]}]}`); w.Code != 200 ||
+		!strings.Contains(w.Body.String(), `"name":"PS5 v2"`) {
+		t.Fatalf("update: %d %s", w.Code, w.Body)
+	}
+	if w := do("PUT", "/api/v1/customformats/ps5", `{`); w.Code != 400 {
+		t.Fatalf("bad update body: %d %s", w.Code, w.Body)
 	}
 }
