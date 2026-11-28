@@ -11,7 +11,7 @@ export const EVENT_TYPES = [
   'download.progress', 'download.state_changed', 'download.completed', 'download.failed', 'download.removed',
   'import.completed', 'import.blocked', 'import.failed', 'payload.rejected', 'file.renamed', 'file.deleted',
   'blocklist.added', 'blocklist.removed', 'rule.acted', 'rule.run_completed', 'rule.undone', 'health.changed',
-  'config.applied', 'config.apply_failed', 'config.drifted', 'mediakind.mode_changed', 'plugin.loaded', 'job.updated',
+  'config.applied', 'config.apply_failed', 'config.drifted', 'mediakind.mode_changed', 'plugin.loaded', 'plugin.changed', 'job.updated',
   'command.updated', 'migration.progress', 'migration.run_completed',
 ] as const;
 

@@ -115,7 +115,24 @@ export function eventView(ev: LiveEvent): EventView {
     const to = String(ev.data?.to ?? 'active');
     return { label: `${String(ev.data?.kind ?? 'Kind')} mode: ${to}`, family: 'kindMode', value: to };
   }
+  if (ev.type === 'plugin.changed') return pluginChangeViews[String(ev.data?.action)] ?? { label: 'Plugin changed', family: 'check', value: 'pass' };
   return eventViews[ev.type] ?? { label: ev.type, family: 'check', value: 'pending' };
+}
+
+const pluginChangeViews: Record<string, EventView> = {
+  installed: { label: 'Plugin installed', family: 'check', value: 'pass' },
+  updated: { label: 'Plugin updated', family: 'check', value: 'pass' },
+  rolledback: { label: 'Plugin rolled back', family: 'check', value: 'warn' },
+  uninstalled: { label: 'Plugin uninstalled', family: 'download', value: 'removed' },
+};
+
+/** "1.3.0 (was 1.2.0) · from the catalogue" for a plugin module change. */
+function pluginChangeDetail(d: Record<string, unknown>): string | undefined {
+  const version = typeof d.version === 'string' ? d.version : '';
+  const was = typeof d.previous === 'string' && d.previous ? ` (was ${d.previous})` : '';
+  const from = d.source === 'catalogue' ? 'from the catalogue' : d.source === 'file' ? 'from a file' : '';
+  const parts = [version + was, from].filter(Boolean);
+  return parts.length ? parts.join(' · ') : undefined;
 }
 
 const healthLabel: Record<string, string> = {
@@ -141,6 +158,7 @@ export function eventSubject(ev: LiveEvent): string {
     return ev.items.map((i) => i.title).join(', ');
   }
   const d = ev.data ?? {};
+  if (ev.type === 'plugin.changed' && typeof d.id === 'string') return d.id;
   const ref = d.ref as { type?: string; key?: string } | undefined;
   if (ref?.key) return integrationName(ref as IntegrationHealth['ref']);
   const rel = (d.release as { title?: string } | undefined)?.title ?? (d.title as string | undefined);
@@ -150,6 +168,7 @@ export function eventSubject(ev: LiveEvent): string {
 /** One line on what happened, from the event data. */
 export function eventDetail(ev: LiveEvent): string | undefined {
   const d = ev.data ?? {};
+  if (ev.type === 'plugin.changed') return pluginChangeDetail(d);
   const parts = [d.message, d.reason, (d.release as { title?: string } | undefined)?.title, d.path].filter((x) => typeof x === 'string' && x);
   return parts.length ? parts.join(' · ') : undefined;
 }

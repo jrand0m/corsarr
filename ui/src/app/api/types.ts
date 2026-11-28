@@ -530,3 +530,142 @@ export interface AlbumDetail { album: AlbumView; artist: { id: number; name: str
 
 export interface MusicProfileOption { key: string; name: string }
 export interface MusicProfiles { quality: (MusicProfileOption & { cutoff: string; isDefault: boolean })[]; metadata: MusicProfileOption[] }
+
+// ── plugin modules and the catalogue ────────────────────────────────────────
+
+/** Field types of a module's settings schema: a closed set the server enforces. */
+export type ModuleFieldType =
+  | 'string' | 'secret' | 'bool' | 'int' | 'number' | 'enum' | 'duration'
+  | 'list<string>' | 'list<int>' | 'map<string,string>';
+
+/** Fixed string patterns a module may ask for. */
+export type ModulePattern = 'hostname' | 'url-http' | 'path-absolute' | 'identifier';
+
+export interface ModuleTextRule { minLength?: number; maxLength?: number; pattern?: ModulePattern }
+
+export interface ModuleField {
+  key: string;
+  /** Typed as string: anything outside ModuleFieldType is refused by the converter. */
+  type: string;
+  label: string;
+  description?: string;
+  /** Plain-text hint shown with a validation message. */
+  hint?: string;
+  required?: boolean;
+  default?: unknown;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  decimals?: number;
+  options?: { value: string; label: string }[];
+  /** Go durations: "30s", "5m". */
+  minDuration?: string;
+  maxDuration?: string;
+  maxItems?: number;
+  maxEntries?: number;
+  keyRule?: ModuleTextRule;
+  valueRule?: ModuleTextRule;
+}
+
+export interface ModuleGroup { title: string; description?: string; fields: string[] }
+export interface ModuleAction { id: string; label: string }
+export interface ModuleSchema { fields: ModuleField[]; groups?: ModuleGroup[]; actions?: ModuleAction[] }
+
+/** Hosts a module may reach ("*.example.org", "$setting:url") and the secret fields it may read. */
+export interface ModulePermissions { http: { hosts?: string[] }; secrets?: string[] }
+
+export interface ModuleManifest {
+  id: string;
+  name: string;
+  version: string;
+  kind: string;
+  abiVersion: number;
+  description?: string;
+  author?: string;
+  license?: string;
+  homepage?: string;
+  permissions: ModulePermissions;
+  limits: { memoryMiB?: number; callTimeoutMs?: number; concurrency?: number };
+  settings: ModuleSchema;
+}
+
+/** A configured plugin instance that uses a module. */
+export interface InstanceRef { section: string; key: string; name: string; enabled: boolean }
+
+export type ModuleStatus = 'active' | 'failed' | 'unloaded' | 'uninstalled';
+
+export interface ModuleInfo {
+  id: string;
+  version: string;
+  previous?: string;
+  sha256: string;
+  kind: string;
+  status: ModuleStatus;
+  error?: string;
+  /** Running module instances. */
+  instances: number;
+  ops?: string[];
+  manifest: ModuleManifest;
+  usedBy: InstanceRef[] | null;
+  source: 'catalogue' | 'file';
+}
+
+export interface PluginPolicy {
+  uiInstall: boolean;
+  autoUpdate: 'off' | 'patch' | 'minor';
+  catalogueUrl: string;
+  lockKey: 'plugins.uiInstall' | string;
+}
+
+export interface ModuleList { items: ModuleInfo[] | null; policy: PluginPolicy }
+
+export interface CatalogueEntry {
+  id: string;
+  name: string;
+  version: string;
+  kind: string;
+  abiVersion: number;
+  description?: string;
+  author?: string;
+  license?: string;
+  homepage?: string;
+  permissions: ModulePermissions;
+  minCorsarr?: string;
+  size: number;
+  sha256: string;
+  url: string;
+  attestation?: unknown;
+}
+
+export interface PermissionDiff { addedHosts: string[]; removedHosts: string[]; addedSecrets: string[]; removedSecrets: string[] }
+
+export type OfferState = 'available' | 'installed' | 'update' | 'update_needs_approval' | 'older' | 'incompatible';
+
+export interface CatalogueOffer {
+  entry: CatalogueEntry;
+  state: OfferState;
+  /** "needs corsarr ≥ 1.5.0" */
+  reason?: string;
+  installed?: string;
+  diff?: PermissionDiff;
+}
+
+export interface CatalogueView {
+  source: { url: string; release?: string; generated?: string; fetchedAt?: string; stale: boolean; error?: string };
+  offers: CatalogueOffer[] | null;
+  policy: PluginPolicy;
+}
+
+export interface ActionRequest { instance?: string; values: Record<string, unknown> }
+export type ActionOutcome = 'ok' | 'warn' | 'fail';
+export interface ActionResult { outcome: ActionOutcome; text: string }
+
+/** One validation failure; the server spells the text `message` (older answers `msg`). */
+export interface Problem { path: string; message?: string; msg?: string }
+export interface ProblemList { problems: Problem[] | null }
+
+/** DELETE answer: the configured instances that now report "module not installed". */
+export interface UninstallResult { usedBy?: InstanceRef[] | null; instances?: InstanceRef[] | null }
