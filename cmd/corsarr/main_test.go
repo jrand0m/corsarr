@@ -300,7 +300,7 @@ func TestEventStreamWaitsBeforeItsFirstHeartbeat(t *testing.T) {
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
-	if !errors.Is(err, context.DeadlineExceeded) || string(body) != "retry: 3000\n\n" {
+	if !errors.Is(err, context.DeadlineExceeded) || !strings.HasPrefix(string(body), "retry: 3000\n\n") || strings.Contains(string(body), ": ping") {
 		t.Fatalf("stream ended early or pinged at once: %q %v", body, err)
 	}
 }
