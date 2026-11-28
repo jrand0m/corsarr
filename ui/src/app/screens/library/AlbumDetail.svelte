@@ -27,6 +27,7 @@
   import { grabFailure, InteractiveSearch, nothingAcceptedNote, sortOptions, type SortKey } from '../../interactive.svelte';
   import { albumItemStatus, albumTypes, albumYear, duration, trackPosition } from '../../music';
   import type { ScreenProps } from '../../screen';
+  import { artSrc } from '../../art';
 
   let { params = {} }: ScreenProps = $props();
   const { api, live, toasts, navigate } = app();
@@ -44,7 +45,7 @@
   const tracks = $derived(page.data?.tracks ?? []);
 
   const entity = $derived({
-    title: al?.title ?? 'Album', kind: 'music' as const, art: null,
+    title: al?.title ?? 'Album', kind: 'music' as const, art: artSrc(al?.coverUrl, 128),
     meta: [artist?.name, albumYear(al ?? { releaseDate: null }) || '', al ? albumTypes(al) : ''].filter(Boolean).join(' · '),
     back: artist ? { href: `#/library/music/${artist.id}`, label: artist.name } : { href: '#/library/music', label: 'Music' },
     monitor: (al?.monitored ? 'monitored' : 'unmonitored') as MonitorState,

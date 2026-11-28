@@ -15,6 +15,7 @@ func ApplyRecord(s *domain.Series, rec plugin.SeriesRecord) {
 	s.TVDBID, _ = strconv.ParseInt(rec.IDs["tvdb"], 10, 64)
 	s.IMDBID, s.Title, s.SortTitle, s.Year = rec.IDs["imdb"], rec.Title, SortTitle(rec.Title), rec.Year
 	s.Status, s.Network, s.Overview, s.RuntimeMin, s.PosterURL = rec.Status, rec.Network, rec.Overview, rec.RuntimeMin, rec.PosterURL
+	s.FanartURL = rec.FanartURL
 	s.Genres, s.AltTitles = nonNil(rec.Genres), nonNil(rec.AltTitles)
 }
 

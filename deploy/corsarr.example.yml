@@ -42,6 +42,41 @@ data:
   # write, 022 keeps files writable by corsarr only.
   umask: "002"
 
+# Artwork cache: posters and covers are fetched once, stored and served by corsarr (applies at
+# start).
+cache:
+  # Keep fetched artwork on disk; turn off to fetch artwork from the provider on every view.
+  # true or false.
+  enabled: true
+  # Folder for cached artwork; leave empty to use the cache folder inside the data folder.
+  # dir:
+  # Most disk space the cache may use, with a unit such as 500MiB or 2GiB.
+  maxSize: 1GiB
+  # How artwork is stored.
+  images:
+    # JPEG quality of stored artwork, from 30 to 95; lower saves space, higher looks sharper.
+    quality: 82
+    # Widest a stored poster or cover may be, in pixels, from 100 to 2000.
+    maxWidth: 600
+    # Widest a stored backdrop may be, in pixels, from 100 to 4000.
+    backdropMaxWidth: 1280
+    # How artwork shrinks when the cache nears its size cap: lower quality first, then smaller
+    # sizes, then the least recently viewed is removed.
+    degrade:
+      # Lowest JPEG quality artwork is reduced to before it is made smaller.
+      qualityFloor: 60
+      # How much the JPEG quality drops in each reduction step.
+      qualityStep: 10
+      # Narrowest a poster or cover is made, in pixels, before it is removed instead.
+      widthFloor: 300
+      # Share of its width artwork keeps in each size reduction step, between 0.5 and 0.95.
+      widthStep: 0.75
+      # Share of the size cap at which shrinking starts, between 0.5 and 1.
+      highWater: 0.9
+      # Share of the size cap at which shrinking stops, between 0.3 and 0.95; keep it below
+      # highWater.
+      lowWater: 0.8
+
 # Logging (applies at start).
 log:
   # How much is logged; use debug while tracking down a problem, warn or error to keep logs

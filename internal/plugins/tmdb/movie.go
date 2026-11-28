@@ -21,6 +21,7 @@ type movieDoc struct {
 	Runtime       int    `json:"runtime"`
 	Status        string `json:"status"`
 	PosterPath    string `json:"poster_path"`
+	BackdropPath  string `json:"backdrop_path"`
 	Genres        []struct {
 		Name string `json:"name"`
 	} `json:"genres"`
@@ -118,7 +119,8 @@ func (d movieDoc) record(images, region string) plugin.MovieRecord {
 		IDs:   map[string]string{"tmdb": strconv.Itoa(d.ID)},
 		Title: d.Title, OriginalTitle: d.OriginalTitle, Year: yearOf(d.ReleaseDate),
 		Overview: d.Overview, RuntimeMin: d.Runtime, Status: d.Status,
-		PosterURL: posterURL(images, d.PosterPath), AltTitles: d.altTitles(),
+		PosterURL: posterURL(images, d.PosterPath), FanartURL: imageURL(images, backdropSize, d.BackdropPath),
+		AltTitles: d.altTitles(),
 	}
 	if imdb := firstNonEmpty(d.ExternalIDs.IMDBID, d.IMDBID); imdb != "" {
 		r.IDs["imdb"] = imdb
@@ -145,11 +147,13 @@ func yearOf(date string) int {
 	return y
 }
 
-func posterURL(images, path string) string {
+func posterURL(images, path string) string { return imageURL(images, posterSize, path) }
+
+func imageURL(images, size, path string) string {
 	if path == "" {
 		return ""
 	}
-	return strings.TrimRight(images, "/") + "/" + posterSize + path
+	return strings.TrimRight(images, "/") + "/" + size + path
 }
 
 func (d movieDoc) altTitles() []string {

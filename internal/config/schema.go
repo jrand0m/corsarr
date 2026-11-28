@@ -64,7 +64,7 @@ type Schema struct {
 }
 
 // Bootstrap sections apply at start only.
-var bootstrapSections = map[string]bool{"server": true, "data": true, "log": true, "auth": true, "plugins": true}
+var bootstrapSections = map[string]bool{"server": true, "data": true, "cache": true, "log": true, "auth": true, "plugins": true}
 
 // instanceSections are the MVP plugin-instance sections, in export order.
 var instanceSections = []plugin.Kind{
@@ -95,6 +95,7 @@ func NewSchema(reg *plugin.Registry) *Schema {
 			Field{Name: "umask", Node: &Node{Kind: KindString, Default: "002", Check: checkUmask,
 				Doc: "Permission mask for every file corsarr creates, in octal; 002 lets a shared media group write, 022 keeps files writable by corsarr only."}},
 		)},
+		{Name: "cache", Node: cacheNode()},
 		{Name: "log", Node: obj("Logging (applies at start).",
 			Field{Name: "level", Node: enum("info", "How much is logged; use debug while tracking down a problem, warn or error to keep logs short.", "debug", "info", "warn", "error")},
 		)},

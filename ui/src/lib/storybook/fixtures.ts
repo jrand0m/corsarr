@@ -324,3 +324,9 @@ export const telegramValues: FormValues = { chats: ['@dockside_alerts'], preview
 export const telegramMeta: Record<string, FieldMeta> = { token: { ref: '${env:TELEGRAM_BOT_TOKEN}' } };
 export const ntfyValues: FormValues = { host: 'https://ntfy.sh', topic: 'dockside-alerts-7731', priority: 'default' };
 export const pushoverMeta: Record<string, FieldMeta> = { user: { isSet: true }, token: { isSet: true } };
+
+/** Synthetic artwork (inline SVG, no remote assets): a poster (2:3) or a square cover. */
+export function artSwatch(hue: number, shape: 'poster' | 'cover' = 'poster'): string {
+  const h = shape === 'cover' ? 2 : 3;
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 ${h}"><rect width="2" height="${h}" fill="oklch(0.45 0.06 ${hue})"/><circle cx="1.4" cy=".7" r=".3" fill="oklch(0.85 0.1 ${(hue + 60) % 360})"/><rect y="${h - 1}" width="2" height="1" fill="oklch(0.3 0.04 ${hue})"/></svg>`)}`;
+}

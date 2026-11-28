@@ -2,7 +2,9 @@ package store
 
 import (
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -20,7 +22,10 @@ const sealPrefix = "v1:"
 // ErrBadCiphertext is returned for tampered or foreign ciphertext.
 var ErrBadCiphertext = errors.New("secret cannot be decrypted with this secret.key")
 
-type cipherBox struct{ aead cipher.AEAD }
+type cipherBox struct {
+	aead cipher.AEAD
+	key  []byte
+}
 
 // loadKey reads secret.key, creating 32 random bytes (0600) on first start.
 func loadKey(path string) (*cipherBox, error) {
@@ -47,7 +52,15 @@ func newBox(key []byte) (*cipherBox, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &cipherBox{aead: aead}, nil
+	return &cipherBox{aead: aead, key: key}, nil
+}
+
+// SubKey derives a 32-byte key for one purpose from secret.key, so a purpose
+// such as signing links never sees the encryption key itself.
+func (s *Store) SubKey(purpose string) []byte {
+	m := hmac.New(sha256.New, s.aead.key)
+	m.Write([]byte(purpose))
+	return m.Sum(nil)
 }
 
 // Encrypt seals a secret field value: "v1:" + base64(nonce ‖ ciphertext).

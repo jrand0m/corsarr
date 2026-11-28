@@ -57,6 +57,7 @@ type Deps struct {
 	Metadata    func() (plugin.SeriesMetadata, bool) // first running TV metadata plugin
 	RootFolders func() []string                      // tv root folders from config
 	Modes       domain.Modes                         // media-kind modes; nil = all active
+	Art         domain.ArtLink                       // artwork addresses in API answers; nil = unchanged
 	Now         func() time.Time
 	Log         *slog.Logger
 }

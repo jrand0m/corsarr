@@ -54,6 +54,7 @@ type Deps struct {
 	Recent        automation.RecentStore // nil = in memory
 	PackThreshold float64                // 0 = DefaultPackThreshold
 	Searches      automation.StateStore  // nil = search results are not kept
+	Art           domain.ArtLink         // artwork addresses in API answers; nil = unchanged
 	Now           func() time.Time
 	Log           *slog.Logger
 }

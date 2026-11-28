@@ -11,7 +11,9 @@
   import Timestamp from '../lib/components/atoms/Timestamp/Timestamp.svelte';
   import PropertyList from '../lib/components/molecules/PropertyList/PropertyList.svelte';
   import DataTable, { type Column } from '../lib/components/organisms/DataTable/DataTable.svelte';
-  import type { RateLimitStatus } from '../app/api/types';
+  import Meter from '../lib/components/atoms/Meter/Meter.svelte';
+  import type { CacheStatus, RateLimitStatus } from '../app/api/types';
+  import { cacheProperties, usageText } from '../app/cache';
   import { ceilingText, noCheckReason, paceText, serviceName } from '../app/ratelimits';
   import { healthRows, NOW, nowDate, type HealthRow } from '../lib/storybook/fixtures';
 
@@ -33,6 +35,11 @@
   ];
 
   const day = 86_400_000;
+  const cache: CacheStatus = {
+    enabled: true, dir: '/data/cache', maxSize: 1024 ** 3, usage: 930 * 1024 ** 2, imageBytes: 918 * 1024 ** 2, metadataBytes: 12 * 1024 ** 2,
+    images: 4812, variants: 960, misses: 14, requests: 18230, hits: 17410, hitRate: 0.955, highWater: 0.9, lowWater: 0.8,
+    lastRun: { at: new Date(NOW - 0.2 * day).toISOString(), reencoded: 412, resized: 0, evicted: 0, metadataEvicted: 0, bytesFreed: 96 * 1024 ** 2 },
+  };
   const limits: RateLimitStatus[] = [
     { service: 'api.metadata.example', pace: 34, probe: 'normal', probing: false, recent: [],
       ceilings: [{ windowSeconds: 10, limit: 400, source: 'advertised', foundAt: new Date(NOW - 2 * day).toISOString() }] },
@@ -97,9 +104,22 @@
     </div>
     <DataTable rows={limits} columns={limitColumns} rowKey={(r) => r.service} cell={limitCell} label="Rate limits" height="auto" density="compact" noun="service" />
   </section>
+
+  <section class="limits" aria-labelledby="artwork-cache">
+    <div class="limits-head">
+      <h2 id="artwork-cache">Artwork cache</h2>
+      <p>Posters and covers corsarr stored so pages load without contacting the provider; near the cap it lowers quality, then size, then removes the least viewed.</p>
+    </div>
+    <div class="cache">
+      <Meter label="Artwork cache use" value={cache.usage} max={cache.maxSize} warnAt={cache.maxSize * cache.highWater} valueText={usageText(cache)} showValue />
+      <PropertyList density="compact" label="Artwork cache details" items={cacheProperties(cache)} />
+      <div><Button size="sm" icon="trash">Clear cache</Button></div>
+    </div>
+  </section>
 </Shell>
 
 <style>
+  .cache { display: grid; gap: var(--space-3); max-width: 48rem; }
   .limits { display: grid; gap: var(--space-3); margin-top: var(--space-6); }
   .limits-head { display: grid; gap: var(--space-1); }
   .limits-head h2 { font-size: var(--text-lg); line-height: var(--leading-tight); }

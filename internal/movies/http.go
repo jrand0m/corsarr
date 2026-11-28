@@ -8,6 +8,7 @@ import (
 
 	"github.com/jrand0m/corsarr/internal/api"
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/plugin"
 )
 
 // Mount registers the movie endpoints (search endpoints are mounted by automation).
@@ -72,7 +73,26 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
+	for i := range items {
+		items[i] = s.withArt(items[i])
+	}
 	api.WritePage(w, items, next)
+}
+
+// withArt points a movie's artwork at the artwork cache.
+func (s *Service) withArt(m domain.Movie) domain.Movie {
+	m.PosterURL, m.FanartURL = s.d.Art.Of(domain.ArtPoster, m.PosterURL), s.d.Art.Of(domain.ArtBackdrop, m.FanartURL)
+	return m
+}
+
+// recordsWithArt points lookup results' artwork at the artwork cache.
+func (s *Service) recordsWithArt(recs []plugin.MovieRecord) []plugin.MovieRecord {
+	out := make([]plugin.MovieRecord, len(recs))
+	for i, r := range recs {
+		r.PosterURL, r.FanartURL = s.d.Art.Of(domain.ArtPoster, r.PosterURL), s.d.Art.Of(domain.ArtBackdrop, r.FanartURL)
+		out[i] = r
+	}
+	return out
 }
 
 func (s *Service) lookup(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +106,7 @@ func (s *Service) lookup(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
-	api.WriteJSON(w, http.StatusOK, map[string]any{"items": recs})
+	api.WriteJSON(w, http.StatusOK, map[string]any{"items": s.recordsWithArt(recs)})
 }
 
 func (s *Service) add(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +123,7 @@ func (s *Service) add(w http.ResponseWriter, r *http.Request) {
 	if created {
 		status = http.StatusCreated
 	}
-	api.WriteJSON(w, status, m)
+	api.WriteJSON(w, status, s.withArt(m))
 }
 
 func (s *Service) get(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +136,7 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
-	api.WriteJSON(w, http.StatusOK, m)
+	api.WriteJSON(w, http.StatusOK, s.withArt(m))
 }
 
 func (s *Service) update(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +150,7 @@ func (s *Service) update(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
-	api.WriteJSON(w, http.StatusOK, m)
+	api.WriteJSON(w, http.StatusOK, s.withArt(m))
 }
 
 func (s *Service) previewMove(w http.ResponseWriter, r *http.Request) {

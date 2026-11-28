@@ -146,7 +146,8 @@ func TestMovieFullRecordUSRegion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.IDs["imdb"] != "tt0133093" || r.Year != 1999 || r.RuntimeMin != 136 || r.Status != "Released" || len(r.Genres) != 2 {
+	if r.IDs["imdb"] != "tt0133093" || r.Year != 1999 || r.RuntimeMin != 136 || r.Status != "Released" || len(r.Genres) != 2 ||
+		r.FanartURL != "https://image.tmdb.org/t/p/w1280/backdrop.jpg" {
 		t.Errorf("%+v", r)
 	}
 	if len(r.AltTitles) != 1 || r.AltTitles[0] != "Matrix" {

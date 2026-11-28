@@ -74,7 +74,22 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
+	for i := range items {
+		items[i].Series = s.withArt(items[i].Series)
+	}
 	api.WritePage(w, items, next)
+}
+
+// withArt points a series' artwork at the artwork cache.
+func (s *Service) withArt(ser domain.Series) domain.Series {
+	ser.PosterURL, ser.FanartURL = s.d.Art.Of(domain.ArtPoster, ser.PosterURL), s.d.Art.Of(domain.ArtBackdrop, ser.FanartURL)
+	return ser
+}
+
+// WithArt points a short series reference's poster at the artwork cache.
+func WithArt(art domain.ArtLink, ref SeriesRef) SeriesRef {
+	ref.PosterURL = art.Of(domain.ArtPoster, ref.PosterURL)
+	return ref
 }
 
 func (s *Service) lookup(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +102,10 @@ func (s *Service) lookup(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		WriteErr(w, err)
 		return
+	}
+	for i := range items {
+		it := &items[i].SeriesRecord
+		it.PosterURL, it.FanartURL = s.d.Art.Of(domain.ArtPoster, it.PosterURL), s.d.Art.Of(domain.ArtBackdrop, it.FanartURL)
 	}
 	api.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }
@@ -105,7 +124,7 @@ func (s *Service) add(w http.ResponseWriter, r *http.Request) {
 	if created {
 		status = http.StatusCreated
 	}
-	api.WriteJSON(w, status, ser)
+	api.WriteJSON(w, status, s.withArt(ser))
 }
 
 func (s *Service) get(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +139,7 @@ func (s *Service) writeDetail(w http.ResponseWriter, r *http.Request, id int64) 
 		WriteErr(w, err)
 		return
 	}
+	d.Series.Series = s.withArt(d.Series.Series)
 	api.WriteJSON(w, http.StatusOK, d)
 }
 
@@ -134,7 +154,7 @@ func (s *Service) update(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, err)
 		return
 	}
-	api.WriteJSON(w, http.StatusOK, ser)
+	api.WriteJSON(w, http.StatusOK, s.withArt(ser))
 }
 
 func (s *Service) remove(w http.ResponseWriter, r *http.Request) {
@@ -217,6 +237,9 @@ func (s *Service) calendar(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		WriteErr(w, err)
 		return
+	}
+	for i := range items {
+		items[i].Series = WithArt(s.d.Art, items[i].Series)
 	}
 	api.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }

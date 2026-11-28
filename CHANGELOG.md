@@ -4,6 +4,11 @@ Short notes per release. Each release's assets, checksums and how to verify them
 
 ## v0.5.5 — 2026-11-28
 
+- Movies now show their posters: the movie list, poster grid, detail page and add dialog use the movie's artwork (posters of movies already in the library are filled in from stored metadata on upgrade).
+- Artwork is served by corsarr from its own cache (`/api/v1/images/…`): fetched once through the shared client, shrunk and re-encoded, still shown when the provider is offline; the browser no longer contacts the metadata provider. Albums and artists get Cover Art Archive covers.
+- New `cache` settings: on/off, folder, size cap, stored quality and widths, and how artwork shrinks near the cap (lower quality, then smaller, then the least recently viewed is removed, library artwork last).
+- System › Health shows the artwork cache's use against its cap, hit rate and last shrink, with a Clear cache action.
+- Movies and series keep the provider's backdrop as fanart.
 - Migration plan: copy the shown rows as text or JSON, or download them.
 - Migration plan: the config-file snippet folds away as optional, and the environment variables for API keys are listed one per line with a copy button.
 - Interactive search leads with the decision: each result says what automatic search would do (the single pick, accepted but outranked and why, or rejected with the main reason in one line); the full reason list folds under "Why it was rejected?", and the separate override notice is gone.
