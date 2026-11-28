@@ -27,6 +27,14 @@
   </ThemePair>
 </Story>
 
+<Story name="Kind modes with tooltips" asChild>
+  <ThemePair>
+    <Row label="hover for the meaning">
+      {#each Object.keys(vocabulary.kindMode) as value (value)}<StatusBadge family="kindMode" {value} />{/each}
+    </Row>
+  </ThemePair>
+</Story>
+
 <Story name="Sizes, plain, detail" asChild>
   <ThemePair>
     <Row label="sm / md"><StatusBadge family="health" value="failing" size="sm" /><StatusBadge family="health" value="failing" /></Row>

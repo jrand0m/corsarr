@@ -10,6 +10,8 @@ export interface StatusEntry {
   tone: Tone;
   /** The state is in motion (downloading, running): the badge may animate its icon. */
   active?: boolean;
+  /** One plain sentence on what the state means, shown as the badge's tooltip. */
+  hint?: string;
 }
 
 type Family = Record<string, StatusEntry>;
@@ -141,9 +143,9 @@ export const vocabulary = {
     excluded: e('Excluded', 'minus-circle', 'neutral'),
   },
   kindMode: {
-    disabled: e('Disabled', 'minus-circle', 'neutral'),
-    shadow: e('Shadow', 'shadow', 'info'),
-    active: e('Active', 'check-circle', 'ok'),
+    disabled: { ...e('Disabled', 'minus-circle', 'neutral'), hint: 'Off: this kind is hidden from the library and never searched or downloaded.' },
+    shadow: { ...e('Shadow', 'shadow', 'info'), hint: 'Dry run: corsarr searches and decides, and records what it would grab in History, but sends nothing to the download client and changes no files.' },
+    active: { ...e('Active', 'check-circle', 'ok'), hint: 'Live: corsarr grabs releases, imports and renames files, and notifies.' },
   },
   check: {
     pass: e('Passed', 'check-circle', 'ok'),

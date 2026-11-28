@@ -2,7 +2,8 @@
   StatusBadge: label + icon + tone, never colour alone. Prefer `family` + `value` from
   the shared vocabulary (status/vocabulary.ts); pass `label`/`icon`/`tone` only for a value the
   vocabulary lacks (and add it there). `detail` appends a qualifier such as a failure class.
-  `appearance="plain"` drops the fill for dense table cells.
+  `appearance="plain"` drops the fill for dense table cells. A value with a `hint` in the vocabulary
+  (or a `hint` prop) shows it as the native tooltip and as the accessible description.
 -->
 <script lang="ts">
   import Icon from '../Icon/Icon.svelte';
@@ -19,21 +20,26 @@
     detail?: string;
     size?: 'sm' | 'md';
     appearance?: 'tint' | 'plain';
+    /** Overrides the vocabulary's tooltip sentence. */
+    hint?: string;
   }
-  let { family, value, label, icon, tone, detail, size = 'md', appearance = 'tint' }: Props = $props();
+  let { family, value, label, icon, tone, detail, size = 'md', appearance = 'tint', hint }: Props = $props();
 
   const entry = $derived(family && value ? lookupStatus(family, value) : undefined);
   const t = $derived(tone ?? entry?.tone ?? 'neutral');
   const text = $derived(label ?? entry?.label ?? value ?? '');
   const glyph = $derived(icon ?? entry?.icon ?? 'info');
+  const tip = $derived(hint ?? entry?.hint);
 </script>
 
-<span class={['badge', size, appearance, t]} class:active={entry?.active}>
+<span class={['badge', size, appearance, t]} class:active={entry?.active} class:hinted={!!tip} title={tip}>
   <Icon name={glyph} size="sm" />
   <span class="text">{text}{#if detail}<span class="detail">{` · ${detail}`}</span>{/if}</span>
+  {#if tip}<span class="visually-hidden">{`: ${tip}`}</span>{/if}
 </span>
 
 <style>
+  .hinted { cursor: help; }
   .badge {
     --ink: var(--tone-neutral-ink);
     --tint: var(--tone-neutral-tint);

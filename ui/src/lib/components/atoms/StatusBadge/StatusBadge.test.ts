@@ -29,4 +29,16 @@ describe('StatusBadge', () => {
       expect(['ok', 'warn', 'error', 'info', 'neutral', 'managed']).toContain(e.tone);
     }
   });
+
+  it('explains kind modes in a tooltip and to screen readers', () => {
+    const { container } = render(StatusBadge, { family: 'kindMode', value: 'shadow' });
+    const badge = container.querySelector('.badge')!;
+    expect(badge.getAttribute('title')).toMatch(/^Dry run:/);
+    expect(badge.textContent).toContain('sends nothing to the download client');
+  });
+
+  it('shows no tooltip for values without a hint', () => {
+    const { container } = render(StatusBadge, { family: 'download', value: 'queued' });
+    expect(container.querySelector('.badge')!.hasAttribute('title')).toBe(false);
+  });
 });
