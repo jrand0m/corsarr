@@ -3,6 +3,7 @@ package migrate
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -49,7 +50,9 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-Api-Key", c.ep.Key.Reveal())
+	if !c.ep.Key.Empty() {
+		req.Header.Set("X-Api-Key", c.ep.Key.Reveal())
+	}
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -60,10 +63,10 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		return ErrUnauthorised
 	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("%s %s: %s", c.ep.App, path, resp.Status)
+		return &StatusError{Where: fmt.Sprintf("%s %s", c.ep.App, path), Code: resp.StatusCode, Status: resp.Status}
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(out); err != nil {
-		return fmt.Errorf("%s %s: unreadable response: %w", c.ep.App, path, err)
+		return fmt.Errorf("%s %s: %w: %w", c.ep.App, path, ErrUnreadable, err)
 	}
 	return nil
 }
@@ -76,6 +79,18 @@ func (c *Client) Status(ctx context.Context) (wStatus, error) {
 	}
 	return st, CheckVersion(c.ep.App, st.Version)
 }
+
+// StatusError is a source answer other than 200 or a refused key.
+type StatusError struct {
+	Where  string
+	Code   int
+	Status string
+}
+
+func (e *StatusError) Error() string { return e.Where + ": " + e.Status }
+
+// ErrUnreadable is a 200 answer whose body is not the expected JSON.
+var ErrUnreadable = errors.New("unreadable response")
 
 // pageSize is the page size of paged resources.
 const pageSize = 250

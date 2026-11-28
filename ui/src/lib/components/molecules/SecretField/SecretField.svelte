@@ -3,7 +3,8 @@
   one is set (`isSet`) or which reference supplies it (`ref`, "${env:NZBGEEK_API_KEY}" or
   "${file:/run/secrets/qbit}"). Typing sets a new value (`value`); the input is masked with a
   reveal toggle for what was just typed. A reference shows instead of the input until the
-  owner chooses to replace it.
+  owner chooses to replace it. `action` puts a control beside the input (a Test button) and `result`
+  a live check result under it; the value itself is never part of either.
 -->
 <script lang="ts" module>
   /** Parse "${env:NAME}" / "${file:/path}" into its kind and target. */
@@ -14,6 +15,7 @@
 </script>
 
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import Field, { type FieldStateProps } from '../Field/Field.svelte';
   import TextInput from '../../atoms/TextInput/TextInput.svelte';
   import IconButton from '../../atoms/IconButton/IconButton.svelte';
@@ -26,8 +28,17 @@
     isSet?: boolean;
     ref?: string;
     onchange?: (value: string) => void;
+    /** Every keystroke or paste, after `value` updates. */
+    oninput?: (value: string) => void;
+    onpaste?: () => void;
+    onblur?: (value: string) => void;
+    /** A control beside the input, such as a Test button. */
+    action?: Snippet;
+    /** A live result under the input (a check outcome); announced politely. */
+    result?: Snippet;
   }
-  let { value = $bindable(''), isSet = false, ref, onchange, ...field }: Props = $props();
+  let { value = $bindable(''), isSet = false, ref, onchange, oninput, onpaste, onblur, action, result, ...field }: Props = $props();
+  const rid = $props.id();
 
   let revealed = $state(false);
   let replacing = $state(false);
@@ -37,7 +48,7 @@
   const status = $derived(ref ? 'ref' : isSet || value ? 'set' : 'unset');
 </script>
 
-<Field {...field}>
+<Field {...field} describedby={result ? `${rid}-result` : undefined}>
   {#snippet trailing()}<StatusBadge family="secret" value={status} size="sm" />{/snippet}
   {#snippet children(c)}
     {#if showRef}
@@ -58,6 +69,7 @@
           required={c.required && !isSet} disabled={c.disabled} bind:value
           placeholder={isSet ? 'Stored; type to replace' : 'Not set'}
           onchange={() => onchange?.(value)}
+          oninput={() => oninput?.(value)} onpaste={() => onpaste?.()} onblur={() => onblur?.(value)}
         />
         <IconButton
           icon={revealed ? 'eye-off' : 'eye'} label={revealed ? 'Hide what you typed' : 'Show what you typed'}
@@ -66,13 +78,16 @@
         {#if ref && replacing}
           <Button size="sm" variant="ghost" onclick={() => { replacing = false; value = ''; }}>Keep reference</Button>
         {/if}
+        {#if action}{@render action()}{/if}
       </div>
     {/if}
+    {#if result}<div class="result" id="{rid}-result" aria-live="polite">{@render result()}</div>{/if}
   {/snippet}
 </Field>
 
 <style>
   .row, .ref { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
+  .result { margin-top: var(--space-1-5); min-width: 0; }
   @media (width < 48rem), (pointer: coarse) {
     .ref { flex-wrap: wrap; }
   }

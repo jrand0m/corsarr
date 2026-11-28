@@ -176,4 +176,7 @@ func TestHTTPModesCutover(t *testing.T) {
 	if len(list.Items) != 4 || !list.Items[1].Managed || list.Items[0].Managed {
 		t.Fatalf("%+v", list)
 	}
+	if by := list.Items[1].By; by == nil || by.Key != "mediaKinds.movie.mode" || by.Kind != config.SourceFile || by.File != "c.yml" || list.Items[0].By != nil {
+		t.Fatalf("managed by: %+v", list.Items)
+	}
 }

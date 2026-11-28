@@ -35,6 +35,7 @@ type Deps struct {
 	Config      func() *config.Config
 	Downloaders func() []Downloader
 	Stat        func(path string) (int64, bool)        // nil = the local filesystem
+	Probe       func(path string) Access               // folder access for path checks; nil = the local filesystem
 	Publish     func(domain.Event)                     // nil = no events (offline CLI)
 	AfterApply  func(context.Context)                  // nil = nothing (offline CLI); also after a mode change
 	Mode        func(domain.MediaKind) domain.KindMode // effective mode; nil = active
@@ -44,8 +45,9 @@ type Deps struct {
 
 // Service runs migrations, one at a time.
 type Service struct {
-	d  Deps
-	mu sync.Mutex
+	d      Deps
+	mu     sync.Mutex
+	checks gate
 }
 
 // New returns the service.
@@ -381,9 +383,11 @@ func configView(cfg *config.Config) ConfigView {
 // ConfigSetsKind reports whether the config source sets the kind's mode
 // (a default does not count).
 func ConfigSetsKind(cfg *config.Config, k domain.MediaKind) bool {
-	loc := cfg.Location("mediaKinds." + string(k) + ".mode")
-	return loc.Kind != "" && loc.Kind != config.SourceDefaults
+	return cfg.ManagedBy(kindModeKey(k)) != nil
 }
+
+// kindModeKey is the dotted config key of a kind's mode.
+func kindModeKey(k domain.MediaKind) string { return "mediaKinds." + string(k) + ".mode" }
 
 // ── store target ─────────────────────────────────────────────────────────────
 

@@ -9,6 +9,7 @@
   import Button from '../../../lib/components/atoms/Button/Button.svelte';
   import Chip from '../../../lib/components/atoms/Chip/Chip.svelte';
   import Skeleton from '../../../lib/components/atoms/Skeleton/Skeleton.svelte';
+  import ManagedValue, { managedFrom } from '../../../lib/components/atoms/ManagedValue/ManagedValue.svelte';
   import StatusBadge from '../../../lib/components/atoms/StatusBadge/StatusBadge.svelte';
   import CodeViewer from '../../../lib/components/molecules/CodeViewer/CodeViewer.svelte';
   import EmptyState from '../../../lib/components/molecules/EmptyState/EmptyState.svelte';
@@ -76,7 +77,7 @@
 
 {#snippet cell(r: ConfiguredInstance, c: Column<ConfiguredInstance>)}
   {#if c.id === 'status'}{#if healthOf(r)}<StatusBadge family="health" value={healthOf(r)!.status} size="sm" appearance="plain" />{:else}<span class="muted">Not checked yet</span>{/if}
-  {:else if c.id === 'source'}<StatusBadge family="config" value="managed" size="sm" />
+  {:else if c.id === 'source'}<ManagedValue value="Config" managed={managedFrom(`${r.section}.${r.key}`, src)} />
   {:else if c.id === 'name'}<a class="name" href="#/settings/plugins/{r.section}.{r.key}">{r.name ?? r.key}</a>
   {:else}{c.value?.(r)}{/if}
 {/snippet}

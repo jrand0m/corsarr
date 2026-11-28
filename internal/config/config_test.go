@@ -459,6 +459,37 @@ func TestOSInputs(t *testing.T) {
 	}
 }
 
+func TestManagedBy(t *testing.T) {
+	file, err := LoadFrom(Source{Kind: SourceFile, Path: "/etc/corsarr.yml"},
+		Inputs{ReadFile: func(string) ([]byte, error) { return []byte("mediaKinds:\n  tv:\n    mode: shadow\n"), nil }}, plugin.Default)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := file.ManagedBy("mediaKinds.tv.mode"); m == nil || m.Kind != SourceFile || m.File != "/etc/corsarr.yml" || m.Key != "mediaKinds.tv.mode" {
+		t.Fatalf("file: %+v", m)
+	}
+	if file.ManagedBy("mediaKinds.movie.mode") != nil || (*Config)(nil).ManagedBy("x") != nil {
+		t.Fatal("a default is not managed")
+	}
+	env, err := LoadFrom(Source{Kind: SourceEnv}, Inputs{Environ: []string{"CORSARR_MEDIAKINDS_TV_MODE=shadow"}}, plugin.Default)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := env.ManagedBy("mediaKinds.tv.mode"); m == nil || m.Kind != SourceEnv || m.Name != "CORSARR_MEDIAKINDS_TV_MODE" {
+		t.Fatalf("env: %+v", m)
+	}
+	args, err := LoadFrom(Source{Kind: SourceArgs}, Inputs{Args: []string{"--mediaKinds.tv.mode=shadow"}}, plugin.Default)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := args.ManagedBy("mediaKinds.tv.mode"); m == nil || m.Kind != SourceArgs || m.Name != "--mediaKinds.tv.mode" {
+		t.Fatalf("args: %+v", m)
+	}
+	if ManagedAt("k", Location{Kind: SourceDefaults}) != nil || ManagedAt("k", Location{}) != nil {
+		t.Fatal("defaults")
+	}
+}
+
 func TestLocationString(t *testing.T) {
 	if (Location{Kind: SourceDefaults}).String() != "defaults" {
 		t.Fatal("defaults")

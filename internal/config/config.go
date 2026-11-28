@@ -95,6 +95,32 @@ type Config struct {
 // Location returns where a dotted key was set (zero when defaulted).
 func (c *Config) Location(path string) Location { return c.locs[path] }
 
+// Managed says a value is set by the active config source, so the UI shows it
+// read-only: the dotted key and where it is set (the file path, or the
+// argument or environment variable name). It never holds the value.
+type Managed struct {
+	Key  string     `json:"key"`
+	Kind SourceKind `json:"kind"`
+	File string     `json:"file,omitempty"`
+	Name string     `json:"name,omitempty"`
+}
+
+// ManagedAt is the managed marker of key set at loc; nil when defaulted.
+func ManagedAt(key string, loc Location) *Managed {
+	if loc.Kind == "" || loc.Kind == SourceDefaults {
+		return nil
+	}
+	return &Managed{Key: key, Kind: loc.Kind, File: loc.File, Name: loc.Name}
+}
+
+// ManagedBy is the managed marker of a dotted key; nil when defaulted.
+func (c *Config) ManagedBy(key string) *Managed {
+	if c == nil {
+		return nil
+	}
+	return ManagedAt(key, c.locs[key])
+}
+
 // Load selects the source, reads it, validates everything and returns the
 // Config, or Errors listing every failure.
 func Load(in Inputs, reg *plugin.Registry) (*Config, error) {

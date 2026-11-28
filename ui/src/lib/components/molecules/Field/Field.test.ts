@@ -21,8 +21,16 @@ describe('Field (via TextField)', () => {
     ]);
     expect(input.getAttribute('aria-invalid')).toBe('true');
     expect(input.readOnly).toBe(true);
-    expect(container.textContent).toContain('Managed by config');
+    expect(container.querySelector('.mv')!.getAttribute('title')).toBe('Managed by downloaders.qbit.category via the config');
     expect(container.textContent).toContain('Drifted');
+  });
+
+  it('names the source of a managed value in the lock and the note', () => {
+    const { container } = render(TextField, {
+      label: 'Mode', managed: { key: 'mediaKinds.tv.mode', kind: 'env', name: 'CORSARR_MEDIAKINDS_TV_MODE' },
+    });
+    expect(container.querySelector('.mv')!.getAttribute('title')).toBe('Managed by mediaKinds.tv.mode via environment variable CORSARR_MEDIAKINDS_TV_MODE');
+    expect(container.querySelector('.note')!.textContent).toContain('via environment variable CORSARR_MEDIAKINDS_TV_MODE.');
   });
 
   it('marks required fields visibly and on the control', () => {

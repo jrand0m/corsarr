@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/jrand0m/corsarr/internal/api"
+	"github.com/jrand0m/corsarr/internal/config"
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/store"
 )
@@ -15,6 +16,8 @@ import (
 func (s *Service) Mount(m api.Mounter) {
 	m.Handle("POST /api/v1/migration/plan", s.handleRun("plan"))
 	m.Handle("POST /api/v1/migration/apply", s.handleRun("apply"))
+	m.Handle("POST /api/v1/migration/check/source", s.checkSource)
+	m.Handle("POST /api/v1/migration/check/paths", s.checkPaths)
 	m.Handle("GET /api/v1/migration/runs", s.listRuns)
 	m.Handle("GET /api/v1/migration/runs/{id}/report", s.runReport)
 	m.Handle("GET /api/v1/migration/modes", s.listModes)
@@ -101,6 +104,80 @@ func (s *Service) handleRun(mode string) http.HandlerFunc {
 	}
 }
 
+// guard admits one quick check under the rate limit, or answers 429.
+func (s *Service) guard(w http.ResponseWriter) bool {
+	if s.checks.enter(s.d.Now()) {
+		return true
+	}
+	w.Header().Set("Retry-After", "1")
+	api.WriteError(w, http.StatusTooManyRequests, "rate_limited", "too many checks at once; try again in a moment", "")
+	return false
+}
+
+// checkSource tests one source (the key is optional) and answers the result;
+// the key is only sent to the source, never logged or echoed.
+func (s *Service) checkSource(w http.ResponseWriter, r *http.Request) {
+	var body sourceBody
+	if !api.DecodeJSON(w, r, &body) {
+		return
+	}
+	ep, err := ParseTarget(body.App, body.URL, body.APIKey)
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid", err.Error(), "url")
+		return
+	}
+	if !s.guard(w) {
+		return
+	}
+	defer s.checks.leave()
+	api.WriteJSON(w, http.StatusOK, s.Check(r.Context(), ep))
+}
+
+// pathsBody is the path check request.
+type pathsBody struct {
+	Sources    []sourceBody `json:"sources"`
+	FromPrefix string       `json:"fromPrefix"`
+	ToPrefix   string       `json:"toPrefix"`
+}
+
+func (b pathsBody) parse() ([]Endpoint, Rewrite, error) {
+	var rw Rewrite
+	var err error
+	if rw.From, err = ParsePrefix("source path prefix", b.FromPrefix); err != nil {
+		return nil, rw, err
+	}
+	if rw.To, err = ParsePrefix("corsarr path prefix", b.ToPrefix); err != nil {
+		return nil, rw, err
+	}
+	eps := make([]Endpoint, 0, len(b.Sources))
+	for _, sb := range b.Sources {
+		ep, err := ParseEndpoint(sb.App, sb.URL, sb.APIKey)
+		if err != nil {
+			return nil, rw, err
+		}
+		eps = append(eps, ep)
+	}
+	return eps, rw, nil
+}
+
+// checkPaths reports how the path rewrite maps the sources' root folders.
+func (s *Service) checkPaths(w http.ResponseWriter, r *http.Request) {
+	var body pathsBody
+	if !api.DecodeJSON(w, r, &body) {
+		return
+	}
+	eps, rw, err := body.parse()
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid", err.Error(), "")
+		return
+	}
+	if !s.guard(w) {
+		return
+	}
+	defer s.checks.leave()
+	api.WriteJSON(w, http.StatusOK, s.CheckPaths(r.Context(), eps, rw))
+}
+
 func (s *Service) listRuns(w http.ResponseWriter, r *http.Request) {
 	runs, err := s.Runs(r.Context())
 	if err != nil {
@@ -138,6 +215,7 @@ type KindState struct {
 	Mode    domain.KindMode  `json:"mode"`
 	Managed bool             `json:"managedByConfig"` // the config file sets it; changes go there
 	Snippet string           `json:"snippet,omitempty"`
+	By      *config.Managed  `json:"managedBy,omitempty"` // the key and the source that set it
 }
 
 var allKinds = []domain.MediaKind{domain.KindTV, domain.KindMovie, domain.KindMusic, domain.KindBook}
@@ -149,6 +227,7 @@ func (s *Service) Modes() []KindState {
 		ks := KindState{Kind: k, Mode: s.mode(k)}
 		if cfg := s.d.Config(); cfg != nil && ConfigSetsKind(cfg, k) {
 			ks.Managed, ks.Snippet = true, kindSnippet(k, domain.ModeActive)
+			ks.By = cfg.ManagedBy(kindModeKey(k))
 		}
 		out = append(out, ks)
 	}

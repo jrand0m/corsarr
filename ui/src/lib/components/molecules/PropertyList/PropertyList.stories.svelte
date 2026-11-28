@@ -10,6 +10,7 @@
   const props: Property[] = [
     { key: 'client', label: 'Downloader', value: 'qBittorrent (home-nas)', href: '#downloader' },
     { key: 'category', label: 'Category', value: 'corsarr-tv', managed: true },
+    { key: 'mode', label: 'TV mode', value: 'Shadow', managed: { key: 'mediaKinds.tv.mode', kind: 'env', name: 'CORSARR_MEDIAKINDS_TV_MODE' } },
     { key: 'hash', label: 'Info hash', value: '3f9a1c0b8e2d47a6b5c4d3e2f1a0b9c8d7e6f5a4', copy: true },
     { key: 'path', label: 'Save path', value: '/downloads/complete/The.Long.Haul.S02', mono: true },
     { key: 'state', label: 'State', custom: true },

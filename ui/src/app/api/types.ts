@@ -1,5 +1,6 @@
 // Wire types of the corsarr /api/v1 surface the web UI reads (Go: internal/domain, internal/api,
 // internal/{movies,queue,automation,importer,plugin}). Only the fields the screens use are typed.
+import type { ManagedSource } from '../../lib/components/atoms/ManagedValue/ManagedValue.svelte';
 import type { MediaKind } from '../../lib/tokens';
 
 export interface ItemRef { kind: MediaKind; id: number }
@@ -325,6 +326,8 @@ export interface IndexerRow {
   pluginName: string;
   delivery: string;
   source: 'config' | 'ui';
+  /** The config key and source that set a config indexer. */
+  managedBy?: ManagedSource;
   enabled: boolean;
   running: boolean;
   priority: number;

@@ -5,6 +5,8 @@
   (a badge, a timestamp) for rows marked `custom`. Two columns on wide screens, stacked on phones.
 -->
 <script lang="ts" module>
+  import type { ManagedSource } from '../../atoms/ManagedValue/ManagedValue.svelte';
+
   export interface Property {
     key: string;
     label: string;
@@ -13,8 +15,8 @@
     copy?: boolean;
     secret?: boolean;
     mono?: boolean;
-    /** Set from the config file: shows the managed seal after the value. */
-    managed?: boolean;
+    /** Set by the config: shows the lock after the value; with its key and source, the lock says where. */
+    managed?: boolean | ManagedSource;
     /** Render this row's value with the `value` snippet. */
     custom?: boolean;
   }
@@ -25,6 +27,7 @@
   import CopyableValue from '../../atoms/CopyableValue/CopyableValue.svelte';
   import Link from '../../atoms/Link/Link.svelte';
   import Icon from '../../atoms/Icon/Icon.svelte';
+  import ManagedValue from '../../atoms/ManagedValue/ManagedValue.svelte';
   import type { Density } from '../../../tokens';
 
   interface Props {
@@ -56,7 +59,8 @@
         {:else}
           <span class:mono={p.mono} class="v">{p.value}</span>
         {/if}
-        {#if p.managed}<span class="seal"><Icon name="lock" size="sm" label="Managed by config" /></span>{/if}
+        {#if typeof p.managed === 'object'}<ManagedValue managed={p.managed} />
+        {:else if p.managed}<span class="seal"><Icon name="lock" size="sm" label="Managed by config" /></span>{/if}
       </dd>
     </div>
   {/each}

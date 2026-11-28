@@ -11,6 +11,8 @@
   map). `labelled="control"` is for a checkbox that carries its own label.
 -->
 <script lang="ts" module>
+  import type { ManagedSource } from '../../atoms/ManagedValue/ManagedValue.svelte';
+
   export interface FieldControl {
     id: string;
     describedby: string | undefined;
@@ -27,8 +29,11 @@
     error?: string;
     required?: boolean;
     disabled?: boolean;
-    /** Managed by config: `true`, or the source key in the config file ("indexers.nzbgeek.api_key"). */
-    managed?: boolean | string;
+    /**
+     * Managed by config: `true`, the key in the config ("indexers.nzbgeek.api_key"), or the key with
+     * the source that sets it (file path, argument or environment variable).
+     */
+    managed?: boolean | string | ManagedSource;
     /** Drift marker: what differs between the config file and the running value. */
     drift?: string;
   }
@@ -38,6 +43,7 @@
   import type { Snippet } from 'svelte';
   import Icon from '../../atoms/Icon/Icon.svelte';
   import StatusBadge from '../../atoms/StatusBadge/StatusBadge.svelte';
+  import ManagedValue, { managedText } from '../../atoms/ManagedValue/ManagedValue.svelte';
 
   interface Props extends FieldStateProps {
     group?: boolean;
@@ -56,6 +62,9 @@
 
   const id = $props.id();
   const source = $derived(typeof managed === 'string' ? managed : undefined);
+  const by = $derived<ManagedSource | undefined>(
+    typeof managed === 'object' ? managed : managed ? { key: source } : undefined,
+  );
   const describedby = $derived(
     [error && `${id}-err`, managed && `${id}-lock`, drift && `${id}-drift`, help && `${id}-help`, extra]
       .filter(Boolean).join(' ') || undefined,
@@ -67,7 +76,7 @@
 
 {#snippet badges()}
   {#if required && !managed}<span class="req">Required</span>{/if}
-  {#if managed}<StatusBadge family="config" value="managed" size="sm" />{/if}
+  {#if by}<ManagedValue managed={by} />{/if}
   {#if drift}<StatusBadge family="config" value="drifted" size="sm" />{/if}
 {/snippet}
 
@@ -75,7 +84,7 @@
   {#if error}<p class="error" id="{id}-err"><Icon name="alert-octagon" size="sm" /><span>{error}</span></p>{/if}
   {#if managed}
     <p class="note" id="{id}-lock">
-      Set in the config file{#if source}{' at '}<code>{source}</code>{/if}. Change it there; the form shows what is running.
+      {#if typeof managed === 'object'}{managedText(managed)}.{:else}Set in the config file{#if source}{' at '}<code>{source}</code>{/if}.{/if} Change it there; the form shows what is running.
     </p>
   {/if}
   {#if drift}<p class="note drift" id="{id}-drift"><Icon name="diff" size="sm" /><span>{drift}</span></p>{/if}

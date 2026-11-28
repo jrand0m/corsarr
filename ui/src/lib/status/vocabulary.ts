@@ -160,6 +160,15 @@ export const vocabulary = {
     skipped: e('Skipped', 'skip', 'neutral'),
     failed: e('Failed', 'x-circle', 'error'),
   },
+  sourceCheck: {
+    checking: e('Checking…', 'refresh', 'info', true),
+    reachable: e('Reachable', 'check-circle', 'ok'),
+    'key-needed': e('Reachable, key needed', 'key', 'info'),
+    unauthorised: e('Unauthorised', 'lock', 'error'),
+    'wrong-app': e('Wrong app', 'alert-triangle', 'warn'),
+    unsupported: e('Unsupported version', 'ban', 'warn'),
+    unreachable: e('Unreachable', 'x-circle', 'error'),
+  },
   connection: {
     live: e('Live', 'check-circle', 'ok'),
     reconnecting: e('Reconnecting', 'refresh', 'warn', true),

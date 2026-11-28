@@ -9,6 +9,7 @@
   import Button from '../../../lib/components/atoms/Button/Button.svelte';
   import Chip from '../../../lib/components/atoms/Chip/Chip.svelte';
   import CopyableValue from '../../../lib/components/atoms/CopyableValue/CopyableValue.svelte';
+  import ManagedValue from '../../../lib/components/atoms/ManagedValue/ManagedValue.svelte';
   import StatusBadge from '../../../lib/components/atoms/StatusBadge/StatusBadge.svelte';
   import Switch from '../../../lib/components/atoms/Switch/Switch.svelte';
   import Banner from '../../../lib/components/molecules/Banner/Banner.svelte';
@@ -169,7 +170,7 @@
 {#snippet cell(r: IndexerRow, c: Column<IndexerRow>)}
   {#if c.id === 'name'}<button type="button" class="name" onclick={() => (editing = r.key)}>{r.name}</button>{#if r.name !== r.key}<span class="key">{r.key}</span>{/if}
   {:else if c.id === 'status'}{#if rowStatus(r)}<StatusBadge family="health" value={rowStatus(r)} size="sm" appearance="plain" detail={r.health?.lastErrorMessage} />{:else}<span class="muted">Not checked yet</span>{/if}
-  {:else if c.id === 'source'}{#if r.source === 'config'}<StatusBadge family="config" value="managed" size="sm" />{:else}<span class="muted">Added here</span>{/if}
+  {:else if c.id === 'source'}{#if r.source === 'config'}<ManagedValue value="Config" managed={r.managedBy ?? { key: `indexers.${r.key}` }} />{:else}<span class="muted">Added here</span>{/if}
   {:else if c.id === 'enabled'}<Switch checked={r.enabled} label="Enable {r.name}" hideLabel disabled={r.source === 'config'} onchange={(on) => void toggle(r, on)} />
   {:else}{c.value?.(r)}{/if}
 {/snippet}
