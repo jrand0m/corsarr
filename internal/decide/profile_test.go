@@ -95,6 +95,16 @@ func TestNewQualityProfile_RefusesInvalid(t *testing.T) {
 	}
 }
 
+func TestNewQualityProfile_OnlyTVAndMoviesShare(t *testing.T) {
+	ok := []QualityGroup{{Qualities: []QualityID{"webdl-1080p"}}}
+	for _, other := range []domain.MediaKind{domain.KindBook, domain.KindMusic} {
+		_, err := NewQualityProfile(ProfileSpec{Name: "p", Kinds: []domain.MediaKind{domain.KindTV, other}, Groups: ok, Cutoff: "webdl-1080p"})
+		if err == nil || !strings.Contains(err.Error(), "only TV and movies can share a profile") {
+			t.Errorf("tv with %s: %v", other, err)
+		}
+	}
+}
+
 func TestNewQualityProfile_GroupsRankEqualAndDefaultIncrement(t *testing.T) {
 	p, err := NewQualityProfile(ProfileSpec{Name: "p", Kind: domain.KindTV,
 		Groups: []QualityGroup{{Qualities: []QualityID{"hdtv-720p"}}, group("WEB", "webrip-720p", "webdl-720p")},

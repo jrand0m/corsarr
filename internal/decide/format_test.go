@@ -1,6 +1,7 @@
 package decide
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jrand0m/corsarr/internal/domain"
@@ -152,5 +153,78 @@ func TestCondition_ContainerBitDepthAndDolbyVisionFallback(t *testing.T) {
 	p5.DVProfile.Value = 8
 	if dvFallbackOf(p5) != "hdr10" {
 		t.Fatal("profile 8 has an HDR10 base")
+	}
+}
+
+func TestConditionKinds_ChoicesPairValuesWithLabels(t *testing.T) {
+	src, _ := KindInfoOf(CondSource)
+	if len(src.Values) != 11 || src.Values[0] != (Choice{Value: "cam", Label: "CAM"}) || src.Values[10] != (Choice{Value: "disc", Label: "Full disc"}) {
+		t.Fatalf("source choices %+v", src.Values)
+	}
+	if got := choices("a", "A", "b"); len(got) != 1 || got[0] != (Choice{Value: "a", Label: "A"}) {
+		t.Fatalf("odd trailing value %+v", got)
+	}
+}
+
+func TestSubjectOf_EdgeFacts(t *testing.T) {
+	title := "Movie.2020.1080p.WEB-DL.H.264-GRP"
+	bare := SubjectOf(domain.Release{Title: title, FileList: []string{".mkv"}}, parse.ParseRelease(title))
+	if bare.Container != "mkv" {
+		t.Fatalf("container from a bare extension %q", bare.Container)
+	}
+	if bare.BitDepth != 0 {
+		t.Fatalf("bit depth without a marker %d", bare.BitDepth)
+	}
+	for in, want := range map[string]int{"Show.S01E01.1080p.8bit-GRP": 8, "Show.S01E01.1080p.12-bit-GRP": 12, "Show.S01E01.1080p.10 bits-GRP": 10} {
+		if got := TitleSubject(in).BitDepth; got != want {
+			t.Errorf("%s: bit depth %d", in, got)
+		}
+	}
+	dv := "Movie.2020.2160p.WEB-DL.DV.H.265-GRP"
+	for profile, want := range map[int]string{4: "", 7: "hdr10", 8: "hdr10", 5: "none"} {
+		p := parse.ParseRelease(dv)
+		p.DVProfile = parse.Field[int]{Value: profile, Known: true}
+		if got := SubjectOf(domain.Release{Title: dv}, p).DVFallback; got != want {
+			t.Errorf("profile %d: fallback %q", profile, got)
+		}
+	}
+}
+
+func TestCondition_RangeBounds(t *testing.T) {
+	y2020 := subject("Movie.2020.1080p.WEB-DL-GRP", 2e9)
+	cases := []struct {
+		name string
+		c    ConditionDoc
+		want bool
+	}{
+		{"year from its min", ConditionDoc{Kind: CondYear, Min: 2020}, true},
+		{"year up to its max", ConditionDoc{Kind: CondYear, Min: 2000, Max: 2020}, true},
+		{"size up to its max", ConditionDoc{Kind: CondSize, Min: 1, Max: 2}, true},
+		{"size above a max of one", ConditionDoc{Kind: CondSize, Max: 1}, false},
+		{"size at its exclusive min", ConditionDoc{Kind: CondSize, Min: 2}, false},
+	}
+	for _, c := range cases {
+		if got := compileFormat(t, c.c).Matches(y2020); got != c.want {
+			t.Errorf("%s: got %v", c.name, got)
+		}
+	}
+}
+
+func TestEmptyFormatAndConditionMatchNothing(t *testing.T) {
+	s := subject("Movie.2020.1080p.WEB-DL-GRP", 0)
+	if (CustomFormat{}).Matches(s) {
+		t.Fatal("format without conditions matched")
+	}
+	if (Condition{}).Matches(s) {
+		t.Fatal("condition of no kind matched")
+	}
+}
+
+func TestKeyOf_Boundaries(t *testing.T) {
+	cases := map[string]string{"Az09": "az09", "a": "a", "Zulu 9": "zulu9", strings.Repeat("b", 49): strings.Repeat("b", 48)}
+	for in, want := range cases {
+		if got := KeyOf(in); got != want {
+			t.Errorf("%q: %q", in, got)
+		}
 	}
 }
