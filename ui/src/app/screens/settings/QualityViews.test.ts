@@ -53,7 +53,7 @@ describe('ProfilesView', () => {
 
   it('edits scores and saves the document without row facts', async () => {
     const p = setup({ initialEdit: 'tv:highps5' });
-    const score = await screen.findByLabelText(/Score for Audio - PS5 Safe/);
+    const score = await screen.findByLabelText(/^Audio - PS5 Safe/);
     await fireEvent.input(score, { target: { value: '150' } });
     await fireEvent.blur(score);
     await fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));

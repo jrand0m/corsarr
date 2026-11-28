@@ -40,7 +40,7 @@
   const open = (key: string | undefined): FormatDoc | undefined => {
     if (key === undefined) return undefined;
     const row = rows.find((r) => r.key === key);
-    return row ? structuredClone(formatDoc(row)) : emptyFormat();
+    return row ? formatDoc($state.snapshot(row) as FormatRow) : emptyFormat();
   };
   // svelte-ignore state_referenced_locally
   let draft = $state<FormatDoc | undefined>(open(initialEdit));
@@ -59,7 +59,7 @@
   function edit(key: string) { draft = open(key); isNew = false; refused = undefined; results = undefined; }
   function add() { draft = emptyFormat(); isNew = true; refused = undefined; results = undefined; }
   function duplicate(r: FormatRow) {
-    draft = { ...structuredClone(formatDoc(r)), key: '', name: `${r.name} (copy)` };
+    draft = { ...formatDoc($state.snapshot(r) as FormatRow), key: '', name: `${r.name} (copy)` };
     isNew = true; refused = undefined; results = undefined;
   }
   function close() { draft = undefined; refused = undefined; }

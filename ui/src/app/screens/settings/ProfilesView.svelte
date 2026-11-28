@@ -72,7 +72,7 @@
   });
 
   function start(r: ProfileRow | undefined, doc?: ProfileDoc) {
-    draft = doc ?? (r ? structuredClone(profileDoc(r)) : undefined);
+    draft = doc ?? (r ? profileDoc($state.snapshot(r) as ProfileRow) : undefined);
     refused = undefined;
     if (draft) ladder = ladderItems(draft.groups, choices?.qualities[draft.kinds.includes('music') ? 'music' : 'movie'] ?? []);
   }
@@ -150,12 +150,14 @@
 
   const columns: Column<ProfileRow>[] = [
     { id: 'name', label: 'Name', value: (r) => r.name, phone: 'title' },
-    { id: 'kinds', label: 'For', width: '9rem', value: (r) => kindsLabel(r.kinds), phone: 'meta' },
-    { id: 'cutoff', label: 'Upgrades until', width: '11rem', value: (r) => (r.upgrades ? r.cutoff : 'No upgrades'), phone: 'hidden' },
-    { id: 'formats', label: 'Formats', width: '6rem', align: 'end', value: (r) => r.formats?.length ?? 0, phone: 'hidden' },
-    { id: 'items', label: 'In use', width: '6rem', align: 'end', value: (r) => r.items, phone: 'trailing' },
-    { id: 'source', label: 'Source', width: '9rem', value: (r) => originLabel(r), phone: 'hidden' },
+    { id: 'kinds', label: 'For', width: '8rem', value: (r) => kindsLabel(r.kinds), phone: 'meta' },
+    { id: 'cutoff', label: 'Upgrades until', width: '9rem', value: (r) => (r.upgrades ? qualityName(r) : 'No upgrades'), phone: 'hidden' },
+    { id: 'formats', label: 'Formats', width: '5rem', align: 'end', value: (r) => r.formats?.length ?? 0, phone: 'hidden' },
+    { id: 'items', label: 'In use', width: '4.5rem', align: 'end', value: (r) => r.items, phone: 'trailing' },
+    { id: 'source', label: 'Source', width: '7.5rem', value: (r) => originLabel(r), phone: 'hidden' },
   ];
+  const qualityName = (r: ProfileRow) =>
+    choices?.qualities[r.kinds.includes('music') ? 'music' : 'movie']?.find((q) => q.id === r.cutoff)?.name ?? r.cutoff;
   function rowActions(r: ProfileRow): ActionItem[] {
     const locked = r.builtin || r.origin === 'config';
     return [
@@ -230,8 +232,7 @@
           <ul class="scores" aria-label="Format scores">
             {#each formats as f (f.key)}
               <li>
-                <span class="fname">{f.name}</span>
-                <NumberField label="Score for {f.name}" value={scoreOf(f.key)?.score ?? 0} disabled={readonly || !!scoreOf(f.key)?.reject}
+                <NumberField label={f.name} value={scoreOf(f.key)?.score ?? 0} disabled={readonly || !!scoreOf(f.key)?.reject}
                   onchange={(v) => setScore(f.key, { score: v ?? 0 })} />
                 <Checkbox label="Reject" checked={scoreOf(f.key)?.reject ?? false} disabled={readonly}
                   onchange={(e) => setScore(f.key, { reject: (e.currentTarget as HTMLInputElement).checked })} />
@@ -282,7 +283,8 @@
   .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--space-3); align-items: start; }
   .three { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--space-3); align-items: start; }
   .scores { display: grid; gap: var(--space-2); list-style: none; padding: 0; margin: 0; }
-  .scores li, .size { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(7rem, 9rem) auto; gap: var(--space-3); align-items: end; }
+  .scores li { display: grid; grid-template-columns: minmax(10rem, 22rem) auto; gap: var(--space-3); align-items: end; }
+  .size { display: grid; gap: var(--space-3); align-items: end; }
   .size { grid-template-columns: minmax(7rem, 1fr) repeat(3, minmax(6rem, 8rem)) auto; }
   @media (max-width: 40rem) { .scores li, .size { grid-template-columns: 1fr; } }
   .add { display: flex; gap: var(--space-2); align-items: flex-end; flex-wrap: wrap; }
