@@ -79,6 +79,11 @@ func TestBuildIndexRefuses(t *testing.T) {
 			t.Errorf("%s: accepted", name)
 		}
 	}
+	full := make([]ModuleFile, MaxIndexPlugins)
+	full[0] = moduleFile(t, "alpha", "1.0.0")
+	if _, err := BuildIndex("v1.0.0", "", sourceDate, full); err == nil || strings.Contains(err.Error(), "at most") {
+		t.Errorf("an index of exactly the maximum is read module by module: %v", err)
+	}
 }
 
 func TestSignAndVerify(t *testing.T) {

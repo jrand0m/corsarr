@@ -354,6 +354,7 @@ describe('config-managed notice', () => {
     const quiet = configNotice(f, [{ kind: 'tv', mode: 'shadow', managedByConfig: false }]);
     expect(hasConfigNotice(quiet)).toBe(false);
     expect(configNotice({ ...f, scope: [] }, modes).nothingWritten).toBe(false);
+    expect(configNotice({ ...f, scope: ['naming'] }, modes).nothingWritten).toBe(true);
   });
 });
 

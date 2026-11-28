@@ -19,6 +19,8 @@ func TestConvertFormatMapsTokenByToken(t *testing.T) {
 		{"{Movie.Title}.{Release.Year}.{MediaInfo VideoCodec}", "{Movie Title}.{Release Year}."},
 		{"Season {season}", "Season {Season}"},
 		{"{track:00} - {Track Title}{ (Medium Format)}", "{Track} - {Track Title}{ (Medium Format)}"},
+		{"{{ImdbId}}", "{IMDb Id}"},
+		{"{Episode Title}{00}", "{Episode Title}"},
 	}
 	for _, c := range cases {
 		if got, _ := convertFormat(Sonarr, "f", c.in); got != c.want {
@@ -67,8 +69,49 @@ func TestMapNamingPerApp(t *testing.T) {
 	}
 }
 
+func TestMapNamingNamesTheSourceSettingOfEachToken(t *testing.T) {
+	fields := func(m NamingMapping) string {
+		var out []string
+		for _, tok := range m.Tokens {
+			out = append(out, tok.Field)
+		}
+		return strings.Join(out, ",")
+	}
+	tv := mapNaming(Sonarr, SrcNaming{Formats: map[string]string{
+		"seriesFolderFormat": "{Series Title}", "seasonFolderFormat": "Season {season}", "standardEpisodeFormat": "{Episode Title}"}})
+	if got := fields(tv); got != "seriesFolderFormat,seasonFolderFormat,standardEpisodeFormat" {
+		t.Errorf("tv: %s", got)
+	}
+	music := mapNaming(Lidarr, SrcNaming{Formats: map[string]string{
+		"artistFolderFormat": "{Artist Name}", "standardTrackFormat": "{Album Title}/{Track Title}"}})
+	if got := fields(music); got != "artistFolderFormat,standardTrackFormat,standardTrackFormat" {
+		t.Errorf("music: %s", got)
+	}
+}
+
+func TestATrackFormatStartingWithASlashHasNoAlbumFolder(t *testing.T) {
+	m := mapNaming(Lidarr, SrcNaming{Formats: map[string]string{"standardTrackFormat": "/{Track Title}"}})
+	if m.Scheme.File != "{Track Title}" || m.Scheme.Sub != naming.DefaultAlbumFolder || len(m.Notes) != 0 {
+		t.Fatalf("%+v %v", m.Scheme, m.Notes)
+	}
+}
+
+func TestNamingSummaryListsOnlyWhatIsThere(t *testing.T) {
+	m := mapNaming(Radarr, SrcNaming{Formats: map[string]string{"movieFolderFormat": "{Movie Title}", "standardMovieFormat": "{Movie Title}"}})
+	want := "add naming.movie to your config file (see the snippet); renaming on; tokens: 2 exact, 0 approximate, 0 without an equivalent"
+	if got := namingSummary(m); got != want {
+		t.Fatalf("%q", got)
+	}
+	m = mapNaming(Radarr, SrcNaming{Colon: "custom", Formats: map[string]string{"standardMovieFormat": "{Movie Title} {Custom Formats}"}})
+	want = "add naming.movie to your config file (see the snippet); renaming on; tokens: 1 exact, 0 approximate, 1 without an equivalent" +
+		" ({Custom Formats}); a custom colon replacement became smart"
+	if got := namingSummary(m); got != want {
+		t.Fatalf("%q", got)
+	}
+}
+
 func TestColonNameReadsNumbersAndNames(t *testing.T) {
-	for raw, want := range map[string]string{`4`: "smart", `"dash"`: "dash", `9`: "", `null`: "", `true`: ""} {
+	for raw, want := range map[string]string{`0`: "delete", `4`: "smart", `5`: "custom", `6`: "", `-1`: "", `"dash"`: "dash", `9`: "", `null`: "", `true`: ""} {
 		if got := colonName(json.RawMessage(raw)); got != want {
 			t.Errorf("%s → %q", raw, got)
 		}

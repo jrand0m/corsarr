@@ -167,12 +167,12 @@ func TestAddValidation(t *testing.T) {
 		{AddRequest{TMDBID: 77, RootFolder: "/elsewhere"}, "rootFolder"},
 	} {
 		var fe FieldError
-		if _, _, err := h.svc.Add(ctx, c.req); !errors.As(err, &fe) || fe.Field != c.field {
+		if _, created, err := h.svc.Add(ctx, c.req); !errors.As(err, &fe) || fe.Field != c.field || created {
 			t.Errorf("%+v: %v", c.req, err)
 		}
 	}
 	h.svc.d.Metadata = func() (plugin.SeriesMetadata, bool) { return nil, false }
-	if _, _, err := h.svc.Add(ctx, AddRequest{TMDBID: 77}); !errors.Is(err, ErrNoMetadata) {
+	if _, created, err := h.svc.Add(ctx, AddRequest{TMDBID: 77}); !errors.Is(err, ErrNoMetadata) || created {
 		t.Fatal(err)
 	}
 	if _, err := h.svc.Lookup(ctx, "x"); !errors.Is(err, ErrNoMetadata) {

@@ -82,7 +82,8 @@ func TestMusicAlbumImportsTracksIntoDiscFolders(t *testing.T) {
 	})
 	e.completed(t, 7)
 	o := e.q.outcomes[0]
-	if o.Status != domain.ImportImported || len(o.Items) != 1 || o.Items[0].Item != al.Ref() || len(o.Items[0].NewPaths) != 3 {
+	if o.Status != domain.ImportImported || len(o.Items) != 1 || o.Items[0].Item != al.Ref() || len(o.Items[0].NewPaths) != 3 ||
+		o.Items[0].Outcome != "imported" {
 		t.Fatalf("%+v", o)
 	}
 	albumDir := filepath.Join(filepath.Dir(e.lib), "music", "Example Artist", "First Album (2020)")
@@ -99,7 +100,7 @@ func TestMusicAlbumImportsTracksIntoDiscFolders(t *testing.T) {
 		}
 	}
 	f, _, _ := e.st.Library().File(ctx, tracks[0].FileID)
-	if f.Quality != "flac" || f.Item.Kind != domain.KindMusic || f.Item.ID != tracks[0].ID {
+	if f.Quality != "flac" || f.Item.Kind != domain.KindMusic || f.Item.ID != tracks[0].ID || f.Revision != 1 {
 		t.Fatalf("%+v", f)
 	}
 	ev := e.rec.Of(domain.EvImportCompleted)
@@ -107,6 +108,12 @@ func TestMusicAlbumImportsTracksIntoDiscFolders(t *testing.T) {
 		ev[0].Items[0].Title != "Example Artist - First Album" {
 		t.Fatalf("%+v", ev)
 	}
+	// re-running the same download ends in the same state
+	e.q.d.State = domain.StateImporting
+	if err := e.svc.Import(ctx, 7); err != nil || e.q.outcomes[1].Status != domain.ImportImported || len(e.q.outcomes[1].Items[0].NewPaths) != 3 {
+		t.Fatalf("idempotent re-run: %v %+v", err, e.q.outcomes[1])
+	}
+	e.q.outcomes = e.q.outcomes[:1]
 	// the same quality again is no upgrade
 	e.q.d.ID, e.q.d.State = 8, domain.StateCompleted
 	e.svc.OnDownloadCompleted(ctx, domain.Event{Type: domain.EvDownloadCompleted, Data: domain.DownloadEventData{DownloadID: 8}})

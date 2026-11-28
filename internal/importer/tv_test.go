@@ -70,7 +70,7 @@ func TestTVSeasonPackImportsEachEpisodeAndSkipsBetterOnes(t *testing.T) {
 	})
 	e.completed(t, 7)
 	o := e.q.outcomes[0]
-	if o.Status != domain.ImportPartial || len(o.Items) != 3 || o.Items[2].Outcome != "skipped" || o.Items[2].Reason == "" {
+	if o.Status != domain.ImportPartial || len(o.Items) != 3 || o.Items[0].Outcome != "imported" || o.Items[2].Outcome != "skipped" || o.Items[2].Reason == "" {
 		t.Fatalf("%+v", o)
 	}
 	want := filepath.Join(filepath.Dir(e.lib), "tv", "Example Show (2022)", "Season 01", "Example Show - S01E01 - Ep [HDTV-720p].mkv")

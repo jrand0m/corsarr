@@ -158,15 +158,15 @@ func TestAddValidatesInput(t *testing.T) {
 	for _, req := range []AddRequest{{}, {MBID: "a1", Monitor: "x"}, {MBID: "a1", MonitorNew: "x"}, {MBID: "a1", ProfileKey: "x"},
 		{MBID: "a1", MetadataProfile: "x"}, {MBID: "a1", RootFolder: "/elsewhere"}} {
 		var fe FieldError
-		if _, _, err := f.svc.Add(ctx, req); !errors.As(err, &fe) {
+		if _, created, err := f.svc.Add(ctx, req); !errors.As(err, &fe) || created {
 			t.Errorf("%+v: %v", req, err)
 		}
 	}
-	if _, _, err := f.svc.Add(ctx, AddRequest{MBID: "missing"}); !errors.Is(err, plugin.ErrNotFound) {
+	if _, created, err := f.svc.Add(ctx, AddRequest{MBID: "missing"}); !errors.Is(err, plugin.ErrNotFound) || created {
 		t.Fatalf("unknown artist: %v", err)
 	}
 	f.svc.d.Metadata = func() (plugin.MusicMetadata, bool) { return nil, false }
-	if _, _, err := f.svc.Add(ctx, AddRequest{MBID: "a1"}); !errors.Is(err, ErrNoMetadata) {
+	if _, created, err := f.svc.Add(ctx, AddRequest{MBID: "a1"}); !errors.Is(err, ErrNoMetadata) || created {
 		t.Fatal(err)
 	}
 	if _, err := f.svc.Lookup(ctx, "x"); !errors.Is(err, ErrNoMetadata) {

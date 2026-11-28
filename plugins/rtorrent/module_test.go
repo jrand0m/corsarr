@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jrand0m/corsarr/internal/wasm"
@@ -179,6 +183,9 @@ func TestStateFolding(t *testing.T) {
 		if s.State != c.state || (s.Error != "") != c.err {
 			t.Errorf("%s: %+v", c.in.State, s)
 		}
+		if (s.State == "completed") != (len(s.Files) == 1 && s.Files[0] == c.in.ContentPath) {
+			t.Errorf("%s: files %v", c.in.State, s.Files)
+		}
 		if c.err && !strings.Contains(s.Error, "Disk full") {
 			t.Errorf("reason lost: %q", s.Error)
 		}
@@ -220,5 +227,62 @@ func TestPayloadsAndFailures(t *testing.T) {
 	}
 	if classify(nil) != nil || classOf(classify(errors.New("x"))) != abi.ClassServerError {
 		t.Error("classify")
+	}
+}
+
+func TestFreeSpaceIsReportedOnlyWhenKnown(t *testing.T) {
+	fake, h := start(t, fakexmlrpc.V010, nil)
+	var res abi.ActionResult
+	call(t, h, abi.OpAction, abi.ActionRequest{ID: "test"}, &res)
+	if strings.Contains(res.Text, "GB free") {
+		t.Errorf("no downloads, no free space known: %q", res.Text)
+	}
+	var stats abi.Stats
+	call(t, h, abi.OpDLStats, struct{}{}, &stats)
+	if stats.FreeSpace != 0 {
+		t.Errorf("unknown free space: %+v", stats)
+	}
+	call(t, h, abi.OpDLAdd, abi.AddRequest{Payload: abi.Payload{Kind: "magnet", URL: magnet}}, nil)
+	call(t, h, abi.OpAction, abi.ActionRequest{ID: "test"}, &res)
+	if !strings.Contains(res.Text, " 1099.5 GB free.") {
+		t.Errorf("free space: %q", res.Text)
+	}
+	fake.SetFreeSpace(0)
+	call(t, h, abi.OpAction, abi.ActionRequest{ID: "test"}, &res)
+	if !strings.Contains(res.Text, " 0.0 GB free.") {
+		t.Errorf("a full disk: %q", res.Text)
+	}
+}
+
+func TestTheClientIsKeptBetweenCalls(t *testing.T) {
+	fake := fakexmlrpc.New(fakexmlrpc.V098, fakexmlrpc.Options{})
+	var mu sync.Mutex
+	asked := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(body), "d.tracker_announce.force") {
+			mu.Lock()
+			asked++
+			mu.Unlock()
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		fake.Handler().ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	h := plugintest.New(plugintest.Host{Settings: map[string]any{"url": srv.URL + "/RPC2", "timeout": "5s"},
+		Secrets: map[string]string{"password": ""}, Hosts: []string{"127.0.0.1"}})
+	call(t, h, abi.OpDLAdd, abi.AddRequest{Payload: abi.Payload{Kind: "magnet", URL: magnet}}, nil)
+	call(t, h, abi.OpDLReannounce, abi.IDRequest{ID: hash}, nil)
+	call(t, h, abi.OpDLReannounce, abi.IDRequest{ID: hash}, nil)
+	if asked != 1 {
+		t.Fatalf("a method the server lacks was asked for %d times", asked)
+	}
+}
+
+func TestATorrentFileOfAnySizeIsSent(t *testing.T) {
+	_, h := start(t, fakexmlrpc.V010, nil)
+	err := h.Call(abi.OpDLAdd, abi.AddRequest{Payload: abi.Payload{Kind: "torrent", Content: []byte("x")}}, nil)
+	if err == nil || strings.Contains(err.Error(), "needs the torrent file") {
+		t.Fatalf("a one-byte payload is read as a torrent: %v", err)
 	}
 }
