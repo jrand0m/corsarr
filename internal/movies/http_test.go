@@ -36,7 +36,6 @@ func TestHTTPEndpoints(t *testing.T) {
 		{"GET", "/api/v1/movies/1/move?rootFolder=/not/a/root", "", 400, `"field":"rootFolder"`},
 		{"GET", "/api/v1/movies/9/move", "", 404, ""},
 		{"GET", "/api/v1/movies/x/move", "", 400, ""},
-		{"GET", "/api/v1/qualityprofiles", "", 200, `"isDefault":true`},
 		{"DELETE", "/api/v1/movies/1", "", 204, ""},
 		{"DELETE", "/api/v1/movies/1", "", 404, ""},
 		{"DELETE", "/api/v1/movies/x", "", 400, ""},
