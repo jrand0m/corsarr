@@ -289,19 +289,26 @@ func convertToken(body string) (string, TokenMapping) {
 	if !ok {
 		return "", tm
 	}
-	tm.Status, tm.Note, tm.Target = TokenApproximate, rule.note, strings.Join(rule.targets, " + ")
-	switch {
-	case rule.padded && format != "00":
-		tm.Note = notePadded
-	case strings.ContainsAny(name, "._") && rule.exact:
-		tm.Note = "written with spaces (the source separates words with " + string(name[strings.IndexAny(name, "._")]) + ")"
-	case rule.exact:
-		tm.Status = TokenExact
-	}
+	tm.Target = strings.Join(rule.targets, " + ")
+	tm.Status, tm.Note = tokenStatus(rule, name, format)
 	if len(rule.targets) == 1 {
 		return "{" + prefix + rule.targets[0] + suffix + "}", tm
 	}
 	return "{" + prefix + rule.targets[0] + "}{ (" + rule.targets[1] + ")" + suffix + "}", tm
+}
+
+// tokenStatus grades a known token: exact only when corsarr writes the same
+// value in the same form.
+func tokenStatus(rule tokenRule, name, format string) (status, note string) {
+	switch {
+	case rule.padded && format != "00":
+		return TokenApproximate, notePadded
+	case !rule.exact:
+		return TokenApproximate, rule.note
+	case strings.ContainsAny(name, "._"):
+		return TokenApproximate, "written with spaces (the source separates words with " + string(name[strings.IndexAny(name, "._")]) + ")"
+	}
+	return TokenExact, ""
 }
 
 // normalToken lower-cases a token name and drops its word separators.

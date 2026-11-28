@@ -44,7 +44,7 @@ func lidarrRoutes(day time.Time) map[string]any {
 				"secondaryAlbumTypes": []any{allowedType("Studio", true), allowedType("Live", true)},
 				"releaseStatuses":     []any{allowedStatus("Official", true), allowedStatus("Bootleg", true)}},
 		},
-		"/rootfolder":    []any{map[string]any{"id": 1, "path": src("music/")}},
+		"/rootfolder": []any{map[string]any{"id": 1, "path": src("music/")}},
 		"/config/naming": map[string]any{"renameTracks": true, "colonReplacementFormat": "dash", "artistFolderFormat": "{Artist Name}",
 			"standardTrackFormat": "{Album Title} ({Release Year})/{track:00} {Track Title}"},
 		"/downloadclient": []any{map[string]any{"id": 1, "name": "qbit", "implementation": "QBittorrent", "protocol": "torrent",
