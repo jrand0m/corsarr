@@ -17,13 +17,28 @@ export function testChecks(t: IndexerTest): CheckResult[] {
     detail: t.ok ? undefined : withClass(t),
   }];
   if (!t.caps) return checks;
-  const modes = (t.caps.modes ?? []).map((m) => modeNames[m] ?? m);
-  checks.push({ id: 'modes', name: 'Search modes', status: modes.length ? 'pass' : 'warn', detail: modes.length ? modes.join(', ') : 'No search modes declared' });
-  const ids = t.caps.idParams ?? [];
-  checks.push({ id: 'ids', name: 'Searches by id', status: ids.length ? 'pass' : 'skipped', detail: ids.length ? ids.join(', ') : 'Text searches only' });
-  const cats = Object.keys(t.caps.categories ?? {}).length;
-  checks.push({ id: 'cats', name: 'Categories', status: cats ? 'pass' : 'warn', detail: cats ? `${cats} mapped` : 'No categories; every search covers all of them' });
+  checks.push(modesCheck(t.caps), idsCheck(t.caps), categoriesCheck(t.caps));
   return checks;
+}
+
+type Caps = NonNullable<IndexerTest['caps']>;
+
+/** The search modes the indexer declares, by their plain names. */
+function modesCheck(caps: Caps): CheckResult {
+  const modes = (caps.modes ?? []).map((m) => modeNames[m] ?? m);
+  return { id: 'modes', name: 'Search modes', status: modes.length ? 'pass' : 'warn', detail: modes.length ? modes.join(', ') : 'No search modes declared' };
+}
+
+/** The ids the indexer searches by; none means text searches only. */
+function idsCheck(caps: Caps): CheckResult {
+  const ids = caps.idParams ?? [];
+  return { id: 'ids', name: 'Searches by id', status: ids.length ? 'pass' : 'skipped', detail: ids.length ? ids.join(', ') : 'Text searches only' };
+}
+
+/** How many categories the indexer maps. */
+function categoriesCheck(caps: Caps): CheckResult {
+  const cats = Object.keys(caps.categories ?? {}).length;
+  return { id: 'cats', name: 'Categories', status: cats ? 'pass' : 'warn', detail: cats ? `${cats} mapped` : 'No categories; every search covers all of them' };
 }
 
 function withClass(t: IndexerTest): string {
