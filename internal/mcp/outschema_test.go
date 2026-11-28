@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"math"
+	"net/netip"
 	"os"
 	"slices"
 	"sort"
@@ -221,6 +222,8 @@ type schemaSample struct {
 	Self     *schemaSample     `json:"self,omitempty"`
 	Hidden   string            `json:"-"`
 	Untagged bool
+	Addr     netip.Addr `json:"addr"`
+	Bytes    []byte     `json:"bytes,omitempty"`
 	unexp    int
 	schemaEmbedded
 	*schemaPtrEmbedded
@@ -249,6 +252,9 @@ func TestOutputSchemaFollowsTheJSONEncoding(t *testing.T) {
 	}
 	if _, ok := props["Hidden"]; ok || props["unexp"] != nil {
 		t.Fatal("skipped fields stay out")
+	}
+	if props["addr"]["type"] != "string" || props["bytes"]["type"] != "string" {
+		t.Fatalf("text and bytes encode as strings: %v %v", props["addr"], props["bytes"])
 	}
 	if props["at"]["format"] != "date-time" || props["self"]["type"] != "object" || len(props["raw"]) != 0 {
 		t.Fatalf("%v %v %v", props["at"], props["self"], props["raw"])
