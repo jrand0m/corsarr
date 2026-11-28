@@ -15,6 +15,10 @@ Short notes per release. Each release's assets, checksums and how to verify them
 - Go SDK for modules (`sdk/go`) with a test harness and an example download client.
 - New `plugins` settings: plugins folder, built-ins to switch off, and memory, time, concurrency and size limits for modules.
 - Plugin settings forms are typed data checked on the server: a closed set of field types, plain text with a small emoji set, per-field errors.
+- Settings › Plugins & integrations › Installed modules: each module's status, version, kind, what it may reach and the instances using it, with rollback and uninstall.
+- Module pages show the module's details, permissions and the instances using it with their settings and action buttons (for example Test connection); a new-instance form is checked by the server and turns into ready-to-paste YAML, secrets as environment references.
+- Settings › Catalogue: install or update modules from the signed catalogue after reviewing their permissions; updates that ask for more wait for approval; a stale or unreachable catalogue says so. `plugins.uiInstall: false` locks these changes and the pages show where the lock is set.
+- History words module installs, updates, rollbacks and removals.
 
 ## v0.5.4 — 2026-11-28
 
