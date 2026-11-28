@@ -252,24 +252,11 @@ func entryOf(key string, variant int, origin, role string, enc Encoded, now time
 // the cap first shrinks and evicts until the file fits, so the cap is never
 // exceeded; crossing the high-water mark asks for a degradation run.
 func (c *Cache) store(ctx context.Context, e store.ImageEntry, data []byte) error {
-	s := c.d.Settings
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	usage, err := c.usage(ctx)
+	usage, err := c.makeRoom(ctx, e.Bytes)
 	if err != nil {
 		return err
-	}
-	if usage+e.Bytes > s.MaxSize {
-		target := min(s.low(), s.MaxSize-e.Bytes)
-		if target < 0 {
-			return fmt.Errorf("%w: one image is larger than the cache", ErrTooLarge)
-		}
-		st, err := c.degrade(ctx, usage, target)
-		c.record(st)
-		if err != nil {
-			return err
-		}
-		usage = st.After
 	}
 	if err := c.write(c.path(e), data); err != nil {
 		return err
@@ -278,10 +265,27 @@ func (c *Cache) store(ctx context.Context, e store.ImageEntry, data []byte) erro
 		_ = os.Remove(c.path(e))
 		return err
 	}
-	if usage+e.Bytes >= s.high() && c.d.Kick != nil {
+	if usage+e.Bytes >= c.d.Settings.high() && c.d.Kick != nil {
 		c.d.Kick()
 	}
 	return nil
+}
+
+// makeRoom shrinks and evicts until n more bytes fit under the cap and
+// returns the usage before they are added; the caller holds mu.
+func (c *Cache) makeRoom(ctx context.Context, n int64) (int64, error) {
+	s := c.d.Settings
+	usage, err := c.usage(ctx)
+	if err != nil || usage+n <= s.MaxSize {
+		return usage, err
+	}
+	target := min(s.low(), s.MaxSize-n)
+	if target < 0 {
+		return 0, fmt.Errorf("%w: one image is larger than the cache", ErrTooLarge)
+	}
+	st, err := c.degrade(ctx, usage, target)
+	c.record(st)
+	return st.After, err
 }
 
 // usage is the stored image bytes plus the provider-record bytes.

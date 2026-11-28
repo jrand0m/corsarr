@@ -112,24 +112,33 @@ func (g *degrader) run() error {
 // it reports whether anything shrank.
 func (g *degrader) passes(entries []store.ImageEntry, step func(*store.ImageEntry) (bool, error)) (bool, error) {
 	any := false
-	for progressed := true; progressed && !g.done(); {
-		progressed = false
-		for i := range entries {
-			if g.done() {
-				return true, nil
-			}
-			if entries[i].Variant > 0 || entries[i].Format == "" {
-				continue
-			}
-			changed, err := step(&entries[i])
-			if err != nil {
-				return any, err
-			}
-			progressed = progressed || changed
-			any = any || changed
+	for !g.done() {
+		changed, err := g.pass(entries, step)
+		any = any || changed
+		if err != nil || !changed {
+			return any, err
 		}
 	}
 	return any, nil
+}
+
+// pass applies step once to each original until the target is met.
+func (g *degrader) pass(entries []store.ImageEntry, step func(*store.ImageEntry) (bool, error)) (bool, error) {
+	changed := false
+	for i := range entries {
+		if g.done() {
+			break
+		}
+		if entries[i].Variant > 0 || entries[i].Format == "" {
+			continue
+		}
+		ok, err := step(&entries[i])
+		if err != nil {
+			return changed, err
+		}
+		changed = changed || ok
+	}
+	return changed, nil
 }
 
 func (g *degrader) lowerQuality(e *store.ImageEntry) (bool, error) {
@@ -215,12 +224,8 @@ func (g *degrader) dropVariants(key string) error {
 // evict removes records of items outside the library first, then files by
 // tier, least recently used first.
 func (g *degrader) evict(entries []store.ImageEntry) error {
-	if m := g.c.d.Metadata; m != nil {
-		n, freed, err := m.EvictUnused(g.ctx, g.usage-g.target)
-		if err != nil {
-			return err
-		}
-		g.st.MetadataEvicted, g.usage = n, g.usage-freed
+	if err := g.evictRecords(); err != nil || g.done() {
+		return err
 	}
 	library, err := g.library()
 	if err != nil {
@@ -230,15 +235,32 @@ func (g *degrader) evict(entries []store.ImageEntry) error {
 		if g.done() {
 			return nil
 		}
-		if e.Format == "" || g.gone[goneKey(e)] {
-			continue
-		}
-		if err := g.c.remove(g.ctx, e); err != nil {
+		if err := g.evictFile(e); err != nil {
 			return err
 		}
-		g.usage -= e.Bytes
-		g.st.Evicted++
 	}
+	return nil
+}
+
+func (g *degrader) evictRecords() error {
+	m := g.c.d.Metadata
+	if m == nil {
+		return nil
+	}
+	n, freed, err := m.EvictUnused(g.ctx, g.usage-g.target)
+	g.st.MetadataEvicted, g.usage = n, g.usage-freed
+	return err
+}
+
+func (g *degrader) evictFile(e store.ImageEntry) error {
+	if e.Format == "" || g.gone[goneKey(e)] {
+		return nil
+	}
+	if err := g.c.remove(g.ctx, e); err != nil {
+		return err
+	}
+	g.usage -= e.Bytes
+	g.st.Evicted++
 	return nil
 }
 
