@@ -24,6 +24,12 @@ func TestBuilds(t *testing.T) {
 	if !bytes.Contains(HostileManifest(func(m *abi.Manifest) { m.ID = "zz" }), []byte(`"zz"`)) {
 		t.Fatal("mutate")
 	}
+	if m := Module(t, "./plugins/example-downloader"); !bytes.Contains(m, []byte(abi.ManifestSection)) || !bytes.Equal(Module(t, "./plugins/example-downloader"), m) {
+		t.Fatal("module build")
+	}
+	if _, err := buildModule("./no/such/package"); err == nil {
+		t.Fatal("missing package built")
+	}
 	if CacheDir() == "" {
 		t.Fatal("cache dir")
 	}
