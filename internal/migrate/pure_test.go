@@ -159,11 +159,14 @@ func TestParseScope(t *testing.T) {
 
 func TestQualityMapping(t *testing.T) {
 	cases := map[string]string{"WEBDL-1080p": "webdl-1080p", "Bluray-2160p Remux": "remux-2160p", "Remux-1080p": "remux-1080p",
-		"SDTV": "sdtv", "Raw-HD": "unknown"}
+		"SDTV": "sdtv", "Raw-HD": "unknown", "Bluray-576p": "bluray-576p"}
 	for in, want := range cases {
 		if got, _ := qualityID(in); string(got) != want {
 			t.Errorf("%s → %s, want %s", in, got, want)
 		}
+	}
+	if _, exact := qualityID("Bluray-576p"); !exact {
+		t.Error("Bluray-576p must map exactly")
 	}
 	if _, exact := qualityID("Raw-HD"); exact {
 		t.Error("unknown quality reported exact")

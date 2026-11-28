@@ -308,8 +308,12 @@ var historyTypes = map[string]domain.EventType{
 	"episodeFileDeleted": domain.EvFileDeleted, "movieFileDeleted": domain.EvFileDeleted,
 	"episodeFileRenamed": domain.EvFileRenamed, "movieFileRenamed": domain.EvFileRenamed,
 	"trackFileImported": domain.EvImportCompleted, "trackFileDeleted": domain.EvFileDeleted,
-	"trackFileRenamed": domain.EvFileRenamed,
+	"trackFileRenamed": domain.EvFileRenamed, "downloadImported": domain.EvImportCompleted,
+	"albumImportIncomplete": domain.EvImportFailed,
 }
+
+// historyMarks are extra data a source event type carries into History.
+var historyMarks = map[string]map[string]any{"albumImportIncomplete": {"incomplete": true}}
 
 func (b *builder) history(s Snapshot) {
 	keys := lookups(s)
@@ -327,8 +331,17 @@ func (b *builder) history(s Snapshot) {
 			e.op = historyOp{title: h.Title, prov: store.Provenance{Key: key}, items: keys.items([]int{h.EpisodeID}, h.MovieID, []int{h.AlbumID}),
 				ev: domain.Event{SchemaVersion: 1, EventID: "import-" + s.Source.Instance + "-" + fmt.Sprint(h.ID), Type: t,
 					OccurredAt: h.Date, Actor: "import:" + string(s.Source.App), Imported: true, Kind: s.Source.App.Kind(),
-					Data: map[string]any{"sourceTitle": h.Title, "downloadId": h.DownloadID, "importedFrom": string(s.Source.App)}}}
+					Data: historyData(h, s.Source.App)}}
 		}
 		b.add(e)
 	}
+}
+
+// historyData is what an imported History row records about its source row.
+func historyData(h SrcHistory, app App) map[string]any {
+	data := map[string]any{"sourceTitle": h.Title, "downloadId": h.DownloadID, "importedFrom": string(app)}
+	for k, v := range historyMarks[h.Event] {
+		data[k] = v
+	}
+	return data
 }
