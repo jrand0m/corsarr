@@ -173,22 +173,35 @@ func (f *Fetcher) getBytes(ctx context.Context, url, etag string, limit int64) (
 		return nil, "", false, fmt.Errorf("catalogue unreachable: %w", err)
 	}
 	defer resp.Body.Close()
-	switch {
-	case resp.StatusCode == http.StatusNotModified && etag != "":
+	if resp.StatusCode == http.StatusNotModified && etag != "" {
 		return nil, etag, true, nil
-	case resp.StatusCode == http.StatusNotFound:
-		return nil, "", false, fmt.Errorf("%w: %s answered 404", errNotFound, req.URL.Redacted())
-	case resp.StatusCode != http.StatusOK:
-		return nil, "", false, fmt.Errorf("catalogue answered HTTP %d", resp.StatusCode)
 	}
-	body, err = io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err := statusProblem(resp.StatusCode, req); err != nil {
+		return nil, "", false, err
+	}
+	body, err = readLimited(resp.Body, limit)
+	return body, resp.Header.Get("ETag"), false, err
+}
+
+func statusProblem(code int, req *http.Request) error {
+	switch code {
+	case http.StatusOK:
+		return nil
+	case http.StatusNotFound:
+		return fmt.Errorf("%w: %s answered 404", errNotFound, req.URL.Redacted())
+	}
+	return fmt.Errorf("catalogue answered HTTP %d", code)
+}
+
+func readLimited(r io.Reader, limit int64) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
-		return nil, "", false, fmt.Errorf("catalogue read: %w", err)
+		return nil, fmt.Errorf("catalogue read: %w", err)
 	}
 	if int64(len(body)) > limit {
-		return nil, "", false, fmt.Errorf("catalogue file is larger than %d bytes", limit)
+		return nil, fmt.Errorf("catalogue file is larger than %d bytes", limit)
 	}
-	return body, resp.Header.Get("ETag"), false, nil
+	return body, nil
 }
 
 func (f *Fetcher) store(url string, index, sig []byte, m meta) error {

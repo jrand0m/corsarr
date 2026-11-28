@@ -179,7 +179,10 @@ type Bootstrap struct {
 // ModulesDir is the plugins folder.
 func (b Bootstrap) ModulesDir() string { return modulesDir(b.Plugins.Dir, b.DataDir) }
 
-// Peek reads only the data and plugins sections of the active source.
+// bootstrapKeys are the sections Peek reads.
+var bootstrapKeys = map[string]bool{"server": true, "data": true, "plugins": true}
+
+// Peek reads only the server, data and plugins sections of the active source.
 func Peek(in Inputs) (Bootstrap, error) {
 	src, err := Select(in)
 	if err != nil {
@@ -190,22 +193,27 @@ func Peek(in Inputs) (Bootstrap, error) {
 		return Bootstrap{}, err
 	}
 	part := newRaw(r.loc)
-	for _, k := range []string{"server", "data", "plugins"} {
+	for k := range bootstrapKeys {
 		if kid, ok := r.kids[k]; ok {
 			part.kids[k] = kid
 		}
 	}
-	full := NewSchema(plugin.NewRegistry())
-	s := &Schema{Root: &Node{Kind: KindObject}, Plugins: full.Plugins}
-	for _, f := range full.Root.Fields {
-		if f.Name == "server" || f.Name == "data" || f.Name == "plugins" {
-			s.Root.Fields = append(s.Root.Fields, f)
-		}
-	}
-	t, _, _, err := s.decode(part, in.Resolver, false)
+	t, _, _, err := bootstrapSchema().decode(part, in.Resolver, false)
 	if err != nil {
 		return Bootstrap{}, err
 	}
 	server, _ := t["server"].(tree)
 	return Bootstrap{DataDir: str(t, "data", "dir"), Plugins: pluginsOf(t), EgressAllow: stringList(server["egressAllow"])}, nil
+}
+
+// bootstrapSchema is the schema of the sections Peek reads.
+func bootstrapSchema() *Schema {
+	full := NewSchema(plugin.NewRegistry())
+	s := &Schema{Root: &Node{Kind: KindObject}, Plugins: full.Plugins}
+	for _, f := range full.Root.Fields {
+		if bootstrapKeys[f.Name] {
+			s.Root.Fields = append(s.Root.Fields, f)
+		}
+	}
+	return s
 }

@@ -257,19 +257,9 @@ func (p *PluginAdmin) installFromCatalogue(ctx context.Context, id, version, act
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	url := p.catalogueURL()
-	snap, err := p.fetch.Get(ctx, url, false)
+	e, err := p.approvedEntry(ctx, url, id, version)
 	if err != nil {
-		return ModuleView{}, fmt.Errorf("%w: %v", ErrCatalogueUnreadable, err)
-	}
-	e, ok := snap.Index.Find(id)
-	switch {
-	case !ok:
-		return ModuleView{}, ErrNotInCatalogue
-	case version != "" && e.Version != version:
-		return ModuleView{}, fmt.Errorf("%w (offered: %s)", ErrCatalogueChanged, e.Version)
-	}
-	if reason := catalogue.Incompatible(e, p.d.Version); reason != "" {
-		return ModuleView{}, fmt.Errorf("%w: it %s", ErrIncompatible, reason)
+		return ModuleView{}, err
 	}
 	before, had := p.d.Modules.Get(id)
 	mod, err := catalogue.Download(ctx, p.d.HTTP, url, e)
@@ -287,6 +277,26 @@ func (p *PluginAdmin) installFromCatalogue(ctx context.Context, id, version, act
 	}
 	p.changed(actor, PluginChange{Action: action, ID: id, Version: info.Version, Previous: previous, SHA256: info.SHA256, Source: "catalogue"})
 	return p.view(info, p.sources()), nil
+}
+
+// approvedEntry is the verified catalogue entry of id, when it still offers
+// exactly version ("" = whatever it offers) and this corsarr can run it.
+func (p *PluginAdmin) approvedEntry(ctx context.Context, url, id, version string) (catalogue.Entry, error) {
+	snap, err := p.fetch.Get(ctx, url, false)
+	if err != nil {
+		return catalogue.Entry{}, fmt.Errorf("%w: %v", ErrCatalogueUnreadable, err)
+	}
+	e, ok := snap.Index.Find(id)
+	switch {
+	case !ok:
+		return e, ErrNotInCatalogue
+	case version != "" && e.Version != version:
+		return e, fmt.Errorf("%w (offered: %s)", ErrCatalogueChanged, e.Version)
+	}
+	if reason := catalogue.Incompatible(e, p.d.Version); reason != "" {
+		return e, fmt.Errorf("%w: it %s", ErrIncompatible, reason)
+	}
+	return e, nil
 }
 
 // Update moves an installed module to exactly version from the catalogue.
@@ -377,24 +387,40 @@ func (p *PluginAdmin) Action(ctx context.Context, id, action, instance string, v
 }
 
 func (p *PluginAdmin) actionValues(id, instance string, values map[string]any) (map[string]any, error) {
-	out := map[string]any{}
-	if instance != "" {
-		section, key, _ := strings.Cut(instance, ".")
-		inst, ok := p.d.Config().Instances[section][domain.ObjectKey(key)]
-		if !ok || inst.Type != id {
-			return nil, ErrUnknownInstance
-		}
-		for k, v := range inst.Settings {
+	out, err := p.savedValues(id, instance)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range values {
+		if !untouched(v, instance != "") {
 			out[k] = v
 		}
 	}
-	for k, v := range values {
-		if s, isText := v.(string); v == nil || (isText && s == "" && instance != "") {
-			continue // an untouched field keeps the saved value
-		}
+	return out, nil
+}
+
+// savedValues are the settings of a configured instance of id ("" = none).
+func (p *PluginAdmin) savedValues(id, instance string) (map[string]any, error) {
+	out := map[string]any{}
+	if instance == "" {
+		return out, nil
+	}
+	section, key, _ := strings.Cut(instance, ".")
+	inst, ok := p.d.Config().Instances[section][domain.ObjectKey(key)]
+	if !ok || inst.Type != id {
+		return nil, ErrUnknownInstance
+	}
+	for k, v := range inst.Settings {
 		out[k] = v
 	}
 	return out, nil
+}
+
+// untouched reports a posted value that keeps the saved one: nothing, or an
+// empty text over a configured instance.
+func untouched(v any, overSaved bool) bool {
+	s, isText := v.(string)
+	return v == nil || (overSaved && isText && s == "")
 }
 
 // AutoUpdate installs newer catalogue versions of modules installed from
@@ -409,10 +435,22 @@ func (p *PluginAdmin) AutoUpdate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	sources := p.sources()
 	var errs []error
+	for _, e := range p.autoUpdates(snap.Index, policy) {
+		if _, err := p.installFromCatalogue(ctx, e.ID, e.Version, "system"); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", e.ID, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// autoUpdates are the entries the policy installs on its own: newer versions
+// of active catalogue installs that ask for no new permissions.
+func (p *PluginAdmin) autoUpdates(ix catalogue.Index, policy string) []catalogue.Entry {
+	sources := p.sources()
+	var out []catalogue.Entry
 	for _, info := range p.d.Modules.List() {
-		e, ok := snap.Index.Find(info.ID)
+		e, ok := ix.Find(info.ID)
 		if !ok || info.Status != modules.StatusActive || p.view(info, sources).Source != "catalogue" ||
 			!catalogue.WithinPolicy(policy, info.Version, e.Version) {
 			continue
@@ -421,11 +459,9 @@ func (p *PluginAdmin) AutoUpdate(ctx context.Context) error {
 			p.d.Log.Info("plugin update waits for approval: it asks for new permissions", "plugin", info.ID, "version", e.Version)
 			continue
 		}
-		if _, err := p.installFromCatalogue(ctx, info.ID, e.Version, "system"); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", info.ID, err))
-		}
+		out = append(out, e)
 	}
-	return errors.Join(errs...)
+	return out
 }
 
 // ── catalogue installs on disk ───────────────────────────────────────────────
@@ -483,29 +519,33 @@ func (p *PluginAdmin) forget(id string) {
 // validated. It returns the changes made, for History once it is open, and
 // one error per entry that could not be installed.
 func (p *PluginAdmin) Provision(ctx context.Context, list []config.PluginInstall) ([]PluginChange, []error) {
-	if p.d.Modules == nil || len(list) == 0 {
+	if p.d.Modules == nil {
 		return nil, nil
 	}
-	var (
-		changes []PluginChange
-		errs    []error
-	)
 	bus := p.d.Bus
 	rec := &changeRecorder{}
 	p.d.Bus = rec
 	defer func() { p.d.Bus = bus }()
-	for _, want := range list {
-		if info, ok := p.d.Modules.Get(want.ID); ok && info.Status != modules.StatusUninstalled && (want.Version == "" || info.Version == want.Version) {
-			continue
-		}
+	var errs []error
+	for _, want := range p.missing(list) {
 		if _, err := p.installFromCatalogue(ctx, want.ID, want.Version, "system"); err != nil {
 			errs = append(errs, fmt.Errorf("plugins.install %s: %w", want.ID, err))
 		}
 	}
-	for _, ev := range rec.evs {
-		changes = append(changes, ev.Data.(PluginChange))
+	return rec.changes(), errs
+}
+
+// missing are the entries not installed at the wanted version.
+func (p *PluginAdmin) missing(list []config.PluginInstall) []config.PluginInstall {
+	var out []config.PluginInstall
+	for _, want := range list {
+		info, ok := p.d.Modules.Get(want.ID)
+		present := ok && info.Status != modules.StatusUninstalled
+		if !present || (want.Version != "" && info.Version != want.Version) {
+			out = append(out, want)
+		}
 	}
-	return changes, errs
+	return out
 }
 
 // changeRecorder keeps the events of a provisioning run.
@@ -514,6 +554,16 @@ type changeRecorder struct{ evs []domain.Event }
 func (r *changeRecorder) Publish(ev domain.Event) (domain.Event, error) {
 	r.evs = append(r.evs, ev)
 	return ev, nil
+}
+
+func (r *changeRecorder) changes() []PluginChange {
+	var out []PluginChange
+	for _, ev := range r.evs {
+		if c, ok := ev.Data.(PluginChange); ok {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // CachedOffers returns the offers of the last verified catalogue copy, by

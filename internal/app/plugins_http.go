@@ -141,46 +141,60 @@ func (p *PluginAdmin) httpValidate(w http.ResponseWriter, r *http.Request) {
 	api.WriteJSON(w, http.StatusOK, map[string]any{"problems": problems})
 }
 
+// errorStatuses maps admin errors to a status and code, first match wins.
+var errorStatuses = []struct {
+	err    error
+	status int
+	code   string
+	field  string
+}{
+	{ErrModulesUnavailable, http.StatusServiceUnavailable, "modules_unavailable", ""},
+	{ErrNotInstalledModule, http.StatusNotFound, "not_found", ""},
+	{modules.ErrNotInstalled, http.StatusNotFound, "not_found", ""},
+	{ErrNotInCatalogue, http.StatusNotFound, "not_found", ""},
+	{ErrCatalogueChanged, http.StatusConflict, "catalogue_changed", "version"},
+	{ErrUnknownInstance, http.StatusBadRequest, "bad_request", "instance"},
+	{ErrIncompatible, http.StatusUnprocessableEntity, "incompatible", ""},
+	{modules.ErrChecksum, http.StatusUnprocessableEntity, "verify_failed", ""},
+	{ErrCatalogueUnreadable, http.StatusBadGateway, "catalogue_unreachable", ""},
+	{modules.ErrBuiltin, http.StatusConflict, "builtin", ""},
+}
+
 // fail maps admin errors to the API's one error shape.
 func (p *PluginAdmin) fail(w http.ResponseWriter, err error) {
-	var (
-		ve *catalogue.VerifyError
-		ps schema.Problems
-	)
+	var ps schema.Problems
 	switch {
 	case errors.As(err, &ps):
 		api.WriteJSON(w, http.StatusUnprocessableEntity, map[string]any{
 			"error":    api.ErrorDetail{Code: "invalid_values", Message: "some settings are not valid"},
 			"problems": ps})
+		return
 	case errors.Is(err, ErrPluginsLocked):
 		api.WriteError(w, http.StatusForbidden, "plugins_locked", err.Error()+" in the configuration", "")
-	case errors.Is(err, ErrModulesUnavailable):
-		api.WriteError(w, http.StatusServiceUnavailable, "modules_unavailable", err.Error(), "")
-	case errors.Is(err, ErrNotInstalledModule), errors.Is(err, modules.ErrNotInstalled), errors.Is(err, ErrNotInCatalogue):
-		api.WriteError(w, http.StatusNotFound, "not_found", err.Error(), "")
-	case errors.Is(err, ErrCatalogueChanged):
-		api.WriteError(w, http.StatusConflict, "catalogue_changed", err.Error(), "version")
-	case errors.Is(err, ErrUnknownInstance):
-		api.WriteError(w, http.StatusBadRequest, "bad_request", err.Error(), "instance")
-	case errors.Is(err, ErrIncompatible):
-		api.WriteError(w, http.StatusUnprocessableEntity, "incompatible", err.Error(), "")
-	case errors.As(err, &ve), errors.Is(err, modules.ErrChecksum), isModuleRefusal(err):
-		api.WriteError(w, http.StatusUnprocessableEntity, "verify_failed", err.Error(), "")
-	case errors.Is(err, ErrCatalogueUnreadable):
-		api.WriteError(w, http.StatusBadGateway, "catalogue_unreachable", err.Error(), "")
+		return
 	case errors.Is(err, plugin.ErrUnsupported):
 		api.WriteError(w, http.StatusNotFound, "not_found", "the plugin has no such action", "")
-	case errors.Is(err, modules.ErrBuiltin):
-		api.WriteError(w, http.StatusConflict, "builtin", err.Error(), "")
-	default:
-		p.d.Log.Warn("plugin module request failed", "err", err)
-		api.WriteError(w, http.StatusBadGateway, "plugin_failed", err.Error(), "")
+		return
+	case isModuleRefusal(err):
+		api.WriteError(w, http.StatusUnprocessableEntity, "verify_failed", err.Error(), "")
+		return
 	}
+	for _, e := range errorStatuses {
+		if errors.Is(err, e.err) {
+			api.WriteError(w, e.status, e.code, err.Error(), e.field)
+			return
+		}
+	}
+	p.d.Log.Warn("plugin module request failed", "err", err)
+	api.WriteError(w, http.StatusBadGateway, "plugin_failed", err.Error(), "")
 }
 
-// isModuleRefusal reports a module the engine refused to load (manifest or
-// imports), which is a verification failure from the owner's side.
+// isModuleRefusal reports a download that did not match its entry or a
+// module the engine refused (manifest), both verification failures.
 func isModuleRefusal(err error) bool {
-	var me *wasm.ManifestError
-	return errors.As(err, &me)
+	var (
+		me *wasm.ManifestError
+		ve *catalogue.VerifyError
+	)
+	return errors.As(err, &me) || errors.As(err, &ve)
 }

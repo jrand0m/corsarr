@@ -134,42 +134,53 @@ func Check(ix Index, maxModule int64) schema.Problems {
 // CheckEntry returns the problems of one entry. A newer ABI or kind is not a
 // problem here: the entry is shown as incompatible instead.
 func CheckEntry(e Entry, maxModule int64) schema.Problems {
-	ps := wasm.CheckIdentity(e.manifest())
-	add := func(path, format string, a ...any) {
-		ps = append(ps, schema.Problem{Path: path, Msg: fmt.Sprintf(format, a...)})
-	}
+	c := &problems{ps: wasm.CheckIdentity(e.manifest())}
 	if _, err := plaintext.Check(e.Kind, plaintext.Label); err != nil || !schema.IsIdentifier(e.Kind) {
-		add("kind", "must be a plugin kind such as downloader")
+		c.add("kind", "must be a plugin kind such as downloader")
 	}
 	if e.ABIVersion < 1 {
-		add("abiVersion", "must be 1 or more")
-	}
-	for i, h := range e.Permissions.HTTP.Hosts {
-		if msg := wasm.CheckHostPattern(h); msg != "" {
-			add(fmt.Sprintf("permissions.http.hosts[%d]", i), "%s", msg)
-		}
-	}
-	for i, s := range e.Permissions.Secrets {
-		if !schema.IsIdentifier(s) {
-			add(fmt.Sprintf("permissions.secrets[%d]", i), "must be a setting key")
-		}
+		c.add("abiVersion", "must be 1 or more")
 	}
 	if e.MinCorsarr != "" && !semverRe.MatchString(e.MinCorsarr) {
-		add("minCorsarr", "must be a version such as 1.4.0")
+		c.add("minCorsarr", "must be a version such as 1.4.0")
 	}
+	checkPermissions(c, e.Permissions)
+	checkArtifact(c, e, maxModule)
+	return c.ps
+}
+
+type problems struct{ ps schema.Problems }
+
+func (c *problems) add(path, format string, a ...any) {
+	c.ps = append(c.ps, schema.Problem{Path: path, Msg: fmt.Sprintf(format, a...)})
+}
+
+func checkPermissions(c *problems, p abi.Permissions) {
+	for i, h := range p.HTTP.Hosts {
+		if msg := wasm.CheckHostPattern(h); msg != "" {
+			c.add(fmt.Sprintf("permissions.http.hosts[%d]", i), "%s", msg)
+		}
+	}
+	for i, s := range p.Secrets {
+		if !schema.IsIdentifier(s) {
+			c.add(fmt.Sprintf("permissions.secrets[%d]", i), "must be a setting key")
+		}
+	}
+}
+
+func checkArtifact(c *problems, e Entry, maxModule int64) {
 	if e.Size <= 0 || (maxModule > 0 && e.Size > maxModule) {
-		add("size", "must be between 1 byte and the largest module accepted (%d bytes)", maxModule)
+		c.add("size", "must be between 1 byte and the largest module accepted (%d bytes)", maxModule)
 	}
 	if !shaRe.MatchString(e.SHA256) {
-		add("sha256", "must be 64 lower-case hex characters")
+		c.add("sha256", "must be 64 lower-case hex characters")
 	}
 	if msg := urlProblem(e.URL); msg != "" {
-		add("url", "%s", msg)
+		c.add("url", "%s", msg)
 	}
 	if e.Attestation != "" && !isHTTPS(e.Attestation) {
-		add("attestation", "must be an https:// address")
+		c.add("attestation", "must be an https:// address")
 	}
-	return ps
 }
 
 func urlProblem(ref string) string {

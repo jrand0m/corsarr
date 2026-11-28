@@ -55,7 +55,9 @@ func indexBytes(t *testing.T, entries ...Entry) []byte {
 
 func TestDecodeAcceptsAValidIndex(t *testing.T) {
 	mod := fakeModule(testManifest)
-	ix, err := Decode(indexBytes(t, entryFor(mod)), 32<<20)
+	e := entryFor(mod)
+	e.Attestation = "https://example.org/attestations/1"
+	ix, err := Decode(indexBytes(t, e), 32<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,17 +70,18 @@ func TestDecodeRejects(t *testing.T) {
 	mod := fakeModule(testManifest)
 	good := entryFor(mod)
 	cases := map[string]func(*Entry){
-		"bad sha":        func(e *Entry) { e.SHA256 = strings.ToUpper(e.SHA256) },
-		"zero size":      func(e *Entry) { e.Size = 0 },
-		"too large":      func(e *Entry) { e.Size = 33 << 20 },
-		"http url":       func(e *Entry) { e.URL = "http://example.org/x.wasm" },
-		"host-only url":  func(e *Entry) { e.URL = "//example.org/x.wasm" },
-		"bidi name":      func(e *Entry) { e.Name = "Fake‮client" },
-		"bad id":         func(e *Entry) { e.ID = "Fake" },
-		"bad host":       func(e *Entry) { e.Permissions.HTTP.Hosts = []string{"exa mple"} },
-		"bad min":        func(e *Entry) { e.MinCorsarr = "one" },
-		"http homepage":  func(e *Entry) { e.Homepage = "http://example.org" },
-		"bad secret key": func(e *Entry) { e.Permissions.Secrets = []string{"pass-word"} },
+		"bad sha":          func(e *Entry) { e.SHA256 = strings.ToUpper(e.SHA256) },
+		"zero size":        func(e *Entry) { e.Size = 0 },
+		"too large":        func(e *Entry) { e.Size = 33 << 20 },
+		"http url":         func(e *Entry) { e.URL = "http://example.org/x.wasm" },
+		"host-only url":    func(e *Entry) { e.URL = "//example.org/x.wasm" },
+		"bidi name":        func(e *Entry) { e.Name = "Fake‮client" },
+		"bad id":           func(e *Entry) { e.ID = "Fake" },
+		"bad host":         func(e *Entry) { e.Permissions.HTTP.Hosts = []string{"exa mple"} },
+		"bad min":          func(e *Entry) { e.MinCorsarr = "one" },
+		"http homepage":    func(e *Entry) { e.Homepage = "http://example.org" },
+		"bad secret key":   func(e *Entry) { e.Permissions.Secrets = []string{"pass-word"} },
+		"http attestation": func(e *Entry) { e.Attestation = "http://example.org/a" },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

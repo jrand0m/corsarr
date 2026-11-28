@@ -85,28 +85,38 @@ func Verify(index, sigFile []byte, keys []Key) error {
 	if len(keys) == 0 {
 		return ErrNoTrustedKey
 	}
+	keyID, raw, err := decodeSignature(sigFile)
+	if err != nil {
+		return err
+	}
+	for _, k := range keys {
+		if k.ID != keyID {
+			continue
+		}
+		if ed25519.Verify(k.Public, message(index), raw) {
+			return nil
+		}
+		return ErrBadSignature
+	}
+	return fmt.Errorf("%w (key %s)", ErrUnknownKey, keyID)
+}
+
+// decodeSignature reads a signature file strictly.
+func decodeSignature(sigFile []byte) (keyID string, raw []byte, err error) {
 	var sig Signature
 	dec := json.NewDecoder(bytes.NewReader(sigFile))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&sig); err != nil {
-		return fmt.Errorf("the catalogue signature file is unreadable: %w", err)
+		return "", nil, fmt.Errorf("the catalogue signature file is unreadable: %w", err)
 	}
 	if sig.Schema != 1 || sig.Alg != SigAlg {
-		return fmt.Errorf("the catalogue signature uses format %d / %q; this build reads format 1 / %s", sig.Schema, sig.Alg, SigAlg)
+		return "", nil, fmt.Errorf("the catalogue signature uses format %d / %q; this build reads format 1 / %s", sig.Schema, sig.Alg, SigAlg)
 	}
-	raw, err := base64.StdEncoding.DecodeString(sig.Signature)
+	raw, err = base64.StdEncoding.DecodeString(sig.Signature)
 	if err != nil || len(raw) != ed25519.SignatureSize {
-		return ErrBadSignature
+		return "", nil, ErrBadSignature
 	}
-	for _, k := range keys {
-		if k.ID == sig.KeyID {
-			if ed25519.Verify(k.Public, message(index), raw) {
-				return nil
-			}
-			return ErrBadSignature
-		}
-	}
-	return fmt.Errorf("%w (key %s)", ErrUnknownKey, sig.KeyID)
+	return sig.KeyID, raw, nil
 }
 
 //go:embed trusted

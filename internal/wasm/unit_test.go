@@ -263,3 +263,18 @@ func TestStateOutsideCall(t *testing.T) {
 		t.Error("import")
 	}
 }
+
+func TestCheckHostPatternAndIdentity(t *testing.T) {
+	for h, ok := range map[string]bool{"example.org": true, "*.example.org": true, "$setting:url": true,
+		"*.org": false, "exa mple": false, "$setting:bad-key": false, "": false} {
+		if got := CheckHostPattern(h) == ""; got != ok {
+			t.Errorf("%q: well formed = %v", h, got)
+		}
+	}
+	if ps := CheckIdentity(abi.Manifest{ID: "ok1", Name: "Ok", Version: "1.0.0"}); len(ps) != 0 {
+		t.Errorf("valid identity: %v", ps)
+	}
+	if ps := CheckIdentity(abi.Manifest{ID: "X", Version: "one"}); len(ps) < 3 {
+		t.Errorf("bad identity: %v", ps)
+	}
+}

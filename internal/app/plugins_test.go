@@ -431,3 +431,22 @@ func TestMCPPluginList(t *testing.T) {
 		t.Fatalf("%+v", list)
 	}
 }
+
+func TestPluginProvision(t *testing.T) {
+	f := newAdminFixture(t)
+	f.cat.offer(t, exampleAt(t, "1.0.0", nil))
+	ctx := context.Background()
+	changes, errs := f.admin.Provision(ctx, []config.PluginInstall{{ID: "exampledl"}, {ID: "ghost"}})
+	if len(changes) != 1 || changes[0].Action != ChangeInstalled || len(errs) != 1 || !strings.Contains(errs[0].Error(), "ghost") {
+		t.Fatalf("changes %+v errs %v", changes, errs)
+	}
+	if len(f.events.changes()) != 0 {
+		t.Fatal("provisioning publishes nothing itself")
+	}
+	if changes, errs := f.admin.Provision(ctx, []config.PluginInstall{{ID: "exampledl", Version: "1.0.0"}}); len(changes)+len(errs) != 0 {
+		t.Fatalf("an installed entry is left alone: %v %v", changes, errs)
+	}
+	if _, errs := f.admin.Provision(ctx, []config.PluginInstall{{ID: "exampledl", Version: "2.0.0"}}); len(errs) != 1 {
+		t.Fatal("another version is fetched and refused when the catalogue does not offer it")
+	}
+}
