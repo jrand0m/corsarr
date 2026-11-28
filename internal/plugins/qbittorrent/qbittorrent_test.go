@@ -64,6 +64,14 @@ func TestSessionCookiesFourAndFive(t *testing.T) {
 	}
 }
 
+func TestLoginAcceptsNoContentAnswer(t *testing.T) {
+	f := newFake(t, "v5.2.4")
+	f.noContent = true
+	if err := newClient(t, f, nil).Test(t.Context()); err != nil {
+		t.Fatalf("204 login answer: %v", err)
+	}
+}
+
 func TestAuthBypassNeedsNoCookie(t *testing.T) {
 	f := newFake(t, "v4.6.2")
 	f.bypass = true

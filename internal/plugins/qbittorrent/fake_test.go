@@ -32,6 +32,7 @@ type fakeQB struct {
 	srv        *httptest.Server
 	version    string
 	cookieName string
+	noContent  bool // answer a good login with 204 and no body, as newer releases do
 	bypass     bool // authentication bypassed: no cookie needed or issued
 	user, pass string
 
@@ -122,6 +123,10 @@ func (f *fakeQB) login(w http.ResponseWriter, r *http.Request) {
 		tok := "tok" + string(rune('a'+f.logins))
 		f.mu.Unlock()
 		http.SetCookie(w, &http.Cookie{Name: f.cookieName, Value: tok, Path: "/"})
+	}
+	if f.noContent {
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
 	_, _ = w.Write([]byte("Ok."))
 }

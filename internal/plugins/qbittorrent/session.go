@@ -103,7 +103,9 @@ func sessionCookie(resp *plugin.Response) (string, error) {
 	if strings.EqualFold(body, "Fails.") {
 		return "", plugin.Errorf(plugin.ClassAuth, "qBittorrent rejected the user name or password")
 	}
-	if resp.Status != http.StatusOK || !strings.EqualFold(body, "Ok.") {
+	// Older releases answer 200 "Ok."; newer ones answer 204 with an empty body.
+	ok := (resp.Status == http.StatusOK && strings.EqualFold(body, "Ok.")) || (resp.Status == http.StatusNoContent && body == "")
+	if !ok {
 		return "", plugin.Errorf(plugin.ClassParse, "unexpected login answer (HTTP %d)", resp.Status)
 	}
 	for _, ck := range (&http.Response{Header: resp.Header}).Cookies() {
