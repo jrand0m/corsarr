@@ -1,8 +1,8 @@
 package app
 
 import (
+	"bytes"
 	"context"
-	"io"
 	"log/slog"
 	"testing"
 
@@ -64,15 +64,19 @@ func TestOverridesApplyWithoutRestart(t *testing.T) {
 	defer rec.Close()
 	cfg := testConfig(t.TempDir())
 	cfg.RuleModes = map[string]string{importer.RuleRecyclePurge: "live"}
+	var logs bytes.Buffer
 	a, err := New(ctx, Deps{Config: func() *config.Config { return cfg }, Store: st, Bus: bus, Health: health.New(bus, nil, nil),
 		Jobs: scheduler.New(scheduler.Options{}), HTTP: httpFor{}, Plugins: registry(), UIClients: func() int { return 0 },
-		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		Log: slog.New(slog.NewTextHandler(&logs, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = st.ModeOverrides().Set(ctx, store.ModeOverride{Scope: store.ScopeKind, Name: "tv", Mode: "shadow"})
 	_ = st.ModeOverrides().Set(ctx, store.ModeOverride{Scope: store.ScopeRule, Name: "*", Mode: "off"})
 	a.afterMigration(ctx)
+	if logs.Len() != 0 {
+		t.Fatalf("a clean reload logs nothing: %s", logs.String())
+	}
 	ev, err := rec.Next(ctx)
 	if err != nil || ev.Kind != domain.KindTV || ev.Actor != "user" || ev.Data.(domain.ModeEventData).To != domain.ModeShadow {
 		t.Fatalf("%v %+v", err, ev)

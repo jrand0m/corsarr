@@ -11,13 +11,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jrand0m/corsarr/internal/automation"
 	"github.com/jrand0m/corsarr/internal/config"
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/events"
 	"github.com/jrand0m/corsarr/internal/health"
 	"github.com/jrand0m/corsarr/internal/imagecache"
 	"github.com/jrand0m/corsarr/internal/importer"
+	"github.com/jrand0m/corsarr/internal/movies"
 	"github.com/jrand0m/corsarr/internal/plugin"
+	"github.com/jrand0m/corsarr/internal/queue"
 	"github.com/jrand0m/corsarr/internal/rootfolders"
 	"github.com/jrand0m/corsarr/internal/rules"
 	"github.com/jrand0m/corsarr/internal/scheduler"
@@ -100,6 +103,21 @@ func TestAppWiresModulesJobsAndAdapters(t *testing.T) {
 	if err := a.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
+	heavy := map[string]bool{}
+	for _, j := range jobs.List() {
+		heavy[j.Name] = j.Heavy
+	}
+	if !heavy[automation.RSSJob] || !heavy[movies.RefreshJob] || !heavy[imagecache.DegradeJob] || heavy[queue.PollJob] || heavy[queue.SweepJob] {
+		t.Fatalf("heavy jobs %v", heavy)
+	}
+	testkit.Eventually(t, 2*time.Second, "the queue is reconciled at start", func() bool {
+		for _, j := range jobs.List() {
+			if j.Name == queue.SweepJob {
+				return j.LastStart != nil
+			}
+		}
+		return false
+	})
 	if len(jobs.List()) != 14 || len(a.Mounts()) != 17 { // movie, TV and music pipelines, indexer settings, migration, compatibility API, MCP, artwork cache, profiles, plugin modules
 		t.Fatalf("jobs %d mounts %d", len(jobs.List()), len(a.Mounts()))
 	}
@@ -277,5 +295,26 @@ func TestImageSettingsAndLibraryArtwork(t *testing.T) {
 	c.Dir = "/srv/cache"
 	if imageSettings(c, "/data").Dir != "/srv/cache" {
 		t.Fatal("explicit folder")
+	}
+}
+
+func TestJobIntervalsFollowTheOptions(t *testing.T) {
+	st := testkit.Store(t)
+	bus := events.New()
+	defer bus.Close()
+	jobs := scheduler.New(scheduler.Options{})
+	cfg := testConfig(t.TempDir())
+	_, err := New(context.Background(), Deps{Config: func() *config.Config { return cfg }, Store: st, Bus: bus, Health: health.New(bus, nil, nil),
+		Jobs: jobs, HTTP: httpFor{}, Plugins: registry(), UIClients: func() int { return 0 }, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Options: Options{TestInterval: time.Nanosecond, SlowPoll: time.Nanosecond}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	every := map[string]time.Duration{}
+	for _, j := range jobs.List() {
+		every[j.Name] = j.Interval
+	}
+	if every[TestJob] != time.Nanosecond || every[queue.PollJob] != time.Nanosecond {
+		t.Fatalf("intervals %v", every)
 	}
 }
