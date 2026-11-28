@@ -86,7 +86,7 @@ const MARK = 'zq';
 const pieces = [
   '<img src=x onerror=alert(1)>', '<script>alert(1)</script>', '"><svg onload=alert(1)>', "'><a href=\"javascript:alert(1)\">x</a>",
   '<style>*{color:red}</style>', '<iframe src="https://evil.example/f"></iframe>', 'javascript:alert(1)', 'https://evil.example/u',
-  'data:text/html,<b>x</b>', '{@html x}', '{#if 1}y{/if}', '&lt;i&gt;', '‮', '​', 'url(https://evil.example/i)', '<b onclick=alert(1)>b</b>', '✅', '\n',
+  'data:text/html,<b>x</b>', '{' + '@html x}', '{#if 1}y{/if}', '&lt;i&gt;', '\u202E', '\u200B', 'url(https://evil.example/i)', '<b onclick=alert(1)>b</b>', '✅', '\n',
 ];
 
 function hostile(rand: () => number): string {
