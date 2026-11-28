@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"regexp"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"time"
 

@@ -21,7 +21,9 @@ func (a *App) newPluginAdmin() *PluginAdmin {
 		Reload: func(id string) { a.Instances.Reload(a.d.Config(), id) }}
 	if a.d.HTTP != nil {
 		d.HTTP = a.d.HTTP.For(domain.IntegrationRef{Type: "plugin", Key: "catalogue"})
-		d.Actions = func(id string) plugin.HTTPDoer { return a.d.HTTP.For(domain.IntegrationRef{Type: "plugin", Key: domain.ObjectKey(id)}) }
+		d.Actions = func(id string) plugin.HTTPDoer {
+			return a.d.HTTP.For(domain.IntegrationRef{Type: "plugin", Key: domain.ObjectKey(id)})
+		}
 	}
 	return NewPluginAdmin(d)
 }
