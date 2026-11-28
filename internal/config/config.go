@@ -74,6 +74,7 @@ type Config struct {
 		Dir   string
 		Umask int
 	}
+	Cache       Cache
 	Log         struct{ Level string }
 	Auth        struct{ Mode string }
 	MediaKinds  map[domain.MediaKind]domain.KindMode
@@ -148,6 +149,9 @@ func LoadFrom(src Source, in Inputs, reg *plugin.Registry) (*Config, error) {
 		src.Ignored = ignoredKeys(in, r)
 	}
 	c := build(s, t)
+	if errs := cacheErrors(c.Cache, locs); len(errs) > 0 {
+		return nil, errs
+	}
 	c.Source, c.Warnings, c.locs = src, warns, locs
 	for section, m := range c.Instances {
 		for k, inst := range m {
@@ -290,6 +294,7 @@ func build(s *Schema, t tree) *Config {
 	c.RuleModes = ruleModes(t)
 	c.Legacy = legacyApps(t)
 	c.MCP = mcpOf(t)
+	c.Cache = cacheOf(t)
 	return c
 }
 
