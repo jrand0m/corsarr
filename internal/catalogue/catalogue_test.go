@@ -377,3 +377,47 @@ func TestFetcherRefusesUnsignedOrForeign(t *testing.T) {
 }
 
 func mustB64(b []byte) []byte { return []byte(base64.StdEncoding.EncodeToString(b)) }
+
+func TestBuildSignAndReadBack(t *testing.T) {
+	mod := fakeModule(testManifest)
+	e, err := EntryFromModule(mod, "1.4.0")
+	if err != nil || e.URL != "fakeclient-1.2.0.wasm" || e.SHA256 != wasm.SHA256(mod) {
+		t.Fatalf("entry %+v %v", e, err)
+	}
+	index, err := BuildIndex("v1.4.0", time.Unix(1764320000, 0), []Entry{e}, 32<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pemKey, pub, err := NewSigningKey(strings.NewReader(strings.Repeat("k", 64)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	priv, err := ParseSigningKey(pemKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := ParseKey(PublicKeyFile(pub))
+	if err != nil || parsed.ID != pub.ID {
+		t.Fatalf("public key file: %v", err)
+	}
+	if err := Verify(index, Sign(index, priv), []Key{parsed}); err != nil {
+		t.Fatal(err)
+	}
+	if ix, err := Decode(index, 32<<20); err != nil || ix.Plugins[0].ID != "fakeclient" {
+		t.Fatalf("read back: %v", err)
+	}
+	if _, err := EntryFromModule([]byte("not wasm"), ""); err == nil {
+		t.Fatal("module without manifest")
+	}
+	bad := e
+	bad.SHA256 = "x"
+	if _, err := BuildIndex("v1.4.0", time.Now(), []Entry{bad}, 32<<20); err == nil {
+		t.Fatal("bad entry built")
+	}
+	if _, err := ParseSigningKey([]byte("nope")); err == nil {
+		t.Fatal("bad key parsed")
+	}
+	if _, err := ParseKey("short"); err == nil {
+		t.Fatal("bad public key parsed")
+	}
+}
