@@ -2,7 +2,7 @@
 
 Short notes per release. Each release's assets, checksums and how to verify them are on its GitHub release page.
 
-## Unreleased
+## v0.6.0 — 2026-11-28
 
 - Custom formats: conditions on release title, group, edition, source, resolution, quality modifier, video codec, audio codec and channels, HDR, Dolby Vision fallback, container, video bit depth, language, indexer flags, size, release type and year, each with negate and required; profiles score them, reject on a match or set a minimum score.
 - Custom quality profiles: allowed qualities and groups, cutoff, upgrade-until score and step, and size limits per quality; one profile can serve TV and movies. Edit both under Settings › Profiles and Settings › Custom formats (built-in profiles duplicate into editable copies), or as config-as-code under `customFormats` and `qualityProfiles`.
