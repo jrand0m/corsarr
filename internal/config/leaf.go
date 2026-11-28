@@ -171,3 +171,19 @@ func rangeCheck(f plugin.Field) func(string) error {
 		return nil
 	}
 }
+
+// bothChecks runs a then b; either may be nil.
+func bothChecks(a, b func(string) error) func(string) error {
+	if a == nil || b == nil {
+		if a == nil {
+			return b
+		}
+		return a
+	}
+	return func(s string) error {
+		if err := a(s); err != nil {
+			return err
+		}
+		return b(s)
+	}
+}
