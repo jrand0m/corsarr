@@ -116,6 +116,9 @@ func TestInstallRegisterAndReplace(t *testing.T) {
 	if got, _ := m.Get("exampledl"); got.Instances != 0 {
 		t.Errorf("closed instance still tracked: %d", got.Instances)
 	}
+	if list := m.List(); len(list) != 1 {
+		t.Errorf("an active module is listed %d times: %+v", len(list), list)
+	}
 }
 
 func TestUnloadAndRemove(t *testing.T) {
@@ -211,6 +214,30 @@ func TestRestartRegistersAndChecksHash(t *testing.T) {
 	info, _ := tampered.Get("exampledl")
 	if _, ok := reg3.Get("exampledl"); ok || info.Status != StatusFailed || !strings.Contains(info.Error, "checksum mismatch") {
 		t.Errorf("tampered module: %+v", info)
+	}
+	if list := tampered.List(); len(list) != 1 {
+		t.Errorf("a failed module is listed %d times: %+v", len(list), list)
+	}
+}
+
+func TestBrokenNewVersionLeavesTheRunningOne(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, plugin.NewRegistry())
+	ctx := context.Background()
+	if _, err := m.Install(ctx, wasmtest.Example(t), nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	// another process activates a version whose files do not match its digest
+	s := Store{Dir: dir}
+	if err := s.Write(Version{ID: "exampledl", Version: "1.0.1", SHA256: "bad", Module: []byte("m")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Activate("exampledl", "1.0.1"); err != nil {
+		t.Fatal(err)
+	}
+	m.Sync(ctx)
+	if info, _ := m.Get("exampledl"); info.Status != StatusActive || info.Version != "1.0.0" {
+		t.Fatalf("the running version is not the one shown: %+v", info)
 	}
 }
 
@@ -369,5 +396,57 @@ func TestUninstallKeepsARecordUntilReinstalled(t *testing.T) {
 	}
 	if got, _ := m2.Get("exampledl"); got.Status != StatusActive {
 		t.Fatalf("status after reinstall: %+v", got)
+	}
+}
+
+func TestUninstallRecordEdges(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, plugin.NewRegistry())
+	ctx := context.Background()
+	if _, err := m.Install(ctx, wasmtest.Example(t), nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Uninstall("exampledl"); err != nil {
+		t.Fatal(err)
+	}
+	// a version stored again (not active) is an installed module, not a record
+	v1 := wasmtest.Example(t)
+	s := Store{Dir: dir}
+	if err := s.Write(Version{ID: "exampledl", Version: "1.0.0", SHA256: wasm.SHA256(v1), Module: v1}); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := m.Get("exampledl"); info.Status != StatusUnloaded || info.Version != "1.0.0" || info.SHA256 == "" {
+		t.Fatalf("stored version shown as %+v", info)
+	}
+
+	// a kept manifest naming another module is not a record of this one
+	if err := s.writeRecord("other", wasmtest.ExampleManifest(t)); err != nil {
+		t.Fatal(err)
+	}
+	if info, ok := m.Get("other"); !ok || info.Status != StatusUnloaded || info.Version != "" {
+		t.Fatalf("foreign record shown as %+v", info)
+	}
+}
+
+func TestEnabledBuiltinKeepsItsIDOverARecord(t *testing.T) {
+	dir := t.TempDir()
+	builtin := plugin.Registration{Manifest: plugin.Manifest{ID: "exampledl", Kind: plugin.KindDownloader, APIVersion: plugin.APIVersion},
+		New: func(plugin.Instance) (any, error) { return nil, nil }}
+	reg := plugin.NewRegistry()
+	reg.MustRegister(builtin)
+	m := newManager(t, dir, reg, "exampledl")
+	if _, err := m.Install(context.Background(), wasmtest.Example(t), nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Uninstall("exampledl"); err != nil {
+		t.Fatal(err)
+	}
+	// the built-in is enabled again: it keeps the id after a restart
+	reg2 := plugin.NewRegistry()
+	reg2.MustRegister(builtin)
+	m2 := newManager(t, dir, reg2)
+	m2.Register()
+	if r, ok := reg2.Get("exampledl"); !ok || r.Manifest.Delivery == "module" {
+		t.Fatalf("placeholder replaced the enabled built-in: %+v", r.Manifest)
 	}
 }

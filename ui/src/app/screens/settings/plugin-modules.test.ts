@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { harbourModule, policyOpen } from '../../../lib/storybook/plugin-module-fixtures';
+import { harbourModule, policyLocked, policyOpen } from '../../../lib/storybook/plugin-module-fixtures';
 import type { ModulePermissions, ModuleSchema } from '../../../lib/forms/plugin-types';
 import type { ConfiguredInstance } from '../../model';
-import { changeError, instanceViews, lockOf, permissionSummary, problemsOf, sortModules } from './plugin-modules';
+import { changeError, fieldLabels, instanceViews, lockOf, permissionSummary, problemsOf, sortModules } from './plugin-modules';
 
 describe('refused module changes', () => {
   it.each([
@@ -28,6 +28,11 @@ describe('refused module changes', () => {
   it('leaves module changes open when there is no policy or the UI may install', () => {
     expect(lockOf(undefined)).toBeUndefined();
     expect(lockOf(policyOpen)).toBeUndefined();
+  });
+
+  it('names the config key that locks module changes, plugins.uiInstall when the policy names none', () => {
+    expect(lockOf({ ...policyLocked, lockKey: 'plugins.lock' })).toEqual({ key: 'plugins.lock' });
+    expect(lockOf({ ...policyLocked, lockKey: '' })).toEqual({ key: 'plugins.uiInstall' });
   });
 });
 
@@ -65,11 +70,22 @@ describe('instance views', () => {
     expect(v.values).toEqual({});
   });
 
+  it('takes the values of the instance with the same section and key', () => {
+    const other: ConfiguredInstance = { section: 'downloadClients', key: 'downstairs', plugin: 'harbourdl', values: { url: 'http://other' }, secrets: {} };
+    const [v] = instanceViews(harbourModule, [other, ...configured]);
+    expect(v.values).toEqual({ url: 'http://box:8080', slots: '6' });
+  });
+
   it('shows no instances for an unused module and no values for a module without settings', () => {
     expect(instanceViews({ ...harbourModule, usedBy: null }, configured)).toEqual([]);
     const [v] = instanceViews({ ...harbourModule, manifest: { ...harbourModule.manifest, settings: undefined as unknown as ModuleSchema } }, configured);
     expect(v.values).toEqual({});
     expect(v.meta).toEqual({});
+  });
+
+  it('labels fields by key, and none for a module without settings', () => {
+    expect(fieldLabels(harbourModule).apiKey).toBe('API key');
+    expect(fieldLabels({ ...harbourModule, manifest: { ...harbourModule.manifest, settings: undefined as unknown as ModuleSchema } })).toEqual({});
   });
 });
 
@@ -77,5 +93,7 @@ describe('module order', () => {
   it('sorts by display name, falling back to the id', () => {
     const named = (id: string, name: string) => ({ ...harbourModule, id, manifest: { ...harbourModule.manifest, name } });
     expect(sortModules([named('b', 'Zed'), named('alpha', ''), named('c', 'Bay')]).map((m) => m.id)).toEqual(['alpha', 'c', 'b']);
+    expect(sortModules([named('aa', 'Zed'), named('zz', 'Alpha')]).map((m) => m.id)).toEqual(['zz', 'aa']);
+    expect(sortModules([named('zz', 'Alpha'), named('aa', 'Zed')]).map((m) => m.id)).toEqual(['zz', 'aa']);
   });
 });

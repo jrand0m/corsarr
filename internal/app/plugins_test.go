@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -62,6 +63,7 @@ type testCatalogue struct {
 	priv    ed25519.PrivateKey
 	tamper  bool
 	release string
+	hits    int // index requests
 }
 
 func newTestCatalogue(t *testing.T) *testCatalogue {
@@ -69,6 +71,9 @@ func newTestCatalogue(t *testing.T) *testCatalogue {
 	c.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
+		if r.URL.Path == "/plugins-index.json" {
+			c.hits++
+		}
 		b, ok := c.files[strings.TrimPrefix(r.URL.Path, "/")]
 		if !ok {
 			http.NotFound(w, r)
@@ -134,7 +139,28 @@ type adminFixture struct {
 	reg     *plugin.Registry
 	events  *eventLog
 	reloads []string
+	logs    *syncBuffer
 }
+
+// syncBuffer is a log sink safe for concurrent writes.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+func (f *adminFixture) mgr() *modules.Manager { return f.admin.d.Modules.(*modules.Manager) }
 
 func newAdminFixture(t *testing.T) *adminFixture {
 	t.Helper()
@@ -147,7 +173,7 @@ func newAdminFixture(t *testing.T) *adminFixture {
 	mgr := modules.New(modules.Options{Dir: dir, Engine: eng, Registry: reg})
 	t.Cleanup(func() { mgr.Close(context.Background()); _ = eng.Close(context.Background()) })
 	cat := newTestCatalogue(t)
-	f := &adminFixture{cat: cat, reg: reg, events: &eventLog{}, mux: http.NewServeMux()}
+	f := &adminFixture{cat: cat, reg: reg, events: &eventLog{}, mux: http.NewServeMux(), logs: &syncBuffer{}}
 	f.cfg = &config.Config{Plugins: config.Plugins{Dir: dir, UIInstall: true, MaxModuleMiB: 32, AutoUpdate: "off",
 		CatalogueURL: cat.URL + "/plugins-index.json"},
 		Instances: map[string]map[domain.ObjectKey]config.Instance{"downloadClients": {
@@ -156,7 +182,7 @@ func newAdminFixture(t *testing.T) *adminFixture {
 	f.admin = NewPluginAdmin(PluginAdminDeps{Modules: mgr, Config: func() *config.Config { return f.cfg }, HTTP: http.DefaultClient,
 		Actions: func(string) plugin.HTTPDoer { return http.DefaultClient }, Bus: f.events,
 		Reload: func(id string) { f.reloads = append(f.reloads, id) }, Keys: []catalogue.Key{cat.key()}, Version: "v1.4.0",
-		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		Log: slog.New(slog.NewTextHandler(f.logs, nil))})
 	f.admin.Mount(muxMounter{f.mux})
 	return f
 }
@@ -252,6 +278,150 @@ func TestPluginLifecycleWithoutRestart(t *testing.T) {
 	if strings.Join(actions, ",") != strings.Join(want, ",") || len(f.reloads) != len(want) {
 		t.Fatalf("audit %v reloads %v", actions, f.reloads)
 	}
+	logs := f.logs.String()
+	if strings.Count(logs, "plugin module changed") != len(want) || strings.Contains(logs, "level=WARN") {
+		t.Fatalf("log:\n%s", logs)
+	}
+}
+
+func TestPluginInstallUsesTheReviewedCatalogue(t *testing.T) {
+	f := newAdminFixture(t)
+	f.cat.offer(t, exampleAt(t, "1.0.0", nil))
+	if s := offerState(t, f, false); s != string(catalogue.StateAvailable) {
+		t.Fatalf("state %s", s)
+	}
+	f.cat.offer(t, exampleAt(t, "1.1.0", nil)) // released after the owner looked
+	if code, out := f.do(t, "POST", "/api/v1/plugins/modules", installBody{ID: "exampledl", Version: "1.0.0"}); code != 201 || out["version"] != "1.0.0" {
+		t.Fatalf("install of the reviewed version: %d %v", code, out)
+	}
+}
+
+func TestPluginCatalogueStaleCopy(t *testing.T) {
+	f := newAdminFixture(t)
+	f.cat.offer(t, exampleAt(t, "1.0.0", nil))
+	if v := f.admin.Catalogue(context.Background(), false); v.Source.Error != "" || v.Source.Stale || v.Source.Release != "v1.4.0" {
+		t.Fatalf("fresh: %+v", v.Source)
+	}
+	f.cat.mu.Lock()
+	delete(f.cat.files, "plugins-index.json")
+	f.cat.mu.Unlock()
+	v := f.admin.Catalogue(context.Background(), true)
+	if !v.Source.Stale || !strings.Contains(v.Source.Error, "404") || len(v.Offers) != 1 || v.Source.FetchedAt == nil {
+		t.Fatalf("stale: %+v %d offers", v.Source, len(v.Offers))
+	}
+}
+
+func TestPluginUsedByIsOrdered(t *testing.T) {
+	f := newAdminFixture(t)
+	f.cfg.Instances["downloadClients"]["aaa"] = config.Instance{Section: "downloadClients", Key: "aaa", Type: "exampledl", Name: "A"}
+	f.cfg.Instances["downloadClients"]["other"] = config.Instance{Section: "downloadClients", Key: "other", Type: "otherdl"}
+	f.cfg.Instances["indexers"] = map[domain.ObjectKey]config.Instance{
+		"aaa": {Section: "indexers", Key: "aaa", Type: "exampledl", Name: "I", Enabled: true}}
+	f.cat.offer(t, exampleAt(t, "1.0.0", nil))
+	if _, err := f.admin.installFromCatalogue(context.Background(), "exampledl", "1.0.0", "user"); err != nil {
+		t.Fatal(err)
+	}
+	for range 5 { // map order varies between runs
+		v, err := f.admin.Get("exampledl")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, r := range v.UsedBy {
+			got = append(got, r.Section+"."+r.Key+"="+r.Name)
+		}
+		if strings.Join(got, ",") != "downloadClients.aaa=A,downloadClients.box=Box,indexers.aaa=I" || v.UsedBy[2].Enabled != true || v.UsedBy[0].Enabled {
+			t.Fatalf("usedBy %+v", v.UsedBy)
+		}
+	}
+}
+
+func TestPluginChangesNeedAnInstalledModule(t *testing.T) {
+	f := newAdminFixture(t)
+	f.cat.offer(t, exampleAt(t, "1.0.0", nil))
+	ctx := context.Background()
+	check := func(when string) {
+		t.Helper()
+		if _, err := f.admin.Update(ctx, "exampledl", "1.0.0"); !errors.Is(err, ErrNotInstalledModule) {
+			t.Fatalf("%s: update: %v", when, err)
+		}
+		if _, err := f.admin.Rollback("exampledl"); !errors.Is(err, ErrNotInstalledModule) {
+			t.Fatalf("%s: rollback: %v", when, err)
+		}
+		if _, err := f.admin.Uninstall("exampledl"); !errors.Is(err, ErrNotInstalledModule) {
+			t.Fatalf("%s: uninstall: %v", when, err)
+		}
+		if info, ok := f.mgr().Get("exampledl"); ok && info.Status != modules.StatusUninstalled {
+			t.Fatalf("%s: the module changed: %+v", when, info)
+		}
+	}
+	check("never installed")
+	if _, err := f.admin.Install(ctx, "exampledl", "1.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.admin.Uninstall("exampledl"); err != nil {
+		t.Fatal(err)
+	}
+	check("uninstalled")
+	if n := len(f.events.changes()); n != 2 {
+		t.Fatalf("%d changes recorded", n)
+	}
+}
+
+func TestPluginSourceFollowsTheActiveFile(t *testing.T) {
+	f := newAdminFixture(t)
+	f.cat.offer(t, exampleAt(t, "1.0.0", nil))
+	ctx := context.Background()
+	if _, err := f.admin.installFromCatalogue(ctx, "exampledl", "1.0.0", "user"); err != nil {
+		t.Fatal(err)
+	}
+	// a version installed from a file (CLI or drop-in) is not a catalogue install
+	if _, err := f.mgr().Install(ctx, exampleAt(t, "1.0.1", nil), nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := f.do(t, "GET", "/api/v1/plugins/modules/exampledl", nil); code != 200 || out["version"] != "1.0.1" || out["source"] != "file" {
+		t.Fatalf("file install: %d %v", code, out)
+	}
+	f.cat.offer(t, exampleAt(t, "1.0.2", nil))
+	f.cfg.Plugins.AutoUpdate = catalogue.AutoPatch
+	if err := f.admin.AutoUpdate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := f.admin.Get("exampledl"); info.Version != "1.0.1" {
+		t.Fatalf("a file install was auto-updated to %s", info.Version)
+	}
+}
+
+func TestPluginAutoUpdateSkipsUnloadedModules(t *testing.T) {
+	f := newAdminFixture(t)
+	f.cat.offer(t, exampleAt(t, "1.0.0", nil))
+	ctx := context.Background()
+	if _, err := f.admin.installFromCatalogue(ctx, "exampledl", "1.0.0", "user"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.mgr().Unload("exampledl"); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := f.admin.Get("exampledl"); info.Source != "catalogue" || info.Status != modules.StatusUnloaded {
+		t.Fatalf("unloaded: %+v", info)
+	}
+	f.cat.offer(t, exampleAt(t, "1.0.1", nil))
+	f.cfg.Plugins.AutoUpdate = catalogue.AutoPatch
+	if err := f.admin.AutoUpdate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := f.admin.Get("exampledl"); info.Version != "1.0.0" || info.Status != modules.StatusUnloaded {
+		t.Fatalf("an unloaded module was auto-updated: %+v", info)
+	}
+}
+
+func TestPluginAutoUpdateUnsetPolicyFetchesNothing(t *testing.T) {
+	f := newAdminFixture(t)
+	f.cat.offer(t, exampleAt(t, "1.0.0", nil))
+	f.cfg.Plugins.AutoUpdate = ""
+	if err := f.admin.AutoUpdate(context.Background()); err != nil || f.cat.hits != 0 {
+		t.Fatalf("err %v, %d catalogue requests", err, f.cat.hits)
+	}
 }
 
 func TestPluginInstallRefusals(t *testing.T) {
@@ -284,6 +454,9 @@ func TestPluginInstallRefusals(t *testing.T) {
 	}
 	if code, _ := f.do(t, "POST", "/api/v1/plugins/modules", installBody{ID: "ghost", Version: "1.0.0"}); code != 404 {
 		t.Fatalf("ghost: %d", code)
+	}
+	if code, out := f.do(t, "POST", "/api/v1/plugins/modules", installBody{ID: "exampledl"}); code != 400 || errCode(out) != "bad_request" {
+		t.Fatalf("no version: %d %v", code, out)
 	}
 }
 
@@ -336,6 +509,15 @@ func TestPluginActionsAndValidation(t *testing.T) {
 	}
 	if code, _ := f.do(t, "POST", "/api/v1/plugins/modules/exampledl/actions/test", valuesBody{Instance: "downloadClients.ghost"}); code != 400 {
 		t.Fatalf("unknown instance: %d", code)
+	}
+	f.cfg.Instances["downloadClients"]["other"] = config.Instance{Section: "downloadClients", Key: "other", Type: "otherdl", Settings: plugin.Settings{"url": api.URL}}
+	if code, out := f.do(t, "POST", "/api/v1/plugins/modules/exampledl/actions/test", valuesBody{Instance: "downloadClients.other"}); code != 400 || errCode(out) != "bad_request" {
+		t.Fatalf("instance of another plugin: %d %v", code, out)
+	}
+	// a posted value that is not empty text replaces the saved one
+	code, out = f.do(t, "POST", "/api/v1/plugins/modules/exampledl/actions/test", valuesBody{Instance: "downloadClients.box", Values: map[string]any{"url": 42}})
+	if code != 422 || errCode(out) != "invalid_values" {
+		t.Fatalf("non-text over the saved value: %d %v", code, out)
 	}
 	code, out = f.do(t, "POST", "/api/v1/plugins/modules/exampledl/actions/test", valuesBody{Values: map[string]any{"url": "not a url"}})
 	if probs, _ := out["problems"].([]any); code != 422 || len(probs) == 0 || errCode(out) != "invalid_values" {
@@ -414,6 +596,10 @@ func TestPluginAdminWithoutModules(t *testing.T) {
 	if v := a.Catalogue(context.Background(), false); v.Source.Error == "" {
 		t.Fatal("no keys: the catalogue must say why it cannot be read")
 	}
+	cfg.Plugins.AutoUpdate = catalogue.AutoPatch
+	if err := a.AutoUpdate(context.Background()); err != nil {
+		t.Fatalf("auto-update without modules: %v", err)
+	}
 }
 
 func TestMCPPluginList(t *testing.T) {
@@ -422,9 +608,13 @@ func TestMCPPluginList(t *testing.T) {
 	if _, err := f.admin.installFromCatalogue(context.Background(), "exampledl", "1.0.0", "user"); err != nil {
 		t.Fatal(err)
 	}
+	a := &App{d: Deps{Config: func() *config.Config { return f.cfg }, Plugins: f.reg}, Plugins: f.admin}
+	_ = f.admin.Catalogue(context.Background(), true)
+	if list := (mcpPlugins{a}).PluginList(); len(list) != 1 || list[0].Update != "" {
+		t.Fatalf("installed version is the offered one: %+v", list)
+	}
 	f.cat.offer(t, exampleAt(t, "1.0.1", nil))
 	_ = f.admin.Catalogue(context.Background(), true)
-	a := &App{d: Deps{Config: func() *config.Config { return f.cfg }, Plugins: f.reg}, Plugins: f.admin}
 	list := mcpPlugins{a}.PluginList()
 	if len(list) != 1 || list[0].Delivery != "module" || list[0].Status != "active" || list[0].Update != "1.0.1" ||
 		len(list[0].Instances) != 1 || list[0].Hosts[0] != "$setting:url" {
@@ -448,5 +638,55 @@ func TestPluginProvision(t *testing.T) {
 	}
 	if _, errs := f.admin.Provision(ctx, []config.PluginInstall{{ID: "exampledl", Version: "2.0.0"}}); len(errs) != 1 {
 		t.Fatal("another version is fetched and refused when the catalogue does not offer it")
+	}
+}
+
+// refsHTTP is the shared outbound client, recording which integration asks.
+type refsHTTP struct {
+	mu   sync.Mutex
+	refs []domain.IntegrationRef
+}
+
+func (h *refsHTTP) For(ref domain.IntegrationRef) plugin.HTTPDoer {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.refs = append(h.refs, ref)
+	return http.DefaultClient
+}
+
+func TestAppPluginAdminWiring(t *testing.T) {
+	cat := newTestCatalogue(t)
+	cat.offer(t, exampleAt(t, "1.0.0", nil))
+	cfg := &config.Config{Plugins: config.Plugins{Dir: t.TempDir(), CatalogueURL: cat.URL + "/plugins-index.json"}}
+	out := &refsHTTP{}
+	a := &App{d: Deps{Config: func() *config.Config { return cfg }, HTTP: out, CatalogueKeys: []catalogue.Key{cat.key()}, Version: "v1.4.0",
+		Log: slog.New(slog.DiscardHandler)}}
+	p := a.newPluginAdmin()
+	if v := p.Catalogue(context.Background(), false); v.Source.Error != "" || len(v.Offers) != 1 {
+		t.Fatalf("catalogue signed by the configured key: %+v", v.Source)
+	}
+	if len(out.refs) == 0 || out.refs[0] != (domain.IntegrationRef{Type: "plugin", Key: "catalogue"}) {
+		t.Fatalf("catalogue client %v", out.refs)
+	}
+	_ = p.d.Actions("exampledl")
+	if out.refs[len(out.refs)-1] != (domain.IntegrationRef{Type: "plugin", Key: "exampledl"}) {
+		t.Fatalf("action client %v", out.refs)
+	}
+
+	// no keys given: the build's trusted keys, which did not sign this catalogue
+	a.d.CatalogueKeys, a.d.HTTP = nil, nil
+	p = a.newPluginAdmin()
+	if p.d.Actions != nil || len(p.fetch.Keys) != len(catalogue.Trusted()) {
+		t.Fatalf("defaults: actions %v, %d keys", p.d.Actions != nil, len(p.fetch.Keys))
+	}
+
+	// the first auto-update waits; a shutdown before it runs nothing
+	a.Plugins = p
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	cfg.Plugins.AutoUpdate = catalogue.AutoPatch
+	a.autoUpdateSoon(ctx)
+	if cat.hits != 1 {
+		t.Fatalf("%d catalogue requests", cat.hits)
 	}
 }

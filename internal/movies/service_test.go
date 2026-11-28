@@ -99,7 +99,7 @@ func TestAddValidation(t *testing.T) {
 		"minAvailability": {TMDBID: 603, MinAvailability: "soon"},
 	} {
 		var fe FieldError
-		if _, _, err := e.svc.Add(ctx, req); !errors.As(err, &fe) || fe.Field != name {
+		if _, created, err := e.svc.Add(ctx, req); !errors.As(err, &fe) || fe.Field != name || created {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -108,7 +108,7 @@ func TestAddValidation(t *testing.T) {
 		t.Error("inaccessible root folder")
 	}
 	e.svc.d.RootFolders = func() []string { return []string{e.root} }
-	if _, _, err := e.svc.Add(ctx, AddRequest{TMDBID: 999}); !errors.Is(err, plugin.ErrNotFound) {
+	if _, created, err := e.svc.Add(ctx, AddRequest{TMDBID: 999}); !errors.Is(err, plugin.ErrNotFound) || created {
 		t.Errorf("unknown tmdb id: %v", err)
 	}
 	e.meta = nil

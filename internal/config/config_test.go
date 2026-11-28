@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -263,6 +264,10 @@ func TestFileSourceWarnsAboutIgnoredKeysOnce(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("want one warning, got %v", c.Warnings)
 	}
+	one := mustLoad(t, inputs(nil, []string{"CORSARR_LOG_LEVEL=debug", "QBIT_PASS=x", "CORSARR_CONFIGFILE=/c.yml"}, map[string]string{"/c.yml": file}))
+	if !slices.Contains(one.Warnings, "config file in use; ignored keys from other sources: CORSARR_LOG_LEVEL") {
+		t.Fatalf("one ignored key: %v", one.Warnings)
+	}
 	// a file referencing a CORSARR_* variable keeps it out of the warning
 	file2 := file + "indexers:\n  k:\n    type: torznab\n    url: http://i\n    apiKey: ${env:CORSARR_LOG_LEVEL}\n"
 	c2 := mustLoad(t, inputs(nil, env, map[string]string{"/c.yml": file2}))
@@ -403,8 +408,13 @@ func TestSecretsFromFileRefsAndClearTextWarning(t *testing.T) {
 	if c.Instances["downloadClients"]["a"].Settings.String("password") != "filepw" {
 		t.Fatal("file secret not resolved")
 	}
-	if a, b := c.Instances["downloadClients"]["a"], c.Instances["downloadClients"]["b"]; a.Refs["password"] != "${file:"+p+"}" || b.Refs["password"] != "" {
+	if a, b := c.Instances["downloadClients"]["a"], c.Instances["downloadClients"]["b"]; len(a.Refs) != 1 || a.Refs["password"] != "${file:"+p+"}" || len(b.Refs) != 0 {
 		t.Fatalf("references: %v %v", a.Refs, b.Refs)
+	}
+	for _, k := range []string{"type", "name", "enabled"} {
+		if _, ok := c.Instances["downloadClients"]["a"].Settings[k]; ok {
+			t.Errorf("%s is an instance field, not a plugin setting", k)
+		}
 	}
 	if len(c.Warnings) != 1 || !strings.Contains(c.Warnings[0], "clear-text secret") || strings.Contains(c.Warnings[0], "clear\n") {
 		t.Fatalf("warnings: %v", c.Warnings)

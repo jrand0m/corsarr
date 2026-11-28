@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError, type Client } from './api/client';
-import type { Decided, ReleaseLine } from './api/types';
+import type { AutomationVerdict, Decided, ReleaseLine } from './api/types';
 import { grabFailure, InteractiveSearch, nothingAcceptedNote, outcomeFor, rank, readSort, sortReleases, toPanel, writeSort, type SortKey } from './interactive.svelte';
 
 const decided = (id: string, accepted: boolean, rankKey: string, protocol: 'torrent' | 'source' = 'torrent'): Decided => ({
@@ -133,6 +133,14 @@ describe('sorting and automation outcome', () => {
     const p = toPanel(decided('b', true, '1'), 1, 2, { verdict: { mode: 'active', pick: 'a', outcomes: { b: { status: 'outranked', lostTo: { criterion: 'quality', message: 'lower quality than the pick' } } } } });
     expect(p.automation).toEqual({ outcome: 'outranked', lostTo: 'lower quality than the pick' });
     expect(p.desirability).toBeNull();
+  });
+
+  it('leaves lostTo empty when the verdict has no word on the release', () => {
+    const b = decided('b', true, '1');
+    const lost = (verdict: unknown) => toPanel(b, 0, 1, { verdict: verdict as AutomationVerdict }).automation?.lostTo;
+    expect(lost({ mode: 'active', pick: 'a', outcomes: null })).toBeUndefined();
+    expect(lost({ mode: 'active', pick: 'a', outcomes: { a: { status: 'grab' } } })).toBeUndefined();
+    expect(lost({ mode: 'active', pick: 'b', outcomes: { b: { status: 'grab' } } })).toBeUndefined();
   });
 
   it('explains when automation would grab nothing', () => {

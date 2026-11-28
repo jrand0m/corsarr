@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -90,5 +92,63 @@ func TestNearestLoc(t *testing.T) {
 	}
 	if l := c.nearestLoc("customFormats.x"); l.Kind != "" {
 		t.Fatalf("unset %+v", l)
+	}
+}
+
+func TestQualitySectionsFailOnASingleProblem(t *testing.T) {
+	bad := strings.Replace(qualityYAML, "format: ps5audio", "format: missing", 1)
+	_, err := Load(inputs([]string{"--configFile=/c.yml"}, nil, map[string]string{"/c.yml": bad}), testRegistry(t))
+	var es Errors
+	if !errors.As(err, &es) || len(es) != 1 || es[0].Path != "qualityProfiles.ps5high.formats.0.format" {
+		t.Fatalf("want one error, got %v", err)
+	}
+}
+
+func TestQualitySectionsRequireTheirKeyFields(t *testing.T) {
+	cases := map[string]string{
+		"customFormats.f.name":               "customFormats:\n  f:\n    conditions:\n      - kind: title\n        pattern: x\n",
+		"customFormats.f.conditions.0.kind":  "customFormats:\n  f:\n    name: F\n    conditions:\n      - pattern: x\n",
+		"qualityProfiles.p.name":             "qualityProfiles:\n  p:\n    kinds: [tv]\n    groups:\n      - qualities: [webdl-720p]\n    cutoff: webdl-720p\n",
+		"qualityProfiles.p.cutoff":           "qualityProfiles:\n  p:\n    name: P\n    kinds: [tv]\n    groups:\n      - qualities: [webdl-720p]\n",
+		"qualityProfiles.p.formats.0.format": "qualityProfiles:\n  p:\n    name: P\n    kinds: [tv]\n    groups:\n      - qualities: [webdl-720p]\n    cutoff: webdl-720p\n    formats:\n      - score: 5\n",
+		"qualityProfiles.p.sizes.0.quality":  "qualityProfiles:\n  p:\n    name: P\n    kinds: [tv]\n    groups:\n      - qualities: [webdl-720p]\n    cutoff: webdl-720p\n    sizes:\n      - max: 5\n",
+	}
+	for path, yml := range cases {
+		_, err := Load(inputs([]string{"--configFile=/c.yml"}, nil, map[string]string{"/c.yml": "version: 1\n" + yml}), testRegistry(t))
+		var es Errors
+		if !errors.As(err, &es) || es[0].Path != path || es[0].Msg != "is required" {
+			t.Errorf("%s: %v", path, err)
+		}
+	}
+}
+
+func TestQualitySectionsRequiredInJSONSchema(t *testing.T) {
+	var root map[string]any
+	if err := json.Unmarshal(NewSchema(testRegistry(t)).JSONSchema(), &root); err != nil {
+		t.Fatal(err)
+	}
+	at := func(n any, keys ...string) any {
+		for _, k := range keys {
+			n = n.(map[string]any)[k]
+		}
+		return n
+	}
+	format := at(root, "properties", "customFormats", "additionalProperties")
+	profile := at(root, "properties", "qualityProfiles", "additionalProperties")
+	cases := map[string]struct {
+		node any
+		want []any
+	}{
+		"format":    {format, []any{"name", "conditions"}},
+		"condition": {at(format, "properties", "conditions", "items"), []any{"kind"}},
+		"profile":   {profile, []any{"name", "kinds", "groups", "cutoff"}},
+		"group":     {at(profile, "properties", "groups", "items"), []any{"qualities"}},
+		"score":     {at(profile, "properties", "formats", "items"), []any{"format"}},
+		"size":      {at(profile, "properties", "sizes", "items"), []any{"quality"}},
+	}
+	for name, c := range cases {
+		if got := at(c.node, "required"); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s required %v", name, got)
+		}
 	}
 }

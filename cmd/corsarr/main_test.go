@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -255,4 +257,50 @@ func TestOnConfigChange(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("jobs did not run: %+v", k.jobs.List())
+}
+
+func TestKernelKeepsHealthAcrossRestarts(t *testing.T) {
+	dir := t.TempDir()
+	c := parse([]string{"--data.dir=" + dir}, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	cfg, _ := c.load()
+	ref := domain.IntegrationRef{Type: "indexer", Key: "one"}
+	k, err := startKernel(context.Background(), cfg, newLogger(cli{stderr: io.Discard}, "info"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k.health.Fail(ref, "unreachable", "down")
+	k.close()
+	k, err = startKernel(context.Background(), cfg, newLogger(cli{stderr: io.Discard}, "info"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer k.close()
+	if h, ok := k.health.Get(ref); !ok || h.LastErrorMessage != "down" {
+		t.Fatalf("health after restart: %+v %v", h, ok)
+	}
+}
+
+func TestEventStreamWaitsBeforeItsFirstHeartbeat(t *testing.T) {
+	dir := t.TempDir()
+	c := parse([]string{"--data.dir=" + dir}, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	cfg, _ := c.load()
+	k, err := startKernel(context.Background(), cfg, newLogger(cli{stderr: io.Discard}, "info"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer k.close()
+	srv := httptest.NewServer(k.hub)
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if !errors.Is(err, context.DeadlineExceeded) || !strings.HasPrefix(string(body), "retry: 3000\n\n") || strings.Contains(string(body), ": ping") {
+		t.Fatalf("stream ended early or pinged at once: %q %v", body, err)
+	}
 }

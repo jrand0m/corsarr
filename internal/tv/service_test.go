@@ -167,12 +167,12 @@ func TestAddValidation(t *testing.T) {
 		{AddRequest{TMDBID: 77, RootFolder: "/elsewhere"}, "rootFolder"},
 	} {
 		var fe FieldError
-		if _, _, err := h.svc.Add(ctx, c.req); !errors.As(err, &fe) || fe.Field != c.field {
+		if _, created, err := h.svc.Add(ctx, c.req); !errors.As(err, &fe) || fe.Field != c.field || created {
 			t.Errorf("%+v: %v", c.req, err)
 		}
 	}
 	h.svc.d.Metadata = func() (plugin.SeriesMetadata, bool) { return nil, false }
-	if _, _, err := h.svc.Add(ctx, AddRequest{TMDBID: 77}); !errors.Is(err, ErrNoMetadata) {
+	if _, created, err := h.svc.Add(ctx, AddRequest{TMDBID: 77}); !errors.Is(err, ErrNoMetadata) || created {
 		t.Fatal(err)
 	}
 	if _, err := h.svc.Lookup(ctx, "x"); !errors.Is(err, ErrNoMetadata) {
@@ -369,5 +369,29 @@ func TestAvailabilityTimerPublishesOncePerEpisode(t *testing.T) {
 	}
 	if it := h.svc.EpisodeItem(ctx, 999); it.Title != "" || it.Ref.ID != 999 {
 		t.Fatalf("unknown episode item %+v", it)
+	}
+}
+
+func TestAddMonitorsTheChosenSeasonsOrReportsTheMetadataError(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	h.meta.err = errors.New("metadata down")
+	if _, created, err := h.svc.Add(ctx, AddRequest{TMDBID: 77}); err == nil || err.Error() != "metadata down" || created {
+		t.Fatalf("%v %v", created, err)
+	}
+	h.meta.err = nil
+	s, created, err := h.svc.Add(ctx, AddRequest{TMDBID: 77, Monitor: "none", Seasons: []int{1}})
+	if err != nil || !created {
+		t.Fatal(err)
+	}
+	d, _ := h.svc.Detail(ctx, s.ID)
+	var mon []string
+	for _, e := range d.Episodes {
+		if e.Monitored {
+			mon = append(mon, e.Code())
+		}
+	}
+	if !eq(mon, []string{"S01E01", "S01E02"}) {
+		t.Fatalf("monitored %v", mon)
 	}
 }

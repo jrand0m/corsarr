@@ -30,6 +30,7 @@ func TestStatusError(t *testing.T) {
 		{503, strings.Repeat("y", 199), abi.ClassServerError, "HTTP 503: " + strings.Repeat("y", 199)},
 		{502, long, abi.ClassServerError, "HTTP 502"},
 		{418, "teapot", abi.ClassParse, "HTTP 418: teapot"},
+		{400, "x", abi.ClassParse, "HTTP 400: x"},
 		{499, "", abi.ClassParse, "HTTP 499"},
 	} {
 		err := plugin.StatusError(tc.status, []byte(tc.body))

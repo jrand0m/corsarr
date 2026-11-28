@@ -56,11 +56,19 @@ type Server struct {
 	erased    []Torrent
 	downLimit int64
 	upLimit   int64
+	free      int64
 }
 
 // New returns a fake of build p.
 func New(p Profile, opts Options) *Server {
-	return &Server{p: p, opts: opts, torrents: map[string]*Torrent{}}
+	return &Server{p: p, opts: opts, torrents: map[string]*Torrent{}, free: 1 << 40}
+}
+
+// SetFreeSpace sets the bytes free the fake reports for every download.
+func (s *Server) SetFreeSpace(n int64) {
+	s.mu.Lock()
+	s.free = n
+	s.mu.Unlock()
 }
 
 // Torrents returns copies of the held downloads, sorted by hash.
@@ -261,7 +269,7 @@ func b2i(b bool) int64 {
 
 // command runs one d.* command on a download.
 func (s *Server) command(t *Torrent, cmd string, args []any) (any, *client.Fault) {
-	if v, ok := getter(t, cmd); ok {
+	if v, ok := getter(t, cmd, s.free); ok {
 		return v, nil
 	}
 	if field, ok := strings.CutSuffix(cmd, ".set"); ok && strings.HasPrefix(field, "custom") {
@@ -274,13 +282,13 @@ func (s *Server) command(t *Torrent, cmd string, args []any) (any, *client.Fault
 	return s.action(t, cmd, args)
 }
 
-func getter(t *Torrent, cmd string) (any, bool) {
+func getter(t *Torrent, cmd string, free int64) (any, bool) {
 	v, ok := map[string]any{
 		"hash": t.Hash, "name": t.Name, "state": b2i(t.Started), "is_active": b2i(t.Active), "is_open": b2i(t.Open),
 		"complete": b2i(t.Complete), "is_hash_checking": b2i(t.Checking), "message": t.Message, "size_bytes": t.Size,
 		"completed_bytes": t.Done, "left_bytes": t.Size - t.Done, "down.rate": t.DownRate, "up.rate": int64(0),
 		"ratio": int64(0), "peers_complete": int64(2), "peers_accounted": int64(4), "priority": t.Priority,
-		"is_multi_file": int64(1), "directory": t.Dir + "/" + t.Name, "free_diskspace": int64(1) << 40,
+		"is_multi_file": int64(1), "directory": t.Dir + "/" + t.Name, "free_diskspace": free,
 	}[cmd]
 	return v, ok
 }

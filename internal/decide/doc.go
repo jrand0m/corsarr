@@ -123,10 +123,7 @@ func CompileFormat(d FormatDoc) (CustomFormat, []DocError) {
 	}
 	conds := make([]Condition, 0, len(d.Conditions))
 	for i, cd := range d.Conditions {
-		c, ok := compileCondition(&e, fmt.Sprintf("conditions.%d", i), cd)
-		if ok {
-			conds = append(conds, c)
-		}
+		conds = append(conds, compileCondition(&e, fmt.Sprintf("conditions.%d", i), cd))
 	}
 	if len(e) > 0 {
 		return CustomFormat{}, e
@@ -134,17 +131,18 @@ func CompileFormat(d FormatDoc) (CustomFormat, []DocError) {
 	return CustomFormat{key: d.Key, name: strings.TrimSpace(d.Name), conditions: conds}, nil
 }
 
-func compileCondition(e *errs, path string, d ConditionDoc) (Condition, bool) {
+// compileCondition reports a bad condition into e; any report discards the
+// whole format, so the condition returned then is never used.
+func compileCondition(e *errs, path string, d ConditionDoc) Condition {
 	info, ok := KindInfoOf(d.Kind)
 	if !ok {
 		e.add(path+".kind", "unknown condition kind %q", d.Kind)
-		return Condition{}, false
+		return Condition{}
 	}
 	if d.Except && d.Kind != CondLanguage {
 		e.add(path+".except", "only language conditions can use except")
 	}
 	c := Condition{kind: d.Kind, negate: d.Negate, required: d.Required, except: d.Except}
-	before := len(*e)
 	switch info.Input {
 	case InputPattern:
 		c.re = checkPattern(e, path+".pattern", d.Pattern)
@@ -154,7 +152,7 @@ func compileCondition(e *errs, path string, d ConditionDoc) (Condition, bool) {
 		c.min, c.max = d.Min, d.Max
 		checkRange(e, path, d)
 	}
-	return c, len(*e) == before
+	return c
 }
 
 func checkPattern(e *errs, path, pattern string) *regexp.Regexp {

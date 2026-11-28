@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -79,6 +80,15 @@ func TestBuildIndexRefuses(t *testing.T) {
 			t.Errorf("%s: accepted", name)
 		}
 	}
+	twice := []ModuleFile{moduleFile(t, "alpha", "1.0.0"), moduleFile(t, "alpha", "1.0.0")}
+	if _, err := BuildIndex("v1.0.0", "", sourceDate, twice); err == nil || !strings.Contains(err.Error(), "plugin alpha is listed twice") {
+		t.Errorf("a plugin listed twice is named: %v", err)
+	}
+	full := make([]ModuleFile, MaxIndexPlugins)
+	full[0] = moduleFile(t, "alpha", "1.0.0")
+	if _, err := BuildIndex("v1.0.0", "", sourceDate, full); err == nil || strings.Contains(err.Error(), "at most") {
+		t.Errorf("an index of exactly the maximum is read module by module: %v", err)
+	}
 }
 
 func TestSignAndVerify(t *testing.T) {
@@ -106,6 +116,9 @@ func TestSignAndVerify(t *testing.T) {
 	}
 	if err := VerifyIndex(index, sig, keys); err != nil {
 		t.Fatal(err)
+	}
+	if err := VerifyIndex(index, sig, nil); !errors.Is(err, catalogue.ErrNoTrustedKey) {
+		t.Errorf("no trusted key: %v", err)
 	}
 	other, _, _ := ed25519.GenerateKey(rand.Reader)
 	for name, c := range map[string]struct {

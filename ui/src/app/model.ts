@@ -57,7 +57,7 @@ export function toQueueCard(d: Download, titleOf: (id: number) => string | undef
   const item = queueItem(d, titleOf, episodes);
   return {
     id: String(d.id),
-    title: item.title ?? d.title,
+    title: item.title || d.title,
     subtitle: item.title ? d.title : undefined,
     kind: d.kind || (item.tv ? 'tv' : 'movie'),
     state: d.state,
@@ -78,7 +78,7 @@ interface QueueItem { title?: string; tv: boolean; movieId?: number }
 function queueItem(d: Download, titleOf: (id: number) => string | undefined, episodes?: (ids: number[]) => string | undefined): QueueItem {
   const links = d.links ?? [];
   const tv = links.filter((l) => l.item.kind === 'tv').map((l) => l.item.id);
-  if (tv.length) return { title: episodes?.(tv) ?? count(tv.length, 'episode'), tv: true };
+  if (tv.length) return { title: episodes?.(tv) || count(tv.length, 'episode'), tv: true };
   const movieId = links.find((l) => l.item.kind === 'movie')?.item.id;
   return { title: movieId === undefined ? undefined : titleOf(movieId), tv: false, movieId };
 }
@@ -173,13 +173,13 @@ export function actorLabel(actor: string): string {
 /** The subject of an event: item titles, else the integration or release it names. */
 export function eventSubject(ev: LiveEvent): string {
   if (ev.items?.length) return itemsSubject(ev.items);
-  return dataSubject(ev) ?? ev.type;
+  return dataSubject(ev) || ev.type;
 }
 
 /** Item titles, or one line for several episodes when that is all the event names. */
 function itemsSubject(items: NonNullable<LiveEvent['items']>): string {
   const episodes = items.filter((i) => i.ref.kind === 'tv' && i.ref.variant !== 'series');
-  if (episodes.length > 1 && episodes.length === items.length) return summariseEpisodes(episodes);
+  if (episodes.length === items.length) return summariseEpisodes(episodes);
   return items.map((i) => i.title).join(', ');
 }
 
@@ -189,7 +189,7 @@ function dataSubject(ev: LiveEvent): string | undefined {
   if (ev.type === 'plugin.changed' && typeof d.id === 'string') return d.id;
   const ref = d.ref as { type?: string; key?: string } | undefined;
   if (ref?.key) return integrationName(ref as IntegrationHealth['ref']);
-  return (d.release as { title?: string } | undefined)?.title ?? (d.title as string | undefined);
+  return (d.release as { title?: string } | undefined)?.title || (d.title as string | undefined);
 }
 
 /** One line on what happened, from the event data. */
@@ -337,11 +337,13 @@ function instanceFor(view: ExportView, byKey: Map<string, ConfiguredInstance>, h
 /** FIELD_N is a list entry, FIELD_SUB a map entry. */
 function readNested(inst: ConfiguredInstance, field: string, rest: string[], value: string) {
   if (/^\d+$/.test(rest[0])) {
-    const list = (inst.values[field] as string[] | undefined) ?? [];
+    const base = inst.values[field];
+    const list = Array.isArray(base) ? (base as string[]) : []; // a plain value of the same field gives way
     list[Number(rest[0])] = value;
     inst.values[field] = list;
   } else {
-    const map = (inst.values[field] as Record<string, string> | undefined) ?? {};
+    const base = inst.values[field];
+    const map = base && typeof base === 'object' && !Array.isArray(base) ? (base as Record<string, string>) : {};
     map[rest.join('_').toLowerCase()] = value;
     inst.values[field] = map;
   }

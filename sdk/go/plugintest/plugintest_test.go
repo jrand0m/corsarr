@@ -149,6 +149,10 @@ func TestHTTPHostAllowList(t *testing.T) {
 			t.Errorf("%s: got %v, want %s", url, err, class)
 		}
 	}
+	plugintest.New(plugintest.Host{Hosts: []string{"exact.test"}, Client: refusing()})
+	if _, err := plugin.Do(plugin.Request{Method: "GET", URL: "http://other.test/"}); plugin.ClassOf(err) != abi.ClassDenied {
+		t.Errorf("a single declared host still limits: %v", err)
+	}
 	_, err := plugin.Do(plugin.Request{Method: "GET", URL: "http://other.test/"})
 	if !containsMsg(err, "host other.test is not declared") {
 		t.Errorf("denial names the host: %v", err)

@@ -129,20 +129,16 @@ func (hs *Harness) handle(name string, req []byte) (any, error) {
 
 func denied(msg string) error { return &abi.Error{Class: abi.ClassDenied, Message: msg} }
 
-func (hs *Harness) log(req []byte) (any, error) {
-	var r abi.LogRequest
-	_ = json.Unmarshal(req, &r)
-	hs.mu.Lock()
-	hs.logs = append(hs.logs, r)
-	hs.mu.Unlock()
-	return nil, nil
-}
+func (hs *Harness) log(req []byte) (any, error) { return record(hs, &hs.logs, req) }
 
-func (hs *Harness) emit(req []byte) (any, error) {
-	var r abi.EventRequest
+func (hs *Harness) emit(req []byte) (any, error) { return record(hs, &hs.events, req) }
+
+// record keeps one decoded request of a host call the module made.
+func record[T any](hs *Harness, into *[]T, req []byte) (any, error) {
+	var r T
 	_ = json.Unmarshal(req, &r)
 	hs.mu.Lock()
-	hs.events = append(hs.events, r)
+	*into = append(*into, r)
 	hs.mu.Unlock()
 	return nil, nil
 }

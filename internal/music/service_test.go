@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -158,15 +159,15 @@ func TestAddValidatesInput(t *testing.T) {
 	for _, req := range []AddRequest{{}, {MBID: "a1", Monitor: "x"}, {MBID: "a1", MonitorNew: "x"}, {MBID: "a1", ProfileKey: "x"},
 		{MBID: "a1", MetadataProfile: "x"}, {MBID: "a1", RootFolder: "/elsewhere"}} {
 		var fe FieldError
-		if _, _, err := f.svc.Add(ctx, req); !errors.As(err, &fe) {
+		if _, created, err := f.svc.Add(ctx, req); !errors.As(err, &fe) || created {
 			t.Errorf("%+v: %v", req, err)
 		}
 	}
-	if _, _, err := f.svc.Add(ctx, AddRequest{MBID: "missing"}); !errors.Is(err, plugin.ErrNotFound) {
+	if _, created, err := f.svc.Add(ctx, AddRequest{MBID: "missing"}); !errors.Is(err, plugin.ErrNotFound) || created {
 		t.Fatalf("unknown artist: %v", err)
 	}
 	f.svc.d.Metadata = func() (plugin.MusicMetadata, bool) { return nil, false }
-	if _, _, err := f.svc.Add(ctx, AddRequest{MBID: "a1"}); !errors.Is(err, ErrNoMetadata) {
+	if _, created, err := f.svc.Add(ctx, AddRequest{MBID: "a1"}); !errors.Is(err, ErrNoMetadata) || created {
 		t.Fatal(err)
 	}
 	if _, err := f.svc.Lookup(ctx, "x"); !errors.Is(err, ErrNoMetadata) {
@@ -307,6 +308,21 @@ func TestHTTPEndpoints(t *testing.T) {
 		"/api/v1/albums/1": 200, "/api/v1/artists/x": 400, "/api/v1/music/profiles": 200} {
 		if code, body := call("GET", path, ""); code != want {
 			t.Errorf("%s: %d %s", path, code, body)
+		}
+	}
+	_, body := call("GET", "/api/v1/music/profiles", "")
+	var profiles struct {
+		Quality []struct {
+			Key       string `json:"key"`
+			IsDefault bool   `json:"isDefault"`
+		} `json:"quality"`
+	}
+	if err := json.Unmarshal([]byte(body), &profiles); err != nil || len(profiles.Quality) < 2 {
+		t.Fatalf("profiles %s %v", body, err)
+	}
+	for _, p := range profiles.Quality {
+		if p.IsDefault != (p.Key == DefaultProfileKey) {
+			t.Errorf("profile %s default %t", p.Key, p.IsDefault)
 		}
 	}
 	if code, _ := call("PUT", "/api/v1/albums/monitor", `{"ids":[2],"monitored":true}`); code != 200 {

@@ -355,3 +355,29 @@ func TestHTTPEndpoints(t *testing.T) {
 		t.Fatal("shadow grab")
 	}
 }
+
+func TestWantedReasonNeedsEveryCondition(t *testing.T) {
+	ar := domain.Artist{Monitored: true, ProfileKey: "lossless"}
+	al := domain.Album{Monitored: true, TrackCount: 1, ReleaseDate: date(2020)}
+	flac := []domain.LibraryFile{{Quality: "flac"}}
+	if r := WantedReason(ar, al, nil, now); r != automation.ReasonMissing {
+		t.Fatalf("no files: %s", r)
+	}
+	if r := WantedReason(ar, al, flac, now); r != automation.ReasonNotWanted {
+		t.Fatalf("one track at the cutoff: %s", r)
+	}
+	noTracks := al
+	noTracks.TrackCount = 0
+	if r := WantedReason(ar, noTracks, nil, now); r != automation.ReasonMissing {
+		t.Fatalf("no files and an unknown track list: %s", r)
+	}
+	unmonitoredArtist, unmonitoredAlbum, unreleased := ar, al, al
+	unmonitoredArtist.Monitored = false
+	unmonitoredAlbum.Monitored = false
+	unreleased.ReleaseDate = date(2999)
+	for name, c := range map[string][2]any{"artist": {unmonitoredArtist, al}, "album": {ar, unmonitoredAlbum}, "unreleased": {ar, unreleased}} {
+		if r := WantedReason(c[0].(domain.Artist), c[1].(domain.Album), nil, now); r != automation.ReasonNotWanted {
+			t.Errorf("%s: %s", name, r)
+		}
+	}
+}

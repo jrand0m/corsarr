@@ -38,6 +38,30 @@ func TestReferenceRowForms(t *testing.T) {
 	rowByKey(t, ref.Rows, "automation.rules.<name>.mode")
 }
 
+func TestReferenceMarksExactlyTheHotReloadedSectionsLive(t *testing.T) {
+	sections := map[string]bool{}
+	for _, r := range NewSchema(testRegistry(t)).Reference().Rows {
+		sections[r.Path[0]] = true
+		if r.Live != Live(r.Path[0]) {
+			t.Errorf("%s: reference says live=%v, the watcher reloads it: %v", r.Key(), r.Live, Live(r.Path[0]))
+		}
+	}
+	for _, s := range []string{"mediaKinds", "rootFolders", "customFormats", "qualityProfiles", "naming", "automation", "legacy", "mcp", "indexers"} {
+		if !sections[s] {
+			t.Errorf("no reference row under %s", s)
+		}
+	}
+}
+
+func TestARootFolderNeedsAPathAndAKind(t *testing.T) {
+	for _, file := range []string{"rootFolders:\n  - kind: movie\n", "rootFolders:\n  - path: /media/movies\n"} {
+		_, err := Load(inputs([]string{"--configFile=/c.yml"}, nil, map[string]string{"/c.yml": file}), testRegistry(t))
+		if err == nil || !strings.Contains(err.Error(), "is required") {
+			t.Errorf("%q: %v", file, err)
+		}
+	}
+}
+
 func TestReferencePluginTables(t *testing.T) {
 	ref := NewSchema(testRegistry(t)).Reference()
 	if len(ref.Plugins) != 2 || ref.Plugins[0].ID != "torznab" || ref.Plugins[1].Section != "downloadClients" {

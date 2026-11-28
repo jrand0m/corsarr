@@ -234,3 +234,16 @@ func TestSessionsAreBoundedAndBoundToTheirKey(t *testing.T) {
 		full.notify([]byte("x")) // never blocks
 	}
 }
+
+func TestInitializeAnnouncesTheConfiguredVersion(t *testing.T) {
+	s := New(Deps{Version: "1.2.3"})
+	out := s.Handle(context.Background(), s.NewSession(KeyFull), []byte(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`))
+	var r struct {
+		Result struct {
+			ServerInfo map[string]any `json:"serverInfo"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil || r.Result.ServerInfo["version"] != "1.2.3" {
+		t.Fatalf("%s %v", out, err)
+	}
+}

@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jrand0m/corsarr/internal/wasm"
@@ -191,5 +195,50 @@ func TestClassify(t *testing.T) {
 		if !errors.As(classify(err), &e) || e.Class != want {
 			t.Errorf("%v: %v", err, classify(err))
 		}
+	}
+}
+
+// wrapped serves the fake behind a handler that counts session handshakes
+// and fails free-space requests when told to.
+func wrapped(t *testing.T, failFree bool) (*plugintest.Harness, func() int) {
+	t.Helper()
+	fake := fakerpc.New(fakerpc.Versions[len(fakerpc.Versions)-1], fakerpc.Options{})
+	var mu sync.Mutex
+	handshakes := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if r.Header.Get("X-Transmission-Session-Id") == "" {
+			mu.Lock()
+			handshakes++
+			mu.Unlock()
+		} else if failFree && strings.Contains(string(body), `"free-space"`) {
+			_, _ = w.Write([]byte(`{"result":"no such directory","arguments":{}}`))
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		fake.Handler().ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	h := plugintest.New(plugintest.Host{Settings: map[string]any{"url": srv.URL + fakerpc.Path, "timeout": "5s"},
+		Secrets: map[string]string{"password": ""}, Hosts: []string{"127.0.0.1"}})
+	return h, func() int { mu.Lock(); defer mu.Unlock(); return handshakes }
+}
+
+func TestTheSessionIsKeptBetweenCalls(t *testing.T) {
+	h, handshakes := wrapped(t, false)
+	for range 3 {
+		call(t, h, abi.OpTest, struct{}{}, nil)
+	}
+	if n := handshakes(); n != 1 {
+		t.Fatalf("%d session handshakes for three calls", n)
+	}
+}
+
+func TestUnknownFreeSpaceReportsZero(t *testing.T) {
+	h, _ := wrapped(t, true)
+	var stats abi.Stats
+	call(t, h, abi.OpDLStats, struct{}{}, &stats)
+	if stats.FreeSpace != 0 || stats.DownSpeed != 2048 {
+		t.Fatalf("%+v", stats)
 	}
 }

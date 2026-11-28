@@ -19,6 +19,9 @@ func TestNamingDefaultsToTheBuiltInTemplates(t *testing.T) {
 	if (*Config)(nil).NamingFor(domain.KindMovie) != naming.DefaultMovie() {
 		t.Fatal("nil config must name like the built-in templates")
 	}
+	if got := c.NamingFor(domain.KindBook); got != (naming.Scheme{Rename: true, Colon: naming.ColonSmart}) {
+		t.Fatalf("kind without templates %+v", got)
+	}
 }
 
 func TestNamingSectionIsReadAndValidated(t *testing.T) {

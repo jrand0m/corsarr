@@ -63,10 +63,16 @@ describe('queue mapping', () => {
     expect(toQueueCard(dl({ kind: '' as Download['kind'] }), () => undefined))
       .toMatchObject({ title: 'The.Matrix.1999.1080p', subtitle: undefined, kind: 'movie', href: '#/library/movies/1' });
   });
+  it('treats an empty item or episode title like a missing one', () => {
+    expect(toQueueCard(dl(), () => '')).toMatchObject({ title: 'The.Matrix.1999.1080p', subtitle: undefined });
+    const links = [{ item: { kind: 'tv' as const, id: 9 }, status: 'pending' }];
+    expect(toQueueCard(dl({ kind: 'tv', links }), () => undefined, () => '').title).toBe('1 episode');
+  });
   it('hides progress of a queued download of unknown size and blanks empty numbers', () => {
     const c = toQueueCard(dl({ state: 'queued', size: 0, downloaded: 0, speed: 0, eta: -1, statusReason: '', held: true }), () => 'The Matrix');
     expect(c).toMatchObject({ state: 'queued', held: true, progress: undefined, size: undefined, downloaded: undefined, speed: undefined, eta: undefined, reason: undefined });
     expect(toQueueCard(dl({ state: 'queued', statusReason: 'waiting for a slot' }), () => 'The Matrix')).toMatchObject({ progress: 0.4, reason: 'waiting for a slot' });
+    expect(toQueueCard(dl({ eta: 1 }), () => 'The Matrix').eta).toBe(1);
   });
 });
 
@@ -93,6 +99,14 @@ describe('events', () => {
     const gone = ev({ action: 'uninstalled', id: 'x', version: '1.0.0', source: 'file' });
     expect(eventView(gone)).toEqual({ label: 'Plugin uninstalled', family: 'download', value: 'removed' });
     expect(eventDetail(gone)).toBe('1.0.0 · from a file');
+    expect(eventDetail(ev({ action: 'installed', id: 'x', version: '1.0.0', previous: '' }))).toBe('1.0.0');
+    expect(eventDetail(ev({ action: 'installed', id: 'x', version: '1.0.0', previous: 1 }))).toBe('1.0.0');
+  });
+  it('treats an empty subject like a missing one', () => {
+    const ev = (type: string, data: Record<string, unknown>) => ({ eventId: 'e', type, occurredAt: '', actor: 'system', data });
+    expect(eventSubject(ev('plugin.changed', { action: 'installed', id: '', version: '1.0.0' }))).toBe('plugin.changed');
+    expect(eventSubject(ev('grab.sent', { release: { title: '' }, title: 'Fallback' }))).toBe('Fallback');
+    expect(eventSubject(ev('grab.sent', { release: { title: '' }, title: '' }))).toBe('grab.sent');
   });
   it('falls back for unknown and incomplete events', () => {
     const ev = (type: string, data?: Record<string, unknown>) => ({ eventId: 'u', type, occurredAt: '', actor: 'system', data });
@@ -145,6 +159,16 @@ describe('events', () => {
 });
 
 describe('parseEnvExport', () => {
+  it('reads list and map entries after a plain base value of the same field', () => {
+    const v = parseEnvExport([
+      'CORSARR_NOTIFICATIONS_NTFY_TYPE=ntfy', 'CORSARR_NOTIFICATIONS_NTFY_URLS=x', 'CORSARR_NOTIFICATIONS_NTFY_URLS_0=ntfy://a',
+      'CORSARR_DOWNLOADCLIENTS_QBIT_TYPE=qbittorrent', 'CORSARR_DOWNLOADCLIENTS_QBIT_CATEGORIES=x', 'CORSARR_DOWNLOADCLIENTS_QBIT_CATEGORIES_MOVIE=movies',
+    ].join('\n'));
+    expect(v.instances.find((i) => i.key === 'ntfy')!.values.urls).toEqual(['ntfy://a']);
+    expect(v.instances.find((i) => i.key === 'qbit')!.values.categories).toEqual({ movie: 'movies' });
+    const mixed = parseEnvExport(['CORSARR_DOWNLOADCLIENTS_QBIT_CATEGORIES_0=a', 'CORSARR_DOWNLOADCLIENTS_QBIT_CATEGORIES_TV=tv'].join('\n'));
+    expect(mixed.instances[0].values.categories).toEqual({ tv: 'tv' });
+  });
   it('reads kinds, root folders, instances and secret references', () => {
     const v = parseEnvExport([
       '# comment', 'CORSARR_SERVER_ADDRESS=127.0.0.1:8090', 'CORSARR_MEDIAKINDS_MUSIC_MODE=shadow', 'CORSARR_MEDIAKINDS_BOOK_MODE=disabled',
@@ -162,6 +186,8 @@ describe('parseEnvExport', () => {
     expect(k.secrets).toEqual({ apikey: 'CORSARR_SECRET_INDEXERS_KNABEN_APIKEY' });
     expect(v.instances.find((i) => i.key === 'ntfy')!.values.urls).toEqual(['ntfy://a', 'ntfy://b']);
     expect(v.instances.find((i) => i.key === 'qbit')!.values.categories).toEqual({ movie: 'movies' });
+    const mixed = parseEnvExport(['CORSARR_DOWNLOADCLIENTS_QBIT_CATEGORIES_0=a', 'CORSARR_DOWNLOADCLIENTS_QBIT_CATEGORIES_TV=tv'].join('\n'));
+    expect(mixed.instances[0].values.categories).toEqual({ tv: 'tv' });
     expect(v.mcp).toEqual({ enabled: false, scope: 'read', tools: [] });
   });
 

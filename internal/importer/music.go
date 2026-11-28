@@ -182,8 +182,8 @@ type trackResult struct {
 
 // placeTracks places every matched file and builds one outcome for the album.
 func (s *Service) placeTracks(ctx context.Context, in musicImport, m music.FileMatch, files map[string]File) result {
-	if err := s.room(in.artist.RootFolder); err != nil {
-		if errors.Is(err, ErrNoSpace) && s.d.NoSpace != nil {
+	if err := s.room(in.artist.RootFolder); err != nil { // room fails only for want of space
+		if s.d.NoSpace != nil {
 			s.d.NoSpace(in.artist.RootFolder)
 		}
 		return placeFailure(in.d.ID, in.items, err)

@@ -1,9 +1,11 @@
 package migrate
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
@@ -167,7 +169,7 @@ func TestApplyAdoptsLibraryDownloadsAndSetsShadow(t *testing.T) {
 		t.Fatalf("overrides %+v", ov)
 	}
 	hist, _, _ := r.st.History().List(ctx, 0, 10)
-	if len(hist) != 1 {
+	if len(hist) != 1 || hist[0].Event.SchemaVersion != 1 || !hist[0].Event.Imported {
 		t.Fatalf("history %+v", hist)
 	}
 	if r.events[len(r.events)-1].Type != domain.EvMigrationComplete {
@@ -264,7 +266,12 @@ func TestWrongKeyStopsThatSourceOnly(t *testing.T) {
 	r := newRig(t)
 	bad, _ := ParseEndpoint("sonarr", r.sonarr.srv.URL, NewSecret("wrong"))
 	r.req.Sources = []Endpoint{bad, r.radarr.endpoint(t, Radarr)}
+	var log bytes.Buffer
+	r.svc.d.Log = slog.New(slog.NewTextHandler(&log, nil))
 	rep := r.plan()
+	if strings.Count(log.String(), "migration source failed") != 1 || !strings.Contains(log.String(), "source=sonarr") {
+		t.Fatalf("log: %s", log.String())
+	}
 	if !strings.Contains(rep.Sources[0].Error, "unauthorised") || rep.Sources[1].Error != "" {
 		t.Fatalf("%+v", rep.Sources)
 	}
@@ -364,5 +371,31 @@ func TestReportRecordsRealStartFinishAndReadTimes(t *testing.T) {
 	stored, ok, err := r.svc.RunReport(context.Background(), rep.RunID)
 	if err != nil || !ok || !strings.Contains(string(stored), `"readMs":`) {
 		t.Fatalf("stored report %s %v", stored, err)
+	}
+}
+
+func TestHistoryWindowFollowsTheRequestedDays(t *testing.T) {
+	r := newRig(t)
+	r.sonarr.routes["/history"] = page(
+		map[string]any{"id": 70, "eventType": "grabbed", "date": day, "sourceTitle": "Show.S01.1080p", "seriesId": 1, "episodeId": 11},
+		map[string]any{"id": 72, "eventType": "grabbed", "date": day.Add(-48 * time.Hour), "sourceTitle": "Show.S01.720p", "seriesId": 1, "episodeId": 11},
+	)
+	r.req.Options.HistoryDays = 1
+	rep := r.plan()
+	entry(t, rep, "sonarr:history:70")
+	for _, e := range rep.Entries {
+		if e.ID == "sonarr:history:72" {
+			t.Fatalf("a row older than one day was read: %+v", e)
+		}
+	}
+	r.req.Options.HistoryDays = 0
+	entry(t, r.plan(), "sonarr:history:72")
+}
+
+func TestSourceQualityDefinitionsReachTheProfile(t *testing.T) {
+	r := newRig(t)
+	r.sonarr.routes["/qualitydefinition"] = []any{map[string]any{"quality": map[string]any{"name": "Bluray-1080p"}, "minSize": 1, "maxSize": nil}}
+	if e := entry(t, r.plan(), "sonarr:profile:1"); !strings.Contains(e.Reason, "bluray-1080p had no size limit") {
+		t.Fatalf("%s %s", e.Outcome, e.Reason)
 	}
 }

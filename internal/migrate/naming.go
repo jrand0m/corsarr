@@ -158,10 +158,7 @@ func mapNaming(a App, n SrcNaming) NamingMapping {
 	}
 	m.colon(n.Colon)
 	formats := sourceFormats[a]
-	folder, sub, file := n.Formats[formats[0]], "", n.Formats[formats[2]]
-	if formats[1] != "" {
-		sub = n.Formats[formats[1]]
-	}
+	folder, sub, file := n.Formats[formats[0]], n.Formats[formats[1]], n.Formats[formats[2]]
 	if a == Lidarr {
 		sub, file = m.splitTrack(file)
 	}
@@ -279,10 +276,10 @@ func convertBraces(body, after string) (string, TokenMapping, string) {
 func convertToken(body string) (string, TokenMapping) {
 	tm := TokenMapping{Token: "{" + body + "}", Status: TokenNone, Note: "no corsarr equivalent; left out"}
 	first := strings.IndexFunc(body, unicode.IsLetter)
-	last := strings.LastIndexFunc(body, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) })
-	if first < 0 || last < first {
+	if first < 0 {
 		return "", tm
 	}
+	last := strings.LastIndexFunc(body, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) })
 	prefix, core, suffix := body[:first], body[first:last+1], body[last+1:]
 	name, format, _ := strings.Cut(core, ":")
 	rule, ok := tokenRules[normalToken(name)]

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/catalogue"
 	"github.com/jrand0m/corsarr/internal/config"
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/modules"
 	"github.com/jrand0m/corsarr/internal/plugin"
 	"github.com/jrand0m/corsarr/internal/wasm"
 	"github.com/jrand0m/corsarr/internal/wasm/wasmtest"
@@ -55,6 +57,16 @@ func TestPluginCommands(t *testing.T) {
 	}
 	if code, out, _ := cliRun(t, nil, "plugin", "list", dd); code != 0 || !strings.Contains(out, "exampledl") || !strings.Contains(out, "active") {
 		t.Fatalf("%d %s", code, out)
+	}
+	cached := 0
+	_ = filepath.WalkDir(modules.Store{Dir: filepath.Join(data, "plugins")}.CacheDir(), func(_ string, d os.DirEntry, _ error) error {
+		if d != nil && d.Type().IsRegular() {
+			cached++
+		}
+		return nil
+	})
+	if cached == 0 {
+		t.Fatal("the compiled module is not cached for the next start")
 	}
 	if code, _, errs := cliRun(t, nil, "config", "validate", dd, "--downloadClients.ex.type=exampledl", "--downloadClients.ex.url=http://box:1"); code != 0 {
 		t.Fatalf("config naming a module: %d %s", code, errs)
@@ -114,8 +126,11 @@ func TestPluginTest(t *testing.T) {
 func TestServerModules(t *testing.T) {
 	data := t.TempDir()
 	c := parse([]string{"--data.dir=" + data}, nil, os.Stdout, os.Stderr)
+	if c.moduleStore() != nil {
+		t.Fatal("a module store before the manager opens")
+	}
 	c.prepareModules(slog.New(slog.DiscardHandler))
-	if c.mods.mgr == nil {
+	if c.mods.mgr == nil || c.moduleStore() == nil {
 		t.Fatal("manager not opened")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -189,4 +204,17 @@ func entryOf(t *testing.T, mod []byte) catalogue.Entry {
 	return catalogue.Entry{ID: m.ID, Name: m.Name, Version: m.Version, Kind: m.Kind, ABIVersion: m.ABIVersion, Description: m.Description,
 		Author: m.Author, License: m.License, Homepage: m.Homepage, Permissions: m.Permissions, Size: int64(len(mod)),
 		SHA256: wasm.SHA256(mod), URL: m.ID + "-" + m.Version + ".wasm"}
+}
+
+func TestStartBudgetFlag(t *testing.T) {
+	for flag, want := range map[string]string{"1ns": "1ns", "-1s": "200ms", "0s": "200ms", "soon": "200ms", "": "200ms"} {
+		c := cli{flags: map[string]string{"start-budget": flag}, stdout: io.Discard}
+		checks := c.describe(&wasm.Module{StartTime: time.Millisecond})
+		if len(checks) != 1 || checks[0].Name != "start within "+want || checks[0].Passed != (want != "1ns") {
+			t.Errorf("--start-budget=%q: %+v", flag, checks)
+		}
+	}
+	if checks := (cli{flags: map[string]string{}, stdout: io.Discard}).describe(&wasm.Module{StartTime: startBudget}); !checks[0].Passed {
+		t.Errorf("a start of exactly the budget is within it: %+v", checks)
+	}
 }

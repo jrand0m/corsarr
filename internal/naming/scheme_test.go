@@ -11,6 +11,11 @@ func TestDefaultSchemesAreTheBuiltInTemplates(t *testing.T) {
 	if got := m.FileName(v, DefaultMovieFile, ".mkv", "/dl/heat.mkv"); got != "Heat (1995) [Bluray-1080p].mkv" {
 		t.Fatal(got)
 	}
+	for _, d := range []Scheme{DefaultTV(), DefaultMovie(), DefaultMusic()} {
+		if !d.Rename || d.Colon != ColonSmart {
+			t.Errorf("built-in naming renames with smart colons: %+v", d)
+		}
+	}
 	if DefaultTV().Sub != DefaultSeasonFolder || DefaultMusic().Sub != DefaultAlbumFolder || DefaultMovie().Sub != "" {
 		t.Fatal("defaults")
 	}
@@ -33,7 +38,11 @@ func TestSchemeRenderingFollowsItsSettings(t *testing.T) {
 	if got := bad.FolderName(v, DefaultMovieFolder); got != "Alien - Romulus" {
 		t.Fatal(got)
 	}
-	if got := (Scheme{}).Or(DefaultMusic()); got.File != DefaultTrackFile || got.Colon != ColonSmart || got.Rename {
+	if got := (Scheme{}).Or(DefaultMusic()); got != (Scheme{Colon: ColonSmart, Folder: DefaultArtistFolder, Sub: DefaultAlbumFolder, File: DefaultTrackFile}) {
+		t.Fatalf("%+v", got)
+	}
+	own := Scheme{Colon: ColonDash, Folder: "{Artist Name}", Sub: "{Album Title}", File: "{Track Title}"}
+	if got := own.Or(DefaultMusic()); got != own {
 		t.Fatalf("%+v", got)
 	}
 }

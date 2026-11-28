@@ -78,7 +78,7 @@ function checkField(f: ModuleField): void {
 
 function toField(f: ModuleField): SchemaField {
   checkField(f);
-  const base: SchemaField = { key: f.key, type: 'text', label: String(f.label ?? f.key), help: f.description, required: f.required || undefined };
+  const base: SchemaField = { key: f.key, type: 'text', label: String(f.label || f.key), help: f.description, required: f.required || undefined };
   if (f.default !== undefined) base.default = f.default;
   return builders[f.type](f, base);
 }

@@ -31,6 +31,15 @@ func TestModuleBuildInfo(t *testing.T) {
 	}
 }
 
+func TestModuleBuildInfoAtTheStartTakesTheMostCommonGoVersion(t *testing.T) {
+	b := append(append([]byte{}, modInfoStart...), modInfo...)
+	b = append(append(b, modInfoEnd...), " go1.20 go1.26.1 go1.26.1"...)
+	info, err := ModuleBuildInfo(b)
+	if err != nil || info.GoVersion != "go1.26.1" {
+		t.Fatalf("%+v %v", info, err)
+	}
+}
+
 func TestModuleSBOM(t *testing.T) {
 	b, err := ModuleSBOM("x-1.0.0.wasm", fakeModule(modInfo), sourceDate, "https://example.org/spdx/x-1.0.0")
 	if err != nil {
@@ -55,7 +64,14 @@ func TestModuleSBOM(t *testing.T) {
 	if _, err := ModuleSBOM("x", []byte("no info"), sourceDate, "ns"); err == nil {
 		t.Error("module without build info")
 	}
-	if mostFrequent(nil) != "" || mostFrequent([]string{"b", "a"}) != "a" {
+	ids := []string{}
+	for _, p := range doc.Packages {
+		ids = append(ids, p.SPDXID)
+	}
+	if got := strings.Join(ids, ","); got != "SPDXRef-Module,SPDXRef-Go-stdlib,SPDXRef-Main,SPDXRef-Dep-1,SPDXRef-Dep-2" {
+		t.Errorf("package ids %s", got)
+	}
+	if mostFrequent(nil) != "" || mostFrequent([]string{"b", "a"}) != "a" || mostFrequent([]string{"a", "b"}) != "a" {
 		t.Error("mostFrequent")
 	}
 }

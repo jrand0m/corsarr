@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/jrand0m/corsarr/internal/config"
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/plugin"
@@ -303,7 +305,9 @@ func TestConfigModeReasonReadsTheEffectiveMode(t *testing.T) {
 		{"shadow", domain.ModeShadow, "already sets shadow; nothing to change", "set mediaKinds"},
 		{"active", domain.ModeShadow, "set mediaKinds.movie.mode: shadow", "already"},
 		{"active", domain.ModeActive, "already sets active", "set mediaKinds"},
-		{"disabled", domain.ModeActive, "set mediaKinds.movie.mode: active", "already"},
+		{"disabled", domain.ModeActive, "set mediaKinds.movie.mode: active there to let corsarr act", "already"},
+		{"active", domain.ModeShadow, "mode: shadow there to compare first", "let corsarr act"},
+		{"", domain.ModeShadow, "your config file sets this kind's mode; set", "already"},
 	}
 	for _, c := range cases {
 		got := configModeReason(domain.KindMovie, c.cur, c.want)
@@ -388,6 +392,10 @@ func TestConfigViewFindsTheManagerReference(t *testing.T) {
     type: torznab
     url: http://other/torznab
     apiKey: plain
+  zed:
+    type: torznab
+    url: http://manager:9696/2
+    apiKey: ${env:SECOND_KEY}
 `
 	in := config.Inputs{ReadFile: func(string) ([]byte, error) { return []byte(yml), nil },
 		Resolver: config.Resolver{Getenv: func(string) (string, bool) { return "x", true }}}
@@ -398,5 +406,154 @@ func TestConfigViewFindsTheManagerReference(t *testing.T) {
 	v := configView(cfg)
 	if v.ManagerRefs["manager"] != "${env:PROWLARR_API_KEY}" || v.ManagerRefs["other"] != "" {
 		t.Fatalf("%v", v.ManagerRefs)
+	}
+}
+
+func TestKeysKeepLettersAndDigitsAtTheEdgesOfTheirRanges(t *testing.T) {
+	c := newConfigDoc()
+	if got := []string{c.key("Az09"), c.key("9a")}; got[0] != "az09" || got[1] != "x9a" {
+		t.Fatalf("%v", got)
+	}
+}
+
+func torznabSnap(ixs ...SrcIndexer) Snapshot {
+	return Snapshot{Source: SourceInfo{App: Sonarr, URL: "http://sonarr:8989", Instance: "s"}, Indexers: ixs}
+}
+
+func TestIndexerSnippetCarriesOnlyTheSettingsTheSourceHas(t *testing.T) {
+	rep := BuildPlan([]Snapshot{torznabSnap(
+		SrcIndexer{ID: 1, Name: "One", Impl: "Torznab", Protocol: "torrent", Enabled: true, BaseURL: "http://one/torznab", Priority: 1},
+		SrcIndexer{ID: 2, Name: "Two", Impl: "Torznab", Protocol: "torrent", Enabled: true, BaseURL: "http://two/torznab", APIPath: "/feed"},
+	)}, State{}, Options{})
+	var doc struct {
+		Indexers map[string]map[string]any `yaml:"indexers"`
+	}
+	if err := yaml.Unmarshal([]byte(rep.Config), &doc); err != nil {
+		t.Fatal(err)
+	}
+	one, two := doc.Indexers["one"], doc.Indexers["two"]
+	if one["priority"] != 1 || one["apiPath"] != nil {
+		t.Errorf("one: %v", one)
+	}
+	if two["apiPath"] != "/feed" || two["priority"] != nil {
+		t.Errorf("two: %v", two)
+	}
+}
+
+func TestASourceWithNothingConfigManagedGivesNoSnippet(t *testing.T) {
+	rep := BuildPlan([]Snapshot{torznabSnap()}, State{}, Options{})
+	if rep.Config != "" || rep.Env != nil {
+		t.Fatalf("%q %v", rep.Config, rep.Env)
+	}
+	for _, e := range rep.Entries {
+		if e.Category == CatNaming {
+			t.Fatalf("naming entry without source naming: %+v", e)
+		}
+	}
+}
+
+func TestAnIndexerPointingAtAManagerInTheRunIsACopy(t *testing.T) {
+	app := torznabSnap(SrcIndexer{ID: 3, Name: "Pushed", Impl: "Torznab", Protocol: "torrent", Enabled: true,
+		BaseURL: "http://manager:9696/api/v2/torznab"})
+	rep := BuildPlan([]Snapshot{managerSnap("http://manager:9696"), app}, State{}, Options{})
+	if e := entry(t, rep, "sonarr:indexer:3"); e.Outcome != OutSkip {
+		t.Fatalf("%+v", e)
+	}
+}
+
+func TestAUsenetIndexerBesideASabnzbdClientIsABridge(t *testing.T) {
+	s := torznabSnap(SrcIndexer{ID: 4, Name: "Feed", Impl: "Newznab", Protocol: "usenet", Enabled: true, BaseURL: "http://bridge:8080"})
+	s.Clients = []SrcClient{{ID: 1, Name: "Bridge", Impl: "Sabnzbd", Protocol: "usenet", Enabled: true, Host: "Bridge", Port: 8080}}
+	rep := BuildPlan([]Snapshot{s}, State{}, Options{})
+	if e := entry(t, rep, "sonarr:indexer:4"); !strings.Contains(e.Reason, "bridge pair") {
+		t.Fatalf("%+v", e)
+	}
+	rep = BuildPlan([]Snapshot{{Source: s.Source, Indexers: s.Indexers}}, State{}, Options{})
+	if e := entry(t, rep, "sonarr:indexer:4"); strings.Contains(e.Reason, "bridge pair") {
+		t.Fatalf("%+v", e)
+	}
+}
+
+func TestAManagerIndexerWithItsOwnURLIsStillRoutedUnlessTorznab(t *testing.T) {
+	s := managerSnap("http://manager:9696")
+	s.Indexers = []SrcIndexer{{ID: 7, Name: "Site", Impl: "Cardigann", Protocol: "torrent", Enabled: true, BaseURL: "http://site/"}}
+	rep := BuildPlan([]Snapshot{s}, State{}, Options{})
+	if e := entry(t, rep, "prowlarr:indexer:7"); e.Outcome != OutApproximate {
+		t.Fatalf("%+v", e)
+	}
+}
+
+func rigPlanInput(t *testing.T) ([]Snapshot, State, Rewrite) {
+	r := newRig(t)
+	snaps := r.svc.read(context.Background(), r.req, func(Progress) {})
+	st, err := r.svc.state(context.Background(), snaps, r.req.Options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return snaps, st, r.req.Options.Rewrite
+}
+
+func TestPlanScopeDefaultsToEverythingButHistory(t *testing.T) {
+	snaps, st, rw := rigPlanInput(t)
+	has := func(rep Report, id string) bool {
+		for _, e := range rep.Entries {
+			if e.ID == id {
+				return true
+			}
+		}
+		return false
+	}
+	if rep := BuildPlan(snaps, st, Options{Rewrite: rw}); !has(rep, "sonarr:series:1") {
+		t.Fatal("the default scope leaves out the library")
+	}
+	if rep := BuildPlan(snaps, st, Options{Rewrite: rw, Scope: Scope{CatModes: true}}); has(rep, "sonarr:series:1") {
+		t.Fatal("a scope without the library still plans it")
+	}
+}
+
+func TestKindModeReasonExplainsShadowOnlyInShadow(t *testing.T) {
+	snaps, st, rw := rigPlanInput(t)
+	shadow := entry(t, BuildPlan(snaps, st, Options{Rewrite: rw}), "corsarr:mode:tv")
+	if !strings.Contains(shadow.Reason, "runs in shadow mode: corsarr keeps the library") {
+		t.Errorf("shadow: %s", shadow.Reason)
+	}
+	active := entry(t, BuildPlan(snaps, st, Options{Rewrite: rw, Activate: true}), "corsarr:mode:tv")
+	if active.Reason != "TV runs in active mode" {
+		t.Errorf("active: %s", active.Reason)
+	}
+}
+
+func TestTorznabIndexersWithoutAPluginOrSeenTwice(t *testing.T) {
+	s := torznabSnap(
+		SrcIndexer{ID: 1, Name: "One", Impl: "Torznab", Protocol: "torrent", Enabled: true, BaseURL: "http://one/torznab"},
+		SrcIndexer{ID: 2, Name: "Again", Impl: "Torznab", Protocol: "torrent", Enabled: true, BaseURL: "http://one/torznab"},
+		SrcIndexer{ID: 3, Name: "Site", Impl: "IPTorrents", Protocol: "torrent", Enabled: true})
+	rep := BuildPlan([]Snapshot{s}, State{}, Options{})
+	if e := entry(t, rep, "sonarr:indexer:1"); e.Outcome != OutManaged {
+		t.Errorf("%+v", e)
+	}
+	if e := entry(t, rep, "sonarr:indexer:2"); e.Outcome != OutUnchanged || e.Reason != "same indexer as One" {
+		t.Errorf("%+v", e)
+	}
+	if e := entry(t, rep, "sonarr:indexer:3"); e.Outcome != OutUnsupported || e.Reason != "no IPTorrents indexer plugin yet" {
+		t.Errorf("%+v", e)
+	}
+}
+
+func TestMovieTagsLeaveANoteOnlyWhenThereAreTags(t *testing.T) {
+	m := SrcMovie{TMDB: 1, Title: "Film", MinAvailability: "released"}
+	if _, notes := movieTarget(m, Snapshot{}, Rewrite{}); len(notes) != 0 {
+		t.Fatalf("no tags: %v", notes)
+	}
+	m.Tags = []int{1}
+	if _, notes := movieTarget(m, Snapshot{}, Rewrite{}); len(notes) != 1 || notes[0] != "movie tags are not kept yet" {
+		t.Fatalf("one tag: %v", notes)
+	}
+}
+
+func TestSeriesEpisodesComeFromTheMetadata(t *testing.T) {
+	s := SrcSeries{TMDB: 1, Title: "Show", Episodes: []SrcEpisode{{Season: 1, Number: 1}}}
+	if _, _, eps := seriesTarget(s, Snapshot{}, Rewrite{}); len(eps) != 1 || !eps[0].InMetadata {
+		t.Fatalf("%+v", eps)
 	}
 }

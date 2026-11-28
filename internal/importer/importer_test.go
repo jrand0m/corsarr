@@ -417,3 +417,14 @@ func TestImportFollowsTheKindsNaming(t *testing.T) {
 		}
 	}
 }
+
+func TestWithoutAGrabTheVideoNameGivesTheQuality(t *testing.T) {
+	e := newEnv(t)
+	e.q.title = ""
+	e.payload(t, map[string]string{"Example.Movie.2021.720p.HDTV.x264-OLD.mkv": "x"})
+	e.completed(t, 7)
+	f, ok, _ := e.st.Library().File(ctx, e.mv.m.FileID)
+	if o := e.q.outcomes[0]; o.Status != domain.ImportImported || !ok || f.Quality != "hdtv-720p" || f.Group != "OLD" {
+		t.Fatalf("%+v %+v", o, f)
+	}
+}

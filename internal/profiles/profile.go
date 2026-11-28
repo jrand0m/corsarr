@@ -109,9 +109,11 @@ func (s *Service) CreateProfile(ctx context.Context, d decide.ProfileDoc) (Profi
 	return s.addProfile(ctx, d)
 }
 
+// profileTaken reports a key a custom or config profile uses; built-in keys
+// are left to the callers (freeKey skips them, CompileProfile refuses them).
 func (s *Service) profileTaken(k string) bool {
 	_, ok := decide.CurrentCatalog().Custom(k)
-	return ok || decide.IsBuiltinKey(k) || s.managed("qualityProfiles", k) != nil
+	return ok || s.managed("qualityProfiles", k) != nil
 }
 
 func (s *Service) addProfile(ctx context.Context, d decide.ProfileDoc) (ProfileRow, error) {

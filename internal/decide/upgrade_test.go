@@ -52,3 +52,27 @@ func TestIsUpgrade(t *testing.T) {
 		}
 	}
 }
+
+func TestEveryShippedProfileUpgradesToItsCutoff(t *testing.T) {
+	for _, kind := range []domain.MediaKind{domain.KindMovie, domain.KindTV, domain.KindMusic} {
+		for _, p := range DefaultProfiles(kind) {
+			s := p.Spec()
+			worst := s.Groups[0].Qualities[0]
+			if w, _ := p.Rank(worst); w == mustRank(t, p, s.Cutoff) {
+				worst = "unknown" // the cutoff is the lowest group: anything from outside the profile is below it
+			}
+			if ok, why := IsUpgrade(p, CurrentFile{Quality: worst}, Candidate{Quality: s.Cutoff}); !ok {
+				t.Errorf("%s %s: %s does not replace %s (%s)", kind, s.Name, s.Cutoff, worst, why)
+			}
+		}
+	}
+}
+
+func mustRank(t *testing.T, p QualityProfile, id QualityID) int {
+	t.Helper()
+	r, ok := p.Rank(id)
+	if !ok {
+		t.Fatalf("%s does not allow %s", p.Spec().Name, id)
+	}
+	return r
+}
