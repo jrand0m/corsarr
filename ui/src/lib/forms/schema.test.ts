@@ -154,4 +154,8 @@ describe('validateField', () => {
     expect(validateField(f('text'), 'anything')).toBeUndefined();
     expect(validateField(f('select', host), 5)).toBeUndefined();
   });
+
+  it('gives the generic message when the pattern message is empty', () => {
+    expect(validateField(f('text', { validation: { pattern: '^[a-z]+$', patternMessage: '' } }), 'ABC')).toBe('Port is not in the expected form');
+  });
 });

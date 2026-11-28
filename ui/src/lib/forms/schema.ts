@@ -187,7 +187,7 @@ const itemsProblem: Check = (value, r) =>
 /** Text-like fields: the optional pattern. */
 function patternProblem(value: unknown, r: SchemaValidation, field: SchemaField): string | undefined {
   if (!r.pattern || typeof value !== 'string' || new RegExp(r.pattern).test(value)) return undefined;
-  return r.patternMessage ?? `${field.label} is not in the expected form`;
+  return r.patternMessage || `${field.label} is not in the expected form`;
 }
 
 /** The check each type runs on a non-empty value; other types run the pattern check. */

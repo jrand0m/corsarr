@@ -30,6 +30,10 @@ const every: ModuleSchema = {
 };
 
 describe('toFormSchema', () => {
+  it('labels a field with an empty label by its key, like one without a label', () => {
+    const { schema } = toFormSchema({ fields: [{ key: 'host', type: 'string', label: '' }] });
+    expect(schema.fields[0].label).toBe('host');
+  });
   it('maps every type of the closed set onto a field molecule', () => {
     const { schema } = toFormSchema(every);
     const byKey = Object.fromEntries(schema.fields.map((f) => [f.key, f]));
