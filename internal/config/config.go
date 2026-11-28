@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/plugin"
 )
 
@@ -87,6 +88,8 @@ type Config struct {
 	MCP MCP
 	// Plugins is the plugin-module section.
 	Plugins Plugins
+	// Naming is each kind's folder and file naming.
+	Naming map[domain.MediaKind]naming.Scheme
 	// Instances maps section (indexers, downloadClients, …) → key → instance.
 	Instances map[string]map[domain.ObjectKey]Instance
 	Source    Source
@@ -294,7 +297,49 @@ func build(s *Schema, t tree) *Config {
 	c.Legacy = legacyApps(t)
 	c.MCP = mcpOf(t)
 	c.Plugins = pluginsOf(t)
+	c.Naming = namingOf(t)
 	return c
+}
+
+// namingDefaults are the built-in schemes of the kinds the naming section covers.
+var namingDefaults = map[domain.MediaKind]func() naming.Scheme{
+	domain.KindTV: naming.DefaultTV, domain.KindMovie: naming.DefaultMovie, domain.KindMusic: naming.DefaultMusic,
+}
+
+func namingOf(t tree) map[domain.MediaKind]naming.Scheme {
+	out := map[domain.MediaKind]naming.Scheme{}
+	section, _ := t["naming"].(tree)
+	for _, k := range namingKinds {
+		kt, _ := section[string(k)].(tree)
+		tmpl := namingTemplates[k]
+		s := naming.Scheme{}
+		s.Rename, _ = kt["rename"].(bool)
+		colon, _ := kt["colon"].(string)
+		s.Colon = naming.ColonMode(colon)
+		slots := []*string{&s.Folder, &s.Sub, &s.File}
+		if len(tmpl) == 2 { // no inner folder
+			slots = []*string{&s.Folder, &s.File}
+		}
+		for i, f := range tmpl {
+			*slots[i], _ = kt[f.name].(string)
+		}
+		out[k] = s.Or(namingDefaults[k]())
+	}
+	return out
+}
+
+// NamingFor is a kind's naming; the built-in naming when there is no config
+// or the kind has none.
+func (c *Config) NamingFor(k domain.MediaKind) naming.Scheme {
+	if c != nil {
+		if s, ok := c.Naming[k]; ok {
+			return s
+		}
+	}
+	if def, ok := namingDefaults[k]; ok {
+		return def()
+	}
+	return naming.Scheme{Rename: true, Colon: naming.ColonSmart}
 }
 
 func ruleModes(t tree) map[string]string {

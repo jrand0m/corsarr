@@ -16,7 +16,7 @@ import (
 
 func (a *App) newTV() *tv.Service {
 	return tv.New(tv.Deps{Repo: a.d.Store.TV(), Files: a.d.Store.Library(), Pub: a.d.Bus, Metadata: a.seriesMetadata,
-		RootFolders: a.tvRoots, Modes: a.mode, Log: a.d.Log})
+		RootFolders: a.tvRoots, Naming: a.namingOf(domain.KindTV), Modes: a.mode, Log: a.d.Log})
 }
 
 func (a *App) newTVAuto() *tvauto.Service {

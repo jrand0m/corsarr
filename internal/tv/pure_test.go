@@ -6,6 +6,7 @@ import (
 
 	"github.com/jrand0m/corsarr/internal/decide"
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/parse"
 	"github.com/jrand0m/corsarr/internal/plugin"
 )
@@ -244,23 +245,23 @@ func TestMergeRecord(t *testing.T) {
 }
 
 func TestPaths(t *testing.T) {
-	if FolderName(show) != "Example Show (2019)" {
-		t.Fatal(FolderName(show))
+	if FolderName(show, naming.DefaultTV()) != "Example Show (2019)" {
+		t.Fatal(FolderName(show, naming.DefaultTV()))
 	}
 	eps := []domain.Episode{{Season: 1, Number: 1, Title: "Pilot"}}
-	if got := FilePath(show, eps, "WEBDL-1080p", "mkv"); got != "/tv/Example Show (2019)/Season 01/Example Show - S01E01 - Pilot [WEBDL-1080p].mkv" {
+	if got := FilePath(show, eps, "WEBDL-1080p", "mkv", "", naming.DefaultTV()); got != "/tv/Example Show (2019)/Season 01/Example Show - S01E01 - Pilot [WEBDL-1080p].mkv" {
 		t.Fatal(got)
 	}
 	multi := []domain.Episode{{Season: 1, Number: 1}, {Season: 1, Number: 2}, {Season: 1, Number: 3}}
-	if got := FilePath(show, multi, "", ".mkv"); got != "/tv/Example Show (2019)/Season 01/Example Show - S01E01-E03.mkv" {
+	if got := FilePath(show, multi, "", ".mkv", "", naming.DefaultTV()); got != "/tv/Example Show (2019)/Season 01/Example Show - S01E01-E03.mkv" {
 		t.Fatal(got)
 	}
 	flat := show
 	flat.SeasonFolders = false
-	if got := FilePath(flat, []domain.Episode{{Season: 0, Number: 12}}, "", "mkv"); got != "/tv/Example Show (2019)/Example Show - S00E12.mkv" {
+	if got := FilePath(flat, []domain.Episode{{Season: 0, Number: 12}}, "", "mkv", "", naming.DefaultTV()); got != "/tv/Example Show (2019)/Example Show - S00E12.mkv" {
 		t.Fatal(got)
 	}
-	if SeasonFolder(show, 0) != "Specials" {
+	if SeasonFolder(show, 0, naming.DefaultTV()) != "Specials" {
 		t.Fatal("specials folder")
 	}
 	s := domain.Series{}
@@ -280,5 +281,21 @@ func TestApplySeasonsMonitorsExactlyTheListedSeasons(t *testing.T) {
 	}
 	if len(seasons) != 4 || seasons[0].Monitored || seasons[1].Monitored || !seasons[2].Monitored || !seasons[3].Monitored {
 		t.Fatalf("season flags %+v", seasons)
+	}
+}
+
+func TestFilePathFollowsTheNaming(t *testing.T) {
+	show := domain.Series{Title: "Example Show", Year: 2019, Path: "/tv/Example Show", SeasonFolders: true}
+	eps := []domain.Episode{{Season: 2, Number: 5, Title: "Five: Again"}}
+	sch := naming.Scheme{Rename: true, Colon: naming.ColonDelete, Sub: "S{Season}", File: "{Series Title} {Season}x{Episode} {Episode Title}"}
+	if got := FilePath(show, eps, "", ".mkv", "/dl/x.mkv", sch); got != "/tv/Example Show/S02/Example Show 02x05 Five Again.mkv" {
+		t.Fatal(got)
+	}
+	sch.Rename = false
+	if got := FilePath(show, eps, "", ".mkv", "/dl/Show.S02E05.mkv", sch); got != "/tv/Example Show/S02/Show.S02E05.mkv" {
+		t.Fatal(got)
+	}
+	if got := FolderName(show, naming.Scheme{Folder: "{Series Title}"}); got != "Example Show" {
+		t.Fatal(got)
 	}
 }

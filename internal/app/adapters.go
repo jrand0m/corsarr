@@ -10,6 +10,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/importer"
 	"github.com/jrand0m/corsarr/internal/instances"
 	"github.com/jrand0m/corsarr/internal/movies"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/notify"
 	"github.com/jrand0m/corsarr/internal/plugin"
 	"github.com/jrand0m/corsarr/internal/queue"
@@ -169,4 +170,12 @@ func (a *App) itemTitles(ctx context.Context, refs []domain.ItemRef) []domain.Ev
 		}
 	}
 	return out
+}
+
+// naming is a kind's folder and file naming from the live config.
+func (a *App) naming(k domain.MediaKind) naming.Scheme { return a.d.Config().NamingFor(k) }
+
+// namingOf binds naming to one kind.
+func (a *App) namingOf(k domain.MediaKind) func() naming.Scheme {
+	return func() naming.Scheme { return a.naming(k) }
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/plugin"
 )
 
@@ -54,6 +55,7 @@ type Deps struct {
 	Pub         Publisher
 	Metadata    func() (plugin.MusicMetadata, bool) // first running music metadata plugin
 	RootFolders func() []string                     // music root folders from config
+	Naming      func() naming.Scheme                // artist folder naming; nil = built-in
 	Modes       domain.Modes                        // media-kind modes; nil = all active
 	Now         func() time.Time
 	Log         *slog.Logger
@@ -196,7 +198,7 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (domain.Artist, bool,
 		return ar, false, err
 	}
 	applyArtist(&ar, rec)
-	ar.Path = filepath.Join(ar.RootFolder, ArtistFolder(ar))
+	ar.Path = filepath.Join(ar.RootFolder, ArtistFolder(ar, s.naming()))
 	profile, _ := domain.MetadataProfileByKey(ar.MetadataProfile)
 	albums := make([]domain.Album, len(rec.Albums))
 	for i, r := range rec.Albums {
@@ -469,4 +471,12 @@ func (s *Service) fileItems(ctx context.Context, ar domain.Artist) ([]domain.Eve
 		}
 	}
 	return items, err
+}
+
+// naming is the music naming in effect.
+func (s *Service) naming() naming.Scheme {
+	if s.d.Naming == nil {
+		return naming.DefaultMusic()
+	}
+	return s.d.Naming()
 }

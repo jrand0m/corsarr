@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jrand0m/corsarr/internal/domain"
+	"github.com/jrand0m/corsarr/internal/naming"
 	"github.com/jrand0m/corsarr/internal/rootfolders"
 	"github.com/jrand0m/corsarr/internal/rules"
 	"github.com/jrand0m/corsarr/internal/store"
@@ -394,5 +395,25 @@ func TestRestoreRefusesToOverwrite(t *testing.T) {
 	}
 	if err := restore("{"); err == nil {
 		t.Fatal("bad payload")
+	}
+}
+
+func TestImportFollowsTheKindsNaming(t *testing.T) {
+	cases := []struct {
+		sch  naming.Scheme
+		want string
+	}{
+		{naming.Scheme{Rename: true, Colon: naming.ColonSmart, File: "{Movie Title} ({Release Year}) {Quality Full}"}, "Example Movie (2021) WEBDL-1080p.mkv"},
+		{naming.Scheme{Rename: false}, "movie.mkv"},
+	}
+	for _, c := range cases {
+		e := newEnv(t)
+		sch := c.sch.Or(naming.DefaultMovie())
+		e.svc.d.Naming = func(k domain.MediaKind) naming.Scheme { return sch }
+		e.payload(t, map[string]string{"movie.mkv": strings.Repeat("x", 1000)})
+		e.completed(t, 7)
+		if got := e.q.outcomes[0].Items[0].NewPaths[0]; got != filepath.Join(e.mv.m.Path, c.want) {
+			t.Errorf("%+v: %s", c.sch, got)
+		}
 	}
 }

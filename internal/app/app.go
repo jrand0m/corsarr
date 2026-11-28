@@ -127,14 +127,15 @@ func (a *App) build() {
 	st, d, modes := a.d.Store, a.d, domain.Modes(a.mode)
 	a.Rules = rules.New(st.Rules(), d.Bus, nil)
 	a.Roots = rootfolders.New(rootfolders.Deps{Roots: a.roots, Repo: st.RootFolders(), Health: d.Health, Log: d.Log})
-	a.Movies = movies.New(movies.Deps{Repo: st.Movies(), Pub: d.Bus, Metadata: a.metadata, Cache: st.Metadata(), Folders: folders{a}, RootFolders: a.movieRoots, Modes: modes, Log: d.Log})
+	a.Movies = movies.New(movies.Deps{Repo: st.Movies(), Pub: d.Bus, Metadata: a.metadata, Cache: st.Metadata(), Folders: folders{a}, RootFolders: a.movieRoots,
+		Naming: a.namingOf(domain.KindMovie), Modes: modes, Log: d.Log})
 	a.Queue = queue.New(queue.Deps{Repo: st.Queue(), Plugins: plugins{a}, Pub: d.Bus, Jobs: d.Jobs, UIClients: d.UIClients,
 		ItemTitles: a.itemTitles, Payload: decide.PayloadPolicy{}, Modes: modes, Clients: a.downloadClients, TestClient: a.testDownloader,
 		FastPoll: d.Options.FastPoll, SlowPoll: d.Options.SlowPoll, Log: d.Log})
 	a.TV = a.newTV()
 	a.Music = a.newMusic()
 	a.Importer = importer.New(importer.Deps{Queue: a.Queue, Movies: a.Movies, TV: a.TV, Music: a.Music, Library: st.Library(), Rules: a.Rules,
-		RuleStore: st.Rules(), Pub: d.Bus, DataDir: st.Dir(), NoSpace: a.recheckRoots, Files: a.Queue.PayloadFiles, Modes: modes, Log: d.Log})
+		RuleStore: st.Rules(), Pub: d.Bus, DataDir: st.Dir(), NoSpace: a.recheckRoots, Files: a.Queue.PayloadFiles, Naming: a.naming, Modes: modes, Log: d.Log})
 	a.Automation = automation.New(automation.Deps{Movies: a.Movies, Files: st.Library(), Queue: a.Queue, Blocklist: st.Blocklist(),
 		Cursors: st.FeedCursors(), Searches: st.Searches(), Recent: st.RecentReleases(), Indexers: a.indexers, Pub: d.Bus, Modes: modes, Log: d.Log})
 	a.TVAuto = a.newTVAuto()
