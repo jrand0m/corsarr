@@ -163,8 +163,12 @@ func TestApplyRebuildsOnlyChangedInstances(t *testing.T) {
 	if builds["qbit"] != 2 {
 		t.Fatal("a changed instance is rebuilt")
 	}
+	m.Reload(cfg(qbit, phone), "dl") // the plugin was replaced at run time
+	if builds["qbit"] != 3 || builds["phone"] != 2 || made["qbit"][1].closed != 1 {
+		t.Fatalf("reload rebuilds only the plugin's instances: %v", builds)
+	}
 	m.Apply(cfg(phone)) // qbit removed
-	if len(m.All(plugin.KindDownloader)) != 0 || made["qbit"][1].closed != 1 {
+	if len(m.All(plugin.KindDownloader)) != 0 || made["qbit"][2].closed != 1 {
 		t.Fatal("a removed instance is closed")
 	}
 	phone.Enabled = false
