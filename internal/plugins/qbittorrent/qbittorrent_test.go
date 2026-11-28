@@ -285,6 +285,36 @@ func TestAddIdempotentWhenAlreadyPresent(t *testing.T) {
 	}
 }
 
+// A client that ignores the hash filter on torrents/info answers the
+// "already present?" check with every torrent it holds. A second, different
+// torrent must still be added, not mistaken for one that is already there.
+func TestAddAnotherTorrentWhenClientIgnoresTheHashFilter(t *testing.T) {
+	f := newFake(t, "v5.0.1")
+	c := newClient(t, f, nil)
+	other := "fedcba9876543210fedcba9876543210fedcba98"
+	f.torrents[other] = map[string]any{"hash": other, "name": "other", "category": "tv", "state": "uploading"}
+	inner := f.srv.Config.Handler
+	f.srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "torrents/info") {
+			q := r.URL.Query()
+			q.Del("hashes")
+			r.URL.RawQuery = q.Encode()
+		}
+		inner.ServeHTTP(w, r)
+	})
+	id, err := c.Add(t.Context(), plugin.AddRequest{Payload: magnetPayload(), Category: "movies"})
+	if err != nil || id != magnetHex {
+		t.Fatalf("%q %v", id, err)
+	}
+	if len(f.forms) != 1 || f.torrents[magnetHex] == nil {
+		t.Fatalf("the new torrent was not added: %d forms", len(f.forms))
+	}
+	// the same torrent again is still recognised as present
+	if _, err := c.Add(t.Context(), plugin.AddRequest{Payload: magnetPayload(), Category: "movies"}); err != nil || len(f.forms) != 1 {
+		t.Fatalf("re-add posted again: %v %d", err, len(f.forms))
+	}
+}
+
 func TestAddRaceReturnsHashWhenClientSaysFails(t *testing.T) {
 	f := newFake(t, "v4.6.2")
 	c := newClient(t, f, nil)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/jrand0m/corsarr/internal/domain"
@@ -123,7 +124,11 @@ func (c *Client) snapshot(ti torrentInfo) plugin.Snapshot {
 	return s
 }
 
-// exists reports whether the client holds a torrent with this hash.
+// exists reports whether the client holds a torrent with this hash. The
+// answer is read from the returned rows, never from their count: a client,
+// proxy or older build that ignores the hash filter answers with every
+// torrent, and treating that as "already added" would silently drop the grab
+// of any new torrent once one other torrent is present.
 func (c *Client) exists(ctx context.Context, hash string) (bool, error) {
 	resp, err := c.get(ctx, "torrents/info", url.Values{"hashes": {hash}}, maxList)
 	if err != nil {
@@ -133,5 +138,10 @@ func (c *Client) exists(ctx context.Context, hash string) (bool, error) {
 	if err := json.Unmarshal(resp.Body, &infos); err != nil {
 		return false, plugin.Wrap(plugin.ClassParse, "torrents/info", err)
 	}
-	return len(infos) > 0, nil
+	for _, ti := range infos {
+		if strings.EqualFold(ti.Hash, hash) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
