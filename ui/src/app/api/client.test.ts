@@ -132,6 +132,12 @@ describe('Client.raw', () => {
     expect(((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>).Accept).toBe('text/plain');
   });
 
+  it('sends an empty Accept header as given instead of the JSON default', async () => {
+    const fetch = vi.fn(async () => json(200, {}));
+    await new Client({ fetch }).raw('GET', 'export', { accept: '' });
+    expect(((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>).Accept).toBe('');
+  });
+
   it('names the status when the error answer has neither a body nor a status text', async () => {
     const api = new Client({ fetch: async () => new Response(null, { status: 500 }) });
     const err = await fail(api.raw('GET', 'queue'));

@@ -41,4 +41,20 @@ describe('applyList', () => {
     applyList(input, { q: '', facets: {} }, { column: 'size', direction: 'desc' }, spec);
     expect(ids(input)).toEqual([1, 2, 3]);
   });
+
+  it('sorts fractional and negative numbers by value', () => {
+    const nums = [{ id: 1, n: 1.5 }, { id: 2, n: 1.25 }, { id: 3, n: -5 }, { id: 4, n: 3 }];
+    const out = applyList(nums, { q: '', facets: {} }, { column: 'n', direction: 'asc' }, { text: () => '', sortKeys: { n: (r) => r.n } });
+    expect(out.map((r) => r.id)).toEqual([3, 2, 1, 4]);
+  });
+
+  it('sorts a column mixing numbers and text as text, digits first', () => {
+    const mixed = [{ id: 1, k: 'b' as string | number }, { id: 2, k: 2 }];
+    const out = applyList(mixed, { q: '', facets: {} }, { column: 'k', direction: 'asc' }, { text: () => '', sortKeys: { k: (r) => r.k } });
+    expect(out.map((r) => r.id)).toEqual([2, 1]);
+  });
+
+  it('leaves the order alone when the list has no sort keys at all', () => {
+    expect(ids(applyList(rows, { q: '', facets: {} }, { column: 'size', direction: 'desc' }, { text: spec.text }))).toEqual([1, 2, 3]);
+  });
 });

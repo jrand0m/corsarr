@@ -189,28 +189,28 @@ export type StreamLine =
 
 /** Progress per chosen source as the stream goes: running until the summary names its outcome. */
 export function progressOf(apps: SourceApp[], lines: StreamLine[]): SourceProgress[] {
-  const { steps, report } = streamState(lines);
-  return apps.map((app) => sourceProgress(app, steps, report));
+  const { seen, report } = streamState(lines);
+  return apps.map((app) => sourceProgress(app, seen, report));
 }
 
-/** Progress lines seen per source, and the report once the summary arrived. */
-function streamState(lines: StreamLine[]): { steps: Map<string, number>; report?: MigrationReport } {
-  const steps = new Map<string, number>();
+/** The sources a progress line was seen for, and the report once the summary arrived. */
+function streamState(lines: StreamLine[]): { seen: Set<string>; report?: MigrationReport } {
+  const seen = new Set<string>();
   let report: MigrationReport | undefined;
   for (const l of lines) {
-    if ('record' in l) steps.set(l.record.progress.source, (steps.get(l.record.progress.source) ?? 0) + 1);
+    if ('record' in l) seen.add(l.record.progress.source);
     if ('summary' in l) report = l.summary.report;
   }
-  return { steps, report };
+  return { seen, report };
 }
 
 /** One source's progress: failed or done once the report names it, else running or still waiting. */
-function sourceProgress(app: SourceApp, steps: Map<string, number>, report: MigrationReport | undefined): SourceProgress {
+function sourceProgress(app: SourceApp, seen: Set<string>, report: MigrationReport | undefined): SourceProgress {
   const name = appLabel(app);
   const info = report?.sources?.find((s) => s.app === app);
   if (info?.error) return { id: app, name, state: 'failed', reason: info.error };
   if (report) return { id: app, name, state: 'ok', count: (report.entries ?? []).filter((e) => e.source === app).length };
-  return { id: app, name, state: steps.has(app) ? 'running' : 'pending' };
+  return { id: app, name, state: seen.has(app) ? 'running' : 'pending' };
 }
 
 /** Leave an entry out of the apply, or take it back in. */

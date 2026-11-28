@@ -68,6 +68,8 @@ describe('migration report', () => {
     const facets = planFacets(entries);
     expect(facets.map((f) => f.id)).toEqual(['outcome', 'category', 'source']);
     expect(facets[2].options.map((o) => o.value)).toEqual(['corsarr', 'sonarr']);
+    expect(facets[0].options.map((o) => [o.value, o.count])).toEqual([['create', 2], ['fileMissing', 1]]);
+    expect(facets[2].options.map((o) => [o.label, o.count])).toEqual([['corsarr', 1], ['Sonarr', 2]]);
     expect(filterEntries(entries, { q: '', facets: { outcome: ['create'] } })).toHaveLength(2);
     expect(filterEntries(entries, { q: 'disk', facets: {} })).toEqual([entries[1]]);
     expect(filterEntries(entries, { q: '', facets: { source: ['corsarr'] } })).toEqual([entries[2]]);
@@ -91,6 +93,8 @@ describe('migration report', () => {
       { id: 'mylar', name: 'mylar', state: 'ok', count: 0 },
     ]);
     expect(progressOf([app], [])).toEqual([{ id: 'mylar', name: 'mylar', state: 'pending' }]);
+    const noSources: StreamLine[] = [{ summary: { done: true, report: { mode: 'plan', planHash: 'h', counts: {}, entries, sources: null as unknown as [] } } }];
+    expect(progressOf(['sonarr'], noSources)).toEqual([{ id: 'sonarr', name: 'Sonarr', state: 'ok', count: 2 }]);
   });
 
   it('leaves out only what an apply would write', () => {
@@ -265,6 +269,7 @@ describe('source check', () => {
   it('explains a check that got no answer and names an unknown app by its id', () => {
     expect(sourceCheckView({ status: 'error' })).toEqual({ value: 'unreachable', detail: 'corsarr could not run the check: no answer' });
     expect(sourceCheckView({ status: 'done' })).toEqual({ value: 'unreachable', detail: 'corsarr could not run the check: no answer' });
+    expect(sourceCheckView({ status: 'error', error: '' })).toEqual({ value: 'unreachable', detail: 'corsarr could not run the check: ' });
     const r: SourceCheck = { app: 'mylar' as SourceApp, state: 'reachable', version: '1.2', supported: '1.x' };
     expect(sourceCheckView({ status: 'done', result: r })).toEqual({ value: 'reachable', detail: 'mylar 1.2 · supported 1.x' });
   });
