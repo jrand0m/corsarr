@@ -74,7 +74,9 @@ func TestHistoryHealthProfilesRoots(t *testing.T) {
 	if modes := out.Data["modes"].(map[string]any); modes["book"] != "disabled" || modes["movie"] != "active" {
 		t.Fatal(modes)
 	}
-	h.ok(t, "list_profiles", map[string]any{"kind": "movie"}, "quality profiles")
+	if out := h.ok(t, "list_profiles", map[string]any{"kind": "movie"}, "quality profiles"); out.Data["metadataProfiles"] != nil {
+		t.Fatal("metadata profiles belong to music only")
+	}
 	if out := h.ok(t, "list_profiles", nil); out.Data["metadataProfiles"] == nil {
 		t.Fatal("music metadata profiles")
 	}
