@@ -126,7 +126,7 @@ func (c cli) recordProvisioned(bus interface {
 // moduleStore is the module manager for the plugin admin; nil when modules
 // are off.
 func (c cli) moduleStore() app.Modules {
-	if c.mods == nil || c.mods.mgr == nil {
+	if c.mods.mgr == nil {
 		return nil
 	}
 	return c.mods.mgr
