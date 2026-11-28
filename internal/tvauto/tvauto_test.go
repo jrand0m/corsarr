@@ -454,3 +454,23 @@ type emitter struct{ records, errors int }
 
 func (e *emitter) Record(any) error          { e.records++; return nil }
 func (e *emitter) Error(string, error) error { e.errors++; return nil }
+
+func TestSearchWeighsAReleaseAgainstTheEpisodesFile(t *testing.T) {
+	e := newEnv(t)
+	s := e.add(t, false)
+	eps, _ := e.tv.Episodes(ctx, s.ID)
+	s2e1 := eps[4]
+	f, err := e.st.Library().SaveFile(ctx, domain.LibraryFile{Item: s2e1.Ref(), Path: "/tv/s2e1.mkv", Quality: "bluray-1080p", Revision: 1, AddedAt: day0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.tv.SetEpisodeFile(ctx, []int64{s2e1.ID}, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	e.ix.byEp["Example Show S02E01"] = []string{"Example.Show.S02E01.1080p.WEB-DL.x264-GRP"}
+	var rec emitter
+	sum, err := e.svc.InteractiveEpisode(ctx, s2e1.ID, &rec)
+	if err != nil || sum.Releases != 1 || sum.Accepted != 0 {
+		t.Fatalf("a worse release than the file on disk is no upgrade: %+v %v", sum, err)
+	}
+}
