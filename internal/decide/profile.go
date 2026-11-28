@@ -168,7 +168,7 @@ func group(name string, ids ...QualityID) QualityGroup {
 }
 
 func defaultSpecs(kind domain.MediaKind) []ProfileSpec {
-	sd := single("dvd", "sdtv", "webrip-480p", "webdl-480p", "bluray-480p")
+	sd := single("dvd", "sdtv", "webrip-480p", "webdl-480p", "bluray-480p", "bluray-576p")
 	anyGroups := append(sd,
 		QualityGroup{Qualities: []QualityID{"hdtv-720p"}}, group("WEB 720p", "webrip-720p", "webdl-720p"),
 		QualityGroup{Qualities: []QualityID{"bluray-720p"}},
