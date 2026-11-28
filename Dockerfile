@@ -42,6 +42,7 @@ COPY scripts/gobuild.sh scripts/
 COPY scripts/repro/ scripts/repro/
 COPY cmd/ cmd/
 COPY internal/ internal/
+COPY sdk/ sdk/
 COPY --from=ui /src/internal/web/dist/ internal/web/dist/
 
 # One binary for the image platform

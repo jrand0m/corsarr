@@ -2,8 +2,10 @@
 
 Short notes per release. Each release's assets, checksums and how to verify them are on its GitHub release page.
 
-## v0.5.5 — 2026-11-28
+## v0.5.6 — 2026-11-28
 
+- v0.5.5 was tagged but never published (its build failed); everything below ships here.
+- Fix: `mcp stdio` relay could read the session id while it changed.
 - Movies now show their posters: the movie list, poster grid, detail page and add dialog use the movie's artwork (posters of movies already in the library are filled in from stored metadata on upgrade).
 - Artwork is served by corsarr from its own cache (`/api/v1/images/…`): fetched once through the shared client, shrunk and re-encoded, still shown when the provider is offline; the browser no longer contacts the metadata provider. Albums and artists get Cover Art Archive covers.
 - New `cache` settings: on/off, folder, size cap, stored quality and widths, and how artwork shrinks near the cap (lower quality, then smaller, then the least recently viewed is removed, library artwork last).

@@ -129,8 +129,9 @@ lint target="all":
           diff -u "$f" "$tmp/$f" || { echo "$f is out of date: run just docs config"; exit 1; }
         done ;;
       quality) scripts/quality.sh ;;
-      all)     just lint go; just lint ui; just lint docs ;;
-      *) echo "unknown target {{target}} (all|go|ui|docs|quality)"; exit 2 ;;
+      docker)  {{x}} scripts/dockerfile-paths.sh ;;
+      all)     just lint go; just lint ui; just lint docs; just lint docker ;;
+      *) echo "unknown target {{target}} (all|go|ui|docs|quality|docker)"; exit 2 ;;
     esac
 
 # ── deploy ───────────────────────────────────────────────────────────────────
