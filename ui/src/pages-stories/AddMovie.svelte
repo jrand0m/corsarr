@@ -106,7 +106,10 @@
   .year { font-weight: var(--weight-regular); color: var(--ink-muted); }
   .facts, .reason { font-size: var(--text-sm); color: var(--ink-muted); }
   .mono { font-family: var(--font-mono); font-size: var(--text-xs); }
-  .options { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+  /* Two equal columns, fields top-aligned; the root folder picker spans the row. */
+  .options { display: grid; gap: var(--space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .options > :global(:first-child) { grid-column: 1 / -1; }
+  @media (max-width: 40rem) { .options { grid-template-columns: minmax(0, 1fr); } }
   .switch { grid-column: 1 / -1; }
   .keys { margin-right: auto; font-size: var(--text-xs); color: var(--ink-subtle); display: inline-flex; align-items: center; gap: var(--space-1); }
   @media (width < 48rem), (pointer: coarse) {
