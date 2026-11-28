@@ -68,6 +68,31 @@ func TestHTTPEndpoints(t *testing.T) {
 	}
 }
 
+func TestAnswersPointArtworkAtTheCache(t *testing.T) {
+	h := newHarness(t)
+	h.meta.set(func(r *plugin.SeriesRecord) {
+		r.PosterURL, r.FanartURL = "https://img.example/p.jpg", "https://img.example/b.jpg"
+	})
+	h.svc.d.Art = func(r domain.ArtRole, o string) string { return "cache/" + string(r) + "/" + o }
+	srv := testkit.Serve(t, func(m testkit.Mux) { h.svc.Mount(m) })
+	poster, fanart := `"posterUrl":"cache/p/https://img.example/p.jpg"`, `"fanartUrl":"cache/b/https://img.example/b.jpg"`
+	for _, s := range []struct{ method, path, body string }{
+		{"POST", "/api/v1/series", `{"tmdbId":77,"monitor":"all"}`}, {"GET", "/api/v1/series", ""}, {"GET", "/api/v1/series/1", ""},
+		{"PUT", "/api/v1/series/1", `{"profileKey":"any"}`}, {"GET", "/api/v1/series/lookup?term=example", ""},
+	} {
+		_, body := testkit.Do(t, srv, s.method, s.path, s.body)
+		if !strings.Contains(body, poster) || !strings.Contains(body, fanart) {
+			t.Errorf("%s %s: %s", s.method, s.path, body)
+		}
+	}
+	if _, body := testkit.Do(t, srv, "GET", "/api/v1/calendar/tv?start=2000-01-01T00:00:00Z&end=2100-01-01T00:00:00Z", ""); !strings.Contains(body, poster) {
+		t.Errorf("calendar: %s", body)
+	}
+	if got := WithArt(nil, SeriesRef{PosterURL: "x"}); got.PosterURL != "x" {
+		t.Fatal(got)
+	}
+}
+
 func TestWriteErrUpstream(t *testing.T) {
 	w := httptest.NewRecorder()
 	WriteErr(w, errors.New("provider down"))

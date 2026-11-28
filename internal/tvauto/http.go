@@ -141,5 +141,15 @@ func (s *Service) missing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items, next := s.index.Page(automation.ReasonMissing, cursor, limit)
-	api.WritePage(w, items, next)
+	api.WritePage(w, s.withArt(items), next)
+}
+
+// withArt points each entry's series poster at the artwork cache.
+func (s *Service) withArt(items []Entry) []Entry {
+	out := make([]Entry, len(items))
+	for i, e := range items {
+		e.Series = tv.WithArt(s.d.Art, e.Series)
+		out[i] = e
+	}
+	return out
 }
