@@ -339,14 +339,16 @@ func TestAuthRepo(t *testing.T) {
 	if _, ok, _ := a.APIKey(ctx); ok {
 		t.Fatal("no key yet")
 	}
+	// A long, distinctive key: a two-letter one can appear in the encoded ciphertext by chance.
+	const second = "second-api-key-in-clear-would-show-this-marker"
 	_ = a.SetAPIKey(ctx, "k1")
-	_ = a.SetAPIKey(ctx, "k2")
-	if k, ok, err := a.APIKey(ctx); k != "k2" || !ok || err != nil {
+	_ = a.SetAPIKey(ctx, second)
+	if k, ok, err := a.APIKey(ctx); k != second || !ok || err != nil {
 		t.Fatalf("key: %q %v %v", k, ok, err)
 	}
 	var sealed string
 	_ = s.R().QueryRow("SELECT key_sealed FROM api_key").Scan(&sealed)
-	if strings.Contains(sealed, "k2") {
+	if strings.Contains(sealed, second) {
 		t.Fatal("api key stored in clear")
 	}
 }
