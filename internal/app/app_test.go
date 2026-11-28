@@ -5,6 +5,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/events"
 	"github.com/jrand0m/corsarr/internal/health"
+	"github.com/jrand0m/corsarr/internal/imagecache"
 	"github.com/jrand0m/corsarr/internal/importer"
 	"github.com/jrand0m/corsarr/internal/plugin"
 	"github.com/jrand0m/corsarr/internal/rootfolders"
@@ -97,8 +100,20 @@ func TestAppWiresModulesJobsAndAdapters(t *testing.T) {
 	if err := a.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(jobs.List()) != 12 || len(a.Mounts()) != 14 { // movie, TV and music pipelines, indexer settings, migration, compatibility API, MCP
+	if len(jobs.List()) != 13 || len(a.Mounts()) != 15 { // movie, TV and music pipelines, indexer settings, migration, compatibility API, MCP, artwork cache
 		t.Fatalf("jobs %d mounts %d", len(jobs.List()), len(a.Mounts()))
+	}
+	if lib, err := a.libraryArtwork(ctx); err != nil || len(lib) != 0 {
+		t.Fatal(lib, err)
+	}
+	if link := a.art(domain.ArtPoster, "https://img.example/p.jpg"); !strings.HasPrefix(link, imagecache.LinkPrefix) {
+		t.Fatal(link)
+	}
+	if n, err := (movieRecords{a}).Bytes(ctx); err != nil || n != 0 {
+		t.Fatal(n, err)
+	}
+	if n, _, err := (movieRecords{a}).EvictUnused(ctx, 10); err != nil || n != 0 {
+		t.Fatal(n, err)
 	}
 	p := plugins{a}
 	if _, ok := p.Indexer("a"); !ok || len(p.Downloaders()) != 1 || len(a.indexers()) != 1 {
@@ -250,4 +265,17 @@ func TestActivationImportsWhatWaitedInShadow(t *testing.T) {
 		got, _ := a.Queue.Get(ctx, d.ID)
 		return got.State != domain.StateCompleted
 	})
+}
+
+func TestImageSettingsAndLibraryArtwork(t *testing.T) {
+	c := config.Cache{Enabled: true, MaxSize: 10, Images: config.CacheImages{Quality: 80, MaxWidth: 500, BackdropMaxWidth: 1000,
+		Degrade: config.CacheDegrade{QualityFloor: 50, QualityStep: 5, WidthFloor: 200, WidthStep: 0.7, HighWater: 0.9, LowWater: 0.7}}}
+	s := imageSettings(c, "/data")
+	if s.Dir != filepath.Join("/data", "cache") || s.Quality != 80 || s.Degrade.WidthStep != 0.7 || s.BackdropMaxWidth != 1000 {
+		t.Fatalf("%+v", s)
+	}
+	c.Dir = "/srv/cache"
+	if imageSettings(c, "/data").Dir != "/srv/cache" {
+		t.Fatal("explicit folder")
+	}
 }

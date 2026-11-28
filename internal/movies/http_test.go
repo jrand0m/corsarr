@@ -2,12 +2,12 @@ package movies
 
 import (
 	"errors"
-	"github.com/jrand0m/corsarr/internal/domain"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/testkit"
 )
 

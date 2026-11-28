@@ -18,6 +18,7 @@ import (
 	"github.com/jrand0m/corsarr/internal/domain"
 	"github.com/jrand0m/corsarr/internal/events"
 	"github.com/jrand0m/corsarr/internal/health"
+	"github.com/jrand0m/corsarr/internal/imagecache"
 	"github.com/jrand0m/corsarr/internal/importer"
 	"github.com/jrand0m/corsarr/internal/indexers"
 	"github.com/jrand0m/corsarr/internal/instances"
@@ -88,7 +89,9 @@ type App struct {
 	// Legacy is the compatibility API for third-party tools.
 	Legacy *legacy.Service
 	// MCP is the endpoint for AI assistants.
-	MCP     *mcp.Service
+	MCP *mcp.Service
+	// Images is the artwork cache.
+	Images  *imagecache.Cache
 	wg      sync.WaitGroup
 	cancel  context.CancelFunc
 	ctx     context.Context // the running pipeline's context (set by Start)
@@ -125,9 +128,10 @@ func New(ctx context.Context, d Deps) (*App, error) {
 
 func (a *App) build() {
 	st, d, modes := a.d.Store, a.d, domain.Modes(a.mode)
+	a.Images = a.newImages()
 	a.Rules = rules.New(st.Rules(), d.Bus, nil)
 	a.Roots = rootfolders.New(rootfolders.Deps{Roots: a.roots, Repo: st.RootFolders(), Health: d.Health, Log: d.Log})
-	a.Movies = movies.New(movies.Deps{Repo: st.Movies(), Pub: d.Bus, Metadata: a.metadata, Cache: st.Metadata(), Folders: folders{a}, RootFolders: a.movieRoots, Modes: modes, Log: d.Log})
+	a.Movies = movies.New(movies.Deps{Repo: st.Movies(), Pub: d.Bus, Metadata: a.metadata, Cache: st.Metadata(), Folders: folders{a}, RootFolders: a.movieRoots, Modes: modes, Art: a.art, Log: d.Log})
 	a.Queue = queue.New(queue.Deps{Repo: st.Queue(), Plugins: plugins{a}, Pub: d.Bus, Jobs: d.Jobs, UIClients: d.UIClients,
 		ItemTitles: a.itemTitles, Payload: decide.PayloadPolicy{}, Modes: modes, Clients: a.downloadClients, TestClient: a.testDownloader,
 		FastPoll: d.Options.FastPoll, SlowPoll: d.Options.SlowPoll, Log: d.Log})
@@ -191,6 +195,7 @@ func (a *App) registerJobs(ctx context.Context) error {
 		{Name: automation.BacklogJob, Interval: automation.BacklogInterval, Run: a.Automation.Backlog},
 		{Name: TestJob, Interval: a.d.Options.TestInterval, Run: a.Instances.TestAll},
 		{Name: rootfolders.CheckJob, Interval: rootfolders.CheckInterval, Run: a.Roots.Check},
+		{Name: imagecache.DegradeJob, Interval: imagecache.DegradeInterval, Heavy: true, Run: a.Images.Degrade},
 		{Name: PurgeJob, Interval: 24 * time.Hour, Run: func(ctx context.Context) error {
 			_, err := a.Rules.Run(ctx, importer.RuleRecyclePurge)
 			return err
@@ -310,7 +315,7 @@ func (a *App) importWaiting(ctx context.Context, k domain.MediaKind) {
 func (a *App) Mounts() []func(api.Mounter) {
 	return []func(api.Mounter){a.Movies.Mount, a.Queue.Mount, a.Automation.Mount, a.Rules.Mount,
 		a.Roots.Mount, a.Notify.Mount, a.TV.Mount, a.TVAuto.Mount, a.IndexerAdmin.Mount, a.Migrate.Mount,
-		a.Music.Mount, a.MusicAuto.Mount, a.Legacy.Mount, a.MCP.Mount}
+		a.Music.Mount, a.MusicAuto.Mount, a.Legacy.Mount, a.MCP.Mount, a.Images.Mount}
 }
 
 func typeIn(types ...domain.EventType) func(domain.EventType) bool {
