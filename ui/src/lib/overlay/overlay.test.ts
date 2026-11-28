@@ -51,6 +51,41 @@ describe('focus helpers', () => {
     expect(document.activeElement?.id).toBe('last');
   });
 
+  it('leaves Tab alone between the ends and ignores other keys', () => {
+    const root = setup();
+    document.getElementById('field')!.focus();
+    const mid = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+    trapTab(mid, root);
+    expect(mid.defaultPrevented).toBe(false);
+    const back = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true });
+    trapTab(back, root);
+    expect(back.defaultPrevented).toBe(false);
+    document.getElementById('last')!.focus();
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+    trapTab(enter, root);
+    expect(enter.defaultPrevented).toBe(false);
+    expect(document.activeElement?.id).toBe('last');
+  });
+
+  it('pulls focus back in from outside the overlay', () => {
+    const root = setup();
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    outside.focus();
+    trapTab(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true }), root);
+    expect(document.activeElement?.textContent).toBe('Close');
+    outside.focus();
+    trapTab(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true }), root);
+    expect(document.activeElement?.id).toBe('last');
+  });
+
+  it('keeps Tab from leaving an overlay with nothing to focus', () => {
+    document.body.replaceChildren(Object.assign(document.createElement('div'), { id: 'empty' }));
+    const e = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+    trapTab(e, document.getElementById('empty')!);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
   it('prefers a marked element, then the first field', () => {
     const root = setup();
     expect(initialFocus(root).id).toBe('field');

@@ -67,3 +67,80 @@ describe('summaries and refusals', () => {
     expect(Object.keys(profileDoc(row)).sort()).toEqual(['cutoff', 'cutoffFormatScore', 'groups', 'key', 'kinds', 'minFormatScore', 'name', 'upgrades']);
   });
 });
+
+describe('ladder rows by group shape', () => {
+  it('names a lone quality by itself and an unknown quality by its id', () => {
+    const items = ladderItems([{ qualities: ['webdl-720p'] }, { qualities: ['remux-2160p'] }], ladder);
+    expect(items.slice(0, 2)).toEqual([
+      { id: 'q:remux-2160p', label: 'remux-2160p', enabled: true },
+      { id: 'q:webdl-720p', label: 'WEBDL-720p', enabled: true },
+    ]);
+  });
+
+  it('keeps a named group of one as a group, and joins the names of an unnamed group', () => {
+    const items = ladderItems([{ name: 'HD', qualities: ['webdl-720p'] }, { qualities: ['webdl-1080p', 'remux-2160p'] }], ladder);
+    expect(items[0]).toMatchObject({ id: 'g:0:', label: 'WEBDL-1080p + remux-2160p' });
+    expect(items[0].children?.map((c) => c.label)).toEqual(['WEBDL-1080p', 'remux-2160p']);
+    expect(items[1]).toMatchObject({ id: 'g:1:HD', label: 'HD' });
+    expect(items[1].children?.map((c) => c.id)).toEqual(['q:webdl-720p']);
+  });
+
+  it('switches every quality off, locking only those below the floor, when nothing is allowed', () => {
+    const items = ladderItems([], ladder);
+    expect(items.map((i) => i.enabled)).toEqual([false, false, false, false, false]);
+    expect(items.filter((i) => i.locked).map((i) => i.label)).toEqual(['Unknown']);
+  });
+});
+
+describe('condition summaries', () => {
+  const sum = (c: Parameters<typeof conditionSummary>[0]) => conditionSummary(c, kinds);
+
+  it('words patterns, with or without a pattern', () => {
+    expect(sum({ kind: 'title', pattern: 'x264' })).toBe('Release title does match x264');
+    expect(sum({ kind: 'title' })).toBe('Release title does match ');
+  });
+
+  it('words ranges with and without a unit, a minimum and negation', () => {
+    expect(sum({ kind: 'size', max: 4 })).toBe('Size is 0–4 GB');
+    expect(sum({ kind: 'size' })).toBe('Size is above 0 GB');
+    expect(sum({ kind: 'size', min: 1, max: 2, negate: true })).toBe('Size is not 1–2 GB');
+    const unitless: ConditionKindInfo[] = [{ kind: 'year', label: 'Year', input: 'range' }];
+    expect(conditionSummary({ kind: 'year', min: 1990, max: 2000 }, unitless)).toBe('Year is 1990–2000');
+  });
+
+  it('words value lists of every length, unknown values, negation and exceptions', () => {
+    expect(sum({ kind: 'audio', values: ['aac'] })).toBe('Audio codec is AAC');
+    expect(sum({ kind: 'audio', values: ['aac', 'flac', 'ac3'] })).toBe('Audio codec is AAC, flac or AC3');
+    expect(sum({ kind: 'audio' })).toBe('Audio codec is ');
+    expect(sum({ kind: 'audio', values: ['aac'], negate: true })).toBe('Audio codec is not AAC');
+    expect(sum({ kind: 'audio', values: ['aac', 'ac3'], except: true })).toBe('Audio codec is anything but AAC or AC3');
+  });
+
+  it('falls back to the raw kind and values when the kind is not offered', () => {
+    expect(sum({ kind: 'codec', values: ['x265'] })).toBe('codec is x265');
+    const noValues: ConditionKindInfo[] = [{ kind: 'codec', label: 'Video codec', input: 'values' }];
+    expect(conditionSummary({ kind: 'codec', values: ['x265'] }, noValues)).toBe('Video codec is x265');
+  });
+});
+
+describe('refusal routing', () => {
+  it('keeps the message and no fields when the body carries none', () => {
+    expect(refusal(undefined, 'Refused.')).toEqual({ fields: {}, conditions: [], message: 'Refused.' });
+    expect(refusal({})).toEqual({ fields: {}, conditions: [], message: undefined });
+  });
+
+  it('merges messages for one condition and joins messages for one field', () => {
+    const r = refusal({ fields: [
+      { field: 'conditions.0.pattern', message: 'bad' }, { field: 'conditions.0.kind', message: 'unknown' },
+      { field: 'groups.0', message: 'empty.' }, { field: 'groups.1.qualities', message: 'twice.' },
+    ] });
+    expect(r.conditions[0]).toEqual({ pattern: 'bad', kind: 'unknown' });
+    expect(r.fields).toEqual({ groups: 'empty. twice.' });
+  });
+
+  it('puts messages without a field on the form', () => {
+    const r = refusal({ fields: [{ message: 'Nothing to save.' }, { field: '', message: 'Try again.' }] });
+    expect(r.fields).toEqual({ form: 'Nothing to save. Try again.' });
+    expect(r.conditions).toEqual([]);
+  });
+});

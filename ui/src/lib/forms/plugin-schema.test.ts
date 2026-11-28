@@ -169,3 +169,119 @@ describe('helpers', () => {
     expect(r.other).toEqual(['other: unknown setting']);
   });
 });
+
+describe('toFormSchema edge cases', () => {
+  const one = (f: Partial<ModuleField> & { type: string }) => toFormSchema({ fields: [{ key: 'x', label: 'X', ...f }] }).schema.fields[0];
+
+  it('labels a field by its key when it has no label and leaves optional fields unrequired', () => {
+    const f = toFormSchema({ fields: [{ key: 'host', type: 'string' } as ModuleField] }).schema.fields[0];
+    expect(f).toEqual({ key: 'host', type: 'text', label: 'host', help: undefined, required: undefined });
+    expect(one({ type: 'string', pattern: '' })).toMatchObject({ type: 'text' });
+    expect(one({ type: 'string', pattern: '' }).mono).toBeUndefined();
+  });
+
+  it('never carries a default into a secret', () => {
+    expect(one({ type: 'secret', default: 'hunter2' }).default).toBeUndefined();
+  });
+
+  it('keeps a default and leaves bounds out when there are none', () => {
+    expect(one({ type: 'int', default: 3 })).toEqual({ key: 'x', type: 'number', label: 'X', help: undefined, required: undefined, default: 3 });
+    expect(one({ type: 'int', min: 2 }).validation).toEqual({ min: 2, max: undefined });
+    expect(one({ type: 'enum' }).options).toEqual([]);
+  });
+
+  it('reads Go durations for the default and bounds and ignores what is not one', () => {
+    expect(one({ type: 'duration' })).toMatchObject({ type: 'duration', default: undefined });
+    expect(one({ type: 'duration' }).validation).toBeUndefined();
+    expect(one({ type: 'duration', default: 45, maxDuration: 'later', minDuration: '1m' })).toMatchObject({ default: undefined, validation: { min: 60, max: undefined } });
+    expect(one({ type: 'duration', default: 'soon' }).default).toBeUndefined();
+  });
+
+  it('turns an int list default into strings and leaves item limits out when unset', () => {
+    expect(one({ type: 'list<int>', default: [80, 443] })).toMatchObject({ type: 'list', mono: true, default: ['80', '443'], validation: undefined });
+    expect(one({ type: 'list<int>', default: 80 }).default).toBeUndefined();
+    expect(one({ type: 'list<string>' }).validation).toBeUndefined();
+  });
+
+  it('leaves groups out when the schema has none', () => {
+    const r = toFormSchema({ fields: [{ key: 'a', type: 'bool', label: 'A' }] });
+    expect(r.schema.groups).toBeUndefined();
+    expect(r.actions).toEqual([]);
+    expect(r.hints).toEqual({});
+  });
+
+  it('accepts a group with no field list', () => {
+    const r = toFormSchema({ fields: [{ key: 'a', type: 'bool', label: 'A' }], groups: [{ title: 'Empty' } as never] });
+    expect(r.schema.groups).toEqual([{ id: 'g0', label: 'Empty', help: undefined }]);
+    expect(r.schema.fields.map((f) => f.key)).toEqual(['a']);
+  });
+
+  it('refuses non-object fields, shared keys, repeated group fields, bad action ids and too many groups', () => {
+    expect(() => toFormSchema({ fields: [null as unknown as ModuleField] })).toThrow(/not an object/);
+    expect(() => toFormSchema({ fields: ['x' as unknown as ModuleField] })).toThrow(/not an object/);
+    expect(() => toFormSchema({ fields: [{ key: 5, type: 'bool', label: 'A' } as unknown as ModuleField] })).toThrow(/key/);
+    const a: ModuleField = { key: 'a', type: 'bool', label: 'A' };
+    expect(() => toFormSchema({ fields: [a, a] })).toThrow(/share a key/);
+    expect(() => toFormSchema({ fields: [a], groups: [{ title: 'G', fields: ['a'] }, { title: 'H', fields: ['a'] }] })).toThrow(/group 2/);
+    expect(() => toFormSchema({ fields: [a], actions: [{ id: 'Bad id', label: 'Go' }] })).toThrow(/action id/);
+    expect(() => toFormSchema({ fields: [a], groups: Array.from({ length: 11 }, () => ({ title: 'G', fields: [] })) })).toThrow(/groups/);
+    expect(() => toFormSchema({ fields: {} as never })).toThrow(/field list/);
+  });
+});
+
+describe('value edge cases', () => {
+  const fields: ModuleField[] = [
+    { key: 'apiKey', type: 'secret', label: 'K' },
+    { key: 'on', type: 'bool', label: 'On' },
+    { key: 'wait', type: 'duration', label: 'Wait' },
+    { key: 'tags', type: 'list<string>', label: 'Tags' },
+    { key: 'paths', type: 'map<string,string>', label: 'Paths' },
+    { key: 'mode', type: 'enum', label: 'Mode' },
+    { key: 'name', type: 'string', label: 'Name' },
+  ];
+
+  it('reads values, skipping secrets and missing ones', () => {
+    expect(toFormValues(fields, { apiKey: 'leak', on: 'false', wait: 30, tags: 'one', paths: { a: 'b' }, mode: 'fast', name: null })).toEqual({
+      on: false, wait: 30, tags: ['one'], paths: { a: 'b' }, mode: 'fast',
+    });
+    expect(toFormValues(fields, { on: true, tags: ['a', 2] })).toEqual({ on: true, tags: ['a', '2'] });
+    expect(toFormValues(fields, { wait: 'nonsense' })).toEqual({ wait: null });
+  });
+
+  it('writes values, passing through a map that is already an object and skipping empty ones', () => {
+    expect(fromFormValues(fields, { paths: { a: 'b' }, mode: 'fast', on: false, name: undefined, wait: null, tags: [] })).toEqual({
+      paths: { a: 'b' }, mode: 'fast', on: false, tags: [],
+    });
+    expect(fromFormValues(fields, { paths: [{ key: ' a ', value: '1' }, { key: ' ', value: 'x' }] })).toEqual({ paths: { a: '1' } });
+  });
+});
+
+describe('configSnippet edge cases', () => {
+  const base = { section: 'indexers', key: 'one', plugin: 'torznab' };
+
+  it('writes a reference for a required secret even when nothing was typed and skips an optional one', () => {
+    const yaml = configSnippet({ ...base, fields: [
+      { key: 'apiKey', type: 'secret', label: 'K', required: true },
+      { key: 'cookie', type: 'secret', label: 'C' },
+      { key: 'token', type: 'secret', label: 'T' },
+    ], values: { cookie: '', token: 'typed' } });
+    expect(yaml).toBe([
+      'indexers:', '  one:', '    type: torznab',
+      '    apiKey: ${env:CORSARR_SECRET_INDEXERS_ONE_APIKEY}',
+      '    token: ${env:CORSARR_SECRET_INDEXERS_ONE_TOKEN}', '',
+    ].join('\n'));
+  });
+
+  it('leaves out defaults, empty lists, empty maps and missing values; keeps env references as they are', () => {
+    const yaml = configSnippet({ ...base, fields: [
+      { key: 'slots', type: 'int', label: 'S', default: 4 },
+      { key: 'tags', type: 'list<string>', label: 'T' },
+      { key: 'paths', type: 'map<string,string>', label: 'P' },
+      { key: 'gone', type: 'string', label: 'G' },
+      { key: 'url', type: 'string', label: 'U' },
+      { key: 'ratio', type: 'number', label: 'R', default: 1 },
+      { key: 'host', type: 'string', label: 'H' },
+    ], values: { slots: 4, tags: [], paths: {}, gone: null, url: '${env:INDEXER_URL}', ratio: 2, host: 'true' } });
+    expect(yaml).toBe(['indexers:', '  one:', '    type: torznab', '    url: ${env:INDEXER_URL}', '    ratio: 2', '    host: "true"', ''].join('\n'));
+  });
+});

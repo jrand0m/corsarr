@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { availableAt, eventDetail, eventSubject, eventView, isAvailable, movieStatus, parseEnvExport, queuedMovieIds, toQueueCard } from './model';
+import { actorLabel, availableAt, eventDetail, eventSubject, eventView, isAvailable, movieStatus, parseEnvExport, queuedMovieIds, settingsFor, toQueueCard } from './model';
 import { applyList, facetCounts } from './list';
 import type { Download, Movie } from './api/types';
 import { instanceView, toSchemaField } from './screens/settings/plugin-form';
@@ -54,6 +54,20 @@ describe('queue mapping', () => {
     expect(toQueueCard(d, () => 'The Matrix')).toMatchObject({ title: '10 episodes', subtitle: 'Example.Show.S01.1080p', kind: 'tv', href: undefined });
     expect(toQueueCard(d, () => 'The Matrix', (ids) => `Example Show · S01 · ${ids.length} episodes`).title).toBe('Example Show · S01 · 10 episodes');
   });
+  it('lets TV links win over a movie link in the same download', () => {
+    const links = [{ item: { kind: 'movie' as const, id: 1 }, status: 'pending' }, { item: { kind: 'tv' as const, id: 9 }, status: 'pending' }];
+    expect(toQueueCard(dl({ kind: '' as Download['kind'], links }), () => 'The Matrix', () => undefined))
+      .toMatchObject({ title: '1 episode', kind: 'tv', href: undefined });
+  });
+  it('keeps the release as title and still links the movie when its title is unknown', () => {
+    expect(toQueueCard(dl({ kind: '' as Download['kind'] }), () => undefined))
+      .toMatchObject({ title: 'The.Matrix.1999.1080p', subtitle: undefined, kind: 'movie', href: '#/library/movies/1' });
+  });
+  it('hides progress of a queued download of unknown size and blanks empty numbers', () => {
+    const c = toQueueCard(dl({ state: 'queued', size: 0, downloaded: 0, speed: 0, eta: -1, statusReason: '', held: true }), () => 'The Matrix');
+    expect(c).toMatchObject({ state: 'queued', held: true, progress: undefined, size: undefined, downloaded: undefined, speed: undefined, eta: undefined, reason: undefined });
+    expect(toQueueCard(dl({ state: 'queued', statusReason: 'waiting for a slot' }), () => 'The Matrix')).toMatchObject({ progress: 0.4, reason: 'waiting for a slot' });
+  });
 });
 
 describe('events', () => {
@@ -79,6 +93,50 @@ describe('events', () => {
     const gone = ev({ action: 'uninstalled', id: 'x', version: '1.0.0', source: 'file' });
     expect(eventView(gone)).toEqual({ label: 'Plugin uninstalled', family: 'download', value: 'removed' });
     expect(eventDetail(gone)).toBe('1.0.0 · from a file');
+  });
+  it('falls back for unknown and incomplete events', () => {
+    const ev = (type: string, data?: Record<string, unknown>) => ({ eventId: 'u', type, occurredAt: '', actor: 'system', data });
+    expect(eventView(ev('health.changed'))).toEqual({ label: 'Health: OK', family: 'health', value: 'ok' });
+    expect(eventView(ev('health.changed', { to: 'sideways' }))).toEqual({ label: 'Health: sideways', family: 'health', value: 'sideways' });
+    expect(eventView(ev('mediakind.mode_changed'))).toEqual({ label: 'Kind mode: active', family: 'kindMode', value: 'active' });
+    expect(eventView(ev('plugin.changed', { action: 'teleported' }))).toEqual({ label: 'Plugin changed', family: 'check', value: 'pass' });
+    expect(eventView(ev('plugin.changed'))).toEqual({ label: 'Plugin changed', family: 'check', value: 'pass' });
+    expect(eventView(ev('something.new'))).toEqual({ label: 'something.new', family: 'check', value: 'pending' });
+  });
+  it('names the subject from the integration, release or event type', () => {
+    const ev = (type: string, data?: Record<string, unknown>) => ({ eventId: 's', type, occurredAt: '', actor: 'system', data });
+    expect(eventSubject(ev('config.drifted', { ref: { type: 'config', key: 'source' } }))).toBe('Configuration source');
+    expect(eventSubject(ev('grab.failed', { ref: { type: 'indexer' }, release: { title: 'Alien.1979.1080p' }, title: 'other' }))).toBe('Alien.1979.1080p');
+    expect(eventSubject(ev('payload.rejected', { title: 'Brazil.1985.720p' }))).toBe('Brazil.1985.720p');
+    expect(eventSubject(ev('plugin.changed', { id: 42 }))).toBe('plugin.changed');
+    expect(eventSubject(ev('config.applied'))).toBe('config.applied');
+    expect(eventSubject({ ...ev('grab.sent'), items: [] })).toBe('grab.sent');
+  });
+  it('lists item titles unless every item is one of several episodes', () => {
+    const base = { eventId: 'i', type: 'grab.sent', occurredAt: '', actor: 'automation' };
+    const ep = (n: number) => ({ ref: { kind: 'tv' as const, id: n }, title: `Example Show S01E0${n}`, series: 'Example Show' });
+    expect(eventSubject({ ...base, items: [ep(1)] })).toBe('Example Show S01E01');
+    expect(eventSubject({ ...base, items: [ep(1), ep(2), { ref: { kind: 'movie' as const, id: 3 }, title: 'Alien' }] })).toBe('Example Show S01E01, Example Show S01E02, Alien');
+    expect(eventSubject({ ...base, items: [ep(1), { ref: { kind: 'tv' as const, id: 7, variant: 'series' }, title: 'Example Show' }] })).toBe('Example Show S01E01, Example Show');
+  });
+  it('details an event from its message, reason, release and path', () => {
+    const ev = (type: string, data?: Record<string, unknown>) => ({ eventId: 'd', type, occurredAt: '', actor: 'system', data });
+    expect(eventDetail(ev('import.blocked', { message: 'no match', reason: 'sample', release: { title: 'Alien.1979' }, path: '/dl/alien' })))
+      .toBe('no match · sample · Alien.1979 · /dl/alien');
+    expect(eventDetail(ev('import.failed', { message: '', reason: 3, path: '/dl/x' }))).toBe('/dl/x');
+    expect(eventDetail(ev('config.applied'))).toBeUndefined();
+    expect(eventDetail(ev('plugin.changed', {}))).toBeUndefined();
+    expect(eventDetail(ev('plugin.changed', { source: 'file' }))).toBe('from a file');
+  });
+  it('names who acted', () => {
+    expect(actorLabel('user')).toBe('You');
+    expect(actorLabel('automation')).toBe('Automation');
+    expect(actorLabel('system')).toBe('corsarr');
+    expect(actorLabel('plugin:harbourdl')).toBe('Plugin harbourdl');
+    expect(actorLabel('import:radarr')).toBe('Imported from radarr');
+    expect(actorLabel('rule:7')).toBe('Rule');
+    expect(actorLabel('mcp')).toBe('mcp');
+    expect(actorLabel('')).toBe('—');
   });
   it('summarises a season of episodes in one line', () => {
     const items = [1, 2, 3].map((n) => ({ ref: { kind: 'tv' as const, id: n }, title: `Example Show S01E0${n}`, series: 'Example Show' }));
@@ -111,6 +169,38 @@ describe('parseEnvExport', () => {
     const v = parseEnvExport(['CORSARR_MCP_ENABLED=true', 'CORSARR_MCP_SCOPE=write', 'CORSARR_MCP_RATELIMIT=30',
       'CORSARR_MCP_TOOLS_0=find_media', 'CORSARR_MCP_TOOLS_1=request_status', 'CORSARR_MCP_TOOLS=', 'CORSARR_MCP_ALLOWEDORIGINS_0=http://x'].join('\n'));
     expect(v.mcp).toEqual({ enabled: true, scope: 'write', rateLimit: 30, tools: ['find_media', 'request_status'] });
+  });
+
+  it('skips lines it cannot place', () => {
+    const v = parseEnvExport([
+      '', '   ', 'CORSARR_SERVER_PORT', 'OTHER_SERVER_ADDRESS=x', 'CORSARR_MEDIAKINDS_MOVIE_ENABLED=true', 'CORSARR_UNKNOWN_A_B=1',
+      'CORSARR_INDEXERS_KNABEN=1', 'CORSARR_ROOTFOLDERS_1_PATH=/data/tv', 'CORSARR_ROOTFOLDERS_1_FREE=9', 'CORSARR_MCP_TOOLS_0=',
+      'CORSARR_MCP_OTHER=1', '  CORSARR_DATA_DIR=/var/lib/corsarr  ', 'CORSARR_LOG_LEVEL=debug', 'CORSARR_AUTH_MODE=basic',
+    ].join('\n'));
+    expect(v.kinds).toEqual({});
+    expect(v.instances).toEqual([]);
+    expect(v.rootFolders).toEqual([{ path: '/data/tv', kind: '' }]);
+    expect(v.mcp).toEqual({ enabled: false, scope: 'read', tools: [] });
+    expect(v.server).toEqual({ 'data.dir': '/var/lib/corsarr', 'log.level': 'debug', 'auth.mode': 'basic' });
+  });
+
+  it('keeps instances of each section apart and groups their fields', () => {
+    const v = parseEnvExport([
+      'CORSARR_SOURCES_A_TYPE=s', 'CORSARR_MEDIASERVERS_A_TYPE=jellyfin', 'CORSARR_MEDIASERVERS_A_LIBRARY_IDS_0=x',
+      'CORSARR_METADATA_TMDB_LANGUAGE=en', 'CORSARR_CHATBOTS_TG_TYPE=telegram',
+    ].join('\n'));
+    expect(v.instances.map((i) => `${i.section}.${i.key}:${i.plugin}`)).toEqual(['sources.a:s', 'mediaServers.a:jellyfin', 'metadata.tmdb:', 'chatbots.tg:telegram']);
+    expect(v.instances[1].values).toEqual({ library: { ids_0: 'x' } });
+    expect(v.instances[2].values).toEqual({ language: 'en' });
+  });
+});
+
+describe('settingsFor', () => {
+  it('opens general settings for folders, disks and config, plugins for the rest', () => {
+    expect(settingsFor('rootFolder')).toBe('#/settings/general');
+    expect(settingsFor('disk')).toBe('#/settings/general');
+    expect(settingsFor('config')).toBe('#/settings/general');
+    expect(settingsFor('indexer')).toBe('#/settings/plugins');
   });
 });
 

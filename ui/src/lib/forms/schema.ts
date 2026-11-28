@@ -106,27 +106,38 @@ export function emptyValue(type: SchemaFieldType): unknown {
   }
 }
 
+const copyList = (v: unknown) => [...(v as string[])];
+
+/** Map form value: entry lists are copied, objects become entries with string values. */
+function mapEntries(v: unknown): MapEntry[] {
+  if (Array.isArray(v)) return v.map((e: MapEntry) => ({ ...e }));
+  return Object.entries(v as Record<string, unknown>).map(([key, value]) => ({ key, value: String(value) }));
+}
+
+/** How a present server value is reshaped per type; other types pass through. */
+const formShapes = new Map<SchemaFieldType, (v: unknown) => unknown>([
+  ['map', mapEntries], ['list', copyList], ['multiselect', copyList], ['select', String],
+]);
+
 /** Server value → form value: maps become ordered entries, missing values take the default. */
 export function toFormValue(field: SchemaField, raw: unknown): unknown {
   if (field.secret) return '';
   const v = raw === undefined ? field.default : raw;
   if (v === undefined || v === null) return emptyValue(field.type);
-  if (field.type === 'map') {
-    if (Array.isArray(v)) return v.map((e: MapEntry) => ({ ...e }));
-    return Object.entries(v as Record<string, unknown>).map(([key, value]) => ({ key, value: String(value) }));
-  }
-  if (field.type === 'list' || field.type === 'multiselect') return [...(v as string[])];
-  if (field.type === 'select') return String(v);
-  return v;
+  const shape = formShapes.get(field.type);
+  return shape ? shape(v) : v;
+}
+
+/** Map entries → the saved object: keys trimmed, entries with an empty key dropped. */
+export function entriesObject(entries: MapEntry[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const e of entries) if (e.key.trim()) out[e.key.trim()] = e.value;
+  return out;
 }
 
 /** Form value → value sent on save: map entries become an object, empty keys dropped. */
 export function fromFormValue(field: SchemaField, value: unknown): unknown {
-  if (field.type === 'map') {
-    const out: Record<string, string> = {};
-    for (const e of value as MapEntry[]) if (e.key.trim()) out[e.key.trim()] = e.value;
-    return out;
-  }
+  if (field.type === 'map') return entriesObject(value as MapEntry[]);
   if (field.type === 'list') return (value as string[]).filter((s) => s.trim() !== '');
   return value;
 }
@@ -154,37 +165,59 @@ export function isVisible(field: SchemaField, values: FormValues, schema: Settin
   return true;
 }
 
+type Check = (value: unknown, r: SchemaValidation, field: SchemaField) => string | undefined;
+
+function rangeProblem(value: unknown, r: SchemaValidation): string | undefined {
+  const n = value as number;
+  if (r.min !== undefined && n < r.min) return `Use ${r.min} or more`;
+  if (r.max !== undefined && n > r.max) return `Use ${r.max} or less`;
+  return undefined;
+}
+
+function regexProblem(value: unknown): string | undefined {
+  const t = testRegex(value as string, '', false);
+  return t.kind === 'invalid' ? `This pattern does not compile: ${t.message}` : undefined;
+}
+
+const mapProblem: Check = (value) => (duplicateKeys(value as MapEntry[]).size ? 'Each key can appear only once' : undefined);
+
+const itemsProblem: Check = (value, r) =>
+  r.maxItems !== undefined && (value as string[]).length > r.maxItems ? `Use at most ${r.maxItems}` : undefined;
+
+/** Text-like fields: the optional pattern. */
+function patternProblem(value: unknown, r: SchemaValidation, field: SchemaField): string | undefined {
+  if (!r.pattern || typeof value !== 'string' || new RegExp(r.pattern).test(value)) return undefined;
+  return r.patternMessage ?? `${field.label} is not in the expected form`;
+}
+
+/** The check each type runs on a non-empty value; other types run the pattern check. */
+const typeChecks = new Map<SchemaFieldType, Check>([
+  ['number', rangeProblem], ['duration', rangeProblem], ['size', rangeProblem],
+  ['url', (value, r) => urlProblem(value as string, r.schemes)],
+  ['regex', regexProblem],
+  ['map', mapProblem],
+  ['list', itemsProblem], ['multiselect', itemsProblem],
+]);
+
+/** Nothing entered: a number may be 0 and a checkbox is never empty. */
+function isEmpty(field: SchemaField, value: unknown): boolean {
+  return !isSetValue(value) && !(field.type === 'number' && value === 0) && field.type !== 'bool';
+}
+
+/** The message for an empty required field; a stored secret counts as filled. */
+function requiredProblem(field: SchemaField, meta: FieldMeta): string | undefined {
+  if (field.secret && (meta.isSet || meta.ref)) return undefined;
+  return field.type === 'select' ? `Choose a ${field.label.toLowerCase()}` : `${field.label} is required`;
+}
+
 /** Client-side check of one visible field; undefined when fine. */
 export function validateField(field: SchemaField, value: unknown, meta: FieldMeta = {}): string | undefined {
   if (meta.managed) return undefined;
-  const r = field.validation ?? {};
-  const empty = !isSetValue(value) && !(field.type === 'number' && value === 0) && field.type !== 'bool';
-  if (field.required && empty) {
-    if (field.secret && (meta.isSet || meta.ref)) return undefined;
-    return field.type === 'select' ? `Choose a ${field.label.toLowerCase()}` : `${field.label} is required`;
-  }
+  const empty = isEmpty(field, value);
+  if (field.required && empty) return requiredProblem(field, meta);
   if (empty) return undefined;
-  switch (field.type) {
-    case 'number': case 'duration': case 'size': {
-      const n = value as number;
-      if (r.min !== undefined && n < r.min) return `Use ${r.min} or more`;
-      if (r.max !== undefined && n > r.max) return `Use ${r.max} or less`;
-      return undefined;
-    }
-    case 'url': return urlProblem(value as string, r.schemes);
-    case 'regex': {
-      const t = testRegex(value as string, '', false);
-      return t.kind === 'invalid' ? `This pattern does not compile: ${t.message}` : undefined;
-    }
-    case 'map': return duplicateKeys(value as MapEntry[]).size ? 'Each key can appear only once' : undefined;
-    case 'list': case 'multiselect':
-      return r.maxItems !== undefined && (value as string[]).length > r.maxItems ? `Use at most ${r.maxItems}` : undefined;
-    default:
-      if (r.pattern && typeof value === 'string' && !new RegExp(r.pattern).test(value)) {
-        return r.patternMessage ?? `${field.label} is not in the expected form`;
-      }
-      return undefined;
-  }
+  const check = typeChecks.get(field.type) ?? patternProblem;
+  return check(value, field.validation ?? {}, field);
 }
 
 export function validate(schema: SettingsSchema, values: FormValues, meta: Record<string, FieldMeta> = {}): Record<string, string> {

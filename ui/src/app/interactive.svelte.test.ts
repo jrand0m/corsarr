@@ -34,6 +34,28 @@ describe('interactive search', () => {
     expect(toPanel(decided('y', true, '1'), 1, 2).rank).toBe(2);
   });
 
+  it('fills gaps in a release with plain fallbacks', () => {
+    const bare = decided('z', true, '1');
+    bare.release.indexers = null;
+    bare.decision.quality = '';
+    bare.decision.reasons = null;
+    const p = toPanel(bare, 0, 3);
+    expect(p.release).toMatchObject({ indexer: 'unknown indexer', quality: 'unknown', seeders: 9, runtimeSeconds: undefined, swarm: undefined, availability: undefined });
+    expect(p).toMatchObject({ verdict: 'accept', rank: 1, candidates: 3, reasons: [], automation: { outcome: 'unavailable', lostTo: undefined } });
+  });
+
+  it('names indexers by name or key and passes swarm, availability and desirability through', () => {
+    const d = decided('w', false, '1');
+    d.release.indexers = [{ key: 'one', name: '' }, { key: 'two', name: 'Two' }];
+    d.swarm = { seeders: 4, reported: true, health: 'good' };
+    d.availability = { status: 'complete' };
+    d.decision.desirability = { score: 1 } as unknown as NonNullable<typeof d.decision.desirability>;
+    const p = toPanel(d, 0, 1, { streaming: true, runtimeSeconds: 1200 });
+    expect(p.release).toMatchObject({ indexer: 'one, Two', runtimeSeconds: 1200, swarm: d.swarm, availability: d.availability });
+    expect(p).toMatchObject({ verdict: 'reject', rank: undefined, candidates: undefined, automation: { outcome: 'declined' } });
+    expect(p.desirability).toBe(d.decision.desirability);
+  });
+
   it('streams records, errors and the summary', async () => {
     const s = new InteractiveSearch(fakeClient([
       { record: decided('a', true, '2') }, { record: decided('b', true, '3') },

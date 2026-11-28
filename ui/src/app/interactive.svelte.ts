@@ -82,23 +82,35 @@ export function outcomeFor(d: Decided, verdict: AutomationVerdict | null | undef
 /** Context a panel needs beyond the release itself. */
 export interface PanelContext { verdict?: AutomationVerdict | null; streaming?: boolean; runtimeSeconds?: number }
 
+/** The release facts of a decided release, with plain words where the indexer left gaps. */
+function panelRelease(d: Decided, runtimeSeconds: number | undefined): PanelDecision['release'] {
+  const r = d.release;
+  return {
+    title: r.title, indexer: (r.indexers ?? []).map((x) => x.name || x.key).join(', ') || 'unknown indexer', protocol: r.protocol,
+    size: r.size, publishedAt: r.publishedAt, seeders: r.protocol === 'torrent' ? r.seeders : undefined, quality: d.decision.quality || 'unknown',
+    runtimeSeconds, swarm: d.swarm ?? undefined, availability: d.availability ?? undefined,
+  };
+}
+
+/** The reasons of a decision as the panel lists them; blocklist rules are marked. */
+const panelReasons = (d: Decided): DecisionReason[] =>
+  (d.decision.reasons ?? []).map((x) => ({ rule: x.ruleId, category: x.category, message: x.message, summary: x.summary, blocklist: x.ruleId.includes('blocklist') }));
+
+/** Why automation picked another release over this one, when the verdict says so. */
+const lostTo = (verdict: AutomationVerdict | null | undefined, id: string): string | undefined => verdict?.outcomes?.[id]?.lostTo?.message;
+
 /** One decided release as the decision panel shows it. */
 export function toPanel(d: Decided, i: number, accepted: number, ctx: PanelContext | number = {}): PanelDecision {
   const c: PanelContext = typeof ctx === 'number' ? { runtimeSeconds: ctx } : ctx;
-  const r = d.release;
-  const outcome = outcomeFor(d, c.verdict, c.streaming ?? false);
+  const ok = d.decision.accepted;
   return {
-    release: {
-      title: r.title, indexer: (r.indexers ?? []).map((x) => x.name || x.key).join(', ') || 'unknown indexer', protocol: r.protocol,
-      size: r.size, publishedAt: r.publishedAt, seeders: r.protocol === 'torrent' ? r.seeders : undefined, quality: d.decision.quality || 'unknown',
-      runtimeSeconds: c.runtimeSeconds, swarm: d.swarm ?? undefined, availability: d.availability ?? undefined,
-    },
-    verdict: d.decision.accepted ? 'accept' : 'reject',
-    rank: d.decision.accepted ? i + 1 : undefined,
-    candidates: d.decision.accepted ? accepted : undefined,
+    release: panelRelease(d, c.runtimeSeconds),
+    verdict: ok ? 'accept' : 'reject',
+    rank: ok ? i + 1 : undefined,
+    candidates: ok ? accepted : undefined,
     score: { total: d.decision.formatScore, formats: [] },
-    reasons: (d.decision.reasons ?? []).map<DecisionReason>((x) => ({ rule: x.ruleId, category: x.category, message: x.message, summary: x.summary, blocklist: x.ruleId.includes('blocklist') })),
-    automation: { outcome, lostTo: c.verdict?.outcomes?.[r.id]?.lostTo?.message },
+    reasons: panelReasons(d),
+    automation: { outcome: outcomeFor(d, c.verdict, c.streaming ?? false), lostTo: lostTo(c.verdict, d.release.id) },
     desirability: d.decision.desirability ?? null,
   };
 }

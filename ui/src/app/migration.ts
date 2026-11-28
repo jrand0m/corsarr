@@ -12,6 +12,9 @@ export const sourceApps: { app: SourceApp; label: string; note: string }[] = [
   { app: 'prowlarr', label: 'Prowlarr', note: 'Indexers' },
 ];
 
+/** The display name of a source app; an app not listed keeps its id. */
+const appLabel = (app: string): string => sourceApps.find((s) => s.app === app)?.label ?? app;
+
 export type Outcome = 'create' | 'update' | 'unchanged' | 'skip' | 'approximate' | 'unsupported' | 'conflict' | 'secretNeeded'
   | 'fileMissing' | 'managedByConfig' | 'gone' | 'failed';
 
@@ -120,7 +123,7 @@ export function sourceProblems(f: RunForm): string[] {
   if (!chosen.length) return ['Choose at least one source.'];
   const out: string[] = [];
   for (const s of chosen) {
-    const label = sourceApps.find((a) => a.app === s.app)?.label ?? s.app;
+    const label = appLabel(s.app);
     if (!/^https?:\/\/[^/]+/.test(s.url.trim())) out.push(`${label}: enter its address, starting with http:// or https://.`);
     if (!s.apiKey.trim()) out.push(`${label}: enter its API key.`);
   }
@@ -166,7 +169,7 @@ export function planFacets(entries: PlanEntry[]): FilterFacet[] {
   return [
     facet('outcome', 'Outcome', (e) => e.outcome, (v) => outcomeView(v as Outcome).label),
     facet('category', 'Category', (e) => e.category, categoryLabel),
-    facet('source', 'Source', (e) => e.source || 'corsarr', (v) => sourceApps.find((s) => s.app === v)?.label ?? v),
+    facet('source', 'Source', (e) => e.source || 'corsarr', appLabel),
   ];
 }
 
@@ -186,19 +189,28 @@ export type StreamLine =
 
 /** Progress per chosen source as the stream goes: running until the summary names its outcome. */
 export function progressOf(apps: SourceApp[], lines: StreamLine[]): SourceProgress[] {
+  const { steps, report } = streamState(lines);
+  return apps.map((app) => sourceProgress(app, steps, report));
+}
+
+/** Progress lines seen per source, and the report once the summary arrived. */
+function streamState(lines: StreamLine[]): { steps: Map<string, number>; report?: MigrationReport } {
   const steps = new Map<string, number>();
   let report: MigrationReport | undefined;
   for (const l of lines) {
     if ('record' in l) steps.set(l.record.progress.source, (steps.get(l.record.progress.source) ?? 0) + 1);
     if ('summary' in l) report = l.summary.report;
   }
-  return apps.map((app) => {
-    const name = sourceApps.find((s) => s.app === app)?.label ?? app;
-    const info = report?.sources?.find((s) => s.app === app);
-    if (info?.error) return { id: app, name, state: 'failed', reason: info.error };
-    if (report) return { id: app, name, state: 'ok', count: report.entries?.filter((e) => e.source === app).length ?? 0 };
-    return { id: app, name, state: steps.has(app) ? 'running' : 'pending' };
-  });
+  return { steps, report };
+}
+
+/** One source's progress: failed or done once the report names it, else running or still waiting. */
+function sourceProgress(app: SourceApp, steps: Map<string, number>, report: MigrationReport | undefined): SourceProgress {
+  const name = appLabel(app);
+  const info = report?.sources?.find((s) => s.app === app);
+  if (info?.error) return { id: app, name, state: 'failed', reason: info.error };
+  if (report) return { id: app, name, state: 'ok', count: (report.entries ?? []).filter((e) => e.source === app).length };
+  return { id: app, name, state: steps.has(app) ? 'running' : 'pending' };
 }
 
 /** Leave an entry out of the apply, or take it back in. */
@@ -369,11 +381,13 @@ export function sourceCheckView(v: CheckView<SourceCheck>): { value: string; det
   if (v.status === 'error' || !v.result) return { value: 'unreachable', detail: `corsarr could not run the check: ${v.error ?? 'no answer'}` };
   const r = v.result;
   const value = ({ keyNeeded: 'key-needed', wrongApp: 'wrong-app' } as Record<string, string>)[r.state] ?? r.state;
-  if (r.state === 'reachable') {
-    const name = r.name || (sourceApps.find((s) => s.app === r.app)?.label ?? r.app);
-    return { value, detail: `${[name, r.version].filter(Boolean).join(' ')} · supported ${r.supported}` };
-  }
-  return { value, detail: r.reason };
+  return { value, detail: r.state === 'reachable' ? reachableDetail(r) : r.reason };
+}
+
+/** "Sonarr 4.0.20 · supported 3.x to 4.x": the name the app reports (else its own), version and supported range. */
+function reachableDetail(r: SourceCheck): string {
+  const name = r.name || appLabel(r.app);
+  return `${[name, r.version].filter(Boolean).join(' ')} · supported ${r.supported}`;
 }
 
 // ── Path rewrite checks ─────────────────────────────────────────────────────
@@ -431,8 +445,7 @@ export function toPrefixView(c: PathCheck, toPrefix: string): CheckLine {
 
 /** The sample: each source root, the path it becomes and whether that exists for corsarr. */
 export function sampleView(c: PathCheck): CheckLine {
-  const items = c.roots.map((r) => `${r.path}${r.rewritten !== r.path ? ` → ${r.rewritten}` : ''}: ${!r.exists ? 'missing' : r.readable ? 'found' : 'found, not readable'}`);
-  for (const s of c.sources) items.push(`${sourceApps.find((a) => a.app === s.app)?.label ?? s.app}: ${s.reason}`);
+  const items = [...c.roots.map(rootLine), ...c.sources.map((s) => `${appLabel(s.app)}: ${s.reason}`)];
   if (!c.roots.length) return { value: 'warn', detail: 'No source root folders to check.', items };
   const missing = c.roots.filter((r) => !r.exists || !r.readable).length;
   let value: CheckLine['value'] = 'warn';
@@ -444,6 +457,10 @@ export function sampleView(c: PathCheck): CheckLine {
     items,
   };
 }
+
+/** "/data/tv → /media/tv: found": a root, the path it becomes when rewritten, and whether corsarr finds and reads it. */
+const rootLine = (r: RootCheck): string =>
+  `${r.path}${r.rewritten !== r.path ? ` → ${r.rewritten}` : ''}: ${!r.exists ? 'missing' : r.readable ? 'found' : 'found, not readable'}`;
 
 // ── Config-managed notice ───────────────────────────────────────────────────
 

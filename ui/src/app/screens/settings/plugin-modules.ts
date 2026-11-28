@@ -12,26 +12,36 @@ export function lockOf(policy: PluginPolicy | undefined, source?: { kind?: strin
   return managedFrom(policy.lockKey || 'plugins.uiInstall', source);
 }
 
+/** The words for each refused module change, by error code; other codes show the server's message. */
+const changeErrors = new Map<string, (message: string) => string>([
+  ['plugins_locked', (m) => `Module changes are off in the config. ${m}`],
+  ['catalogue_changed', () => 'The catalogue now offers another version. Check the new entry and confirm again.'],
+  ['verify_failed', (m) => `The file did not pass the checks: ${m}`],
+  ['incompatible', (m) => `This version does not run on this corsarr: ${m}`],
+  ['no_previous', () => 'There is no previous version to go back to.'],
+  ['modules_unavailable', () => 'Plugin modules are switched off on this server.'],
+  ['catalogue_unreachable', (m) => `The catalogue is not reachable: ${m}`],
+]);
+
 /** The words for a refused module change, by error code. */
 export function changeError(code: string, message: string): string {
-  switch (code) {
-    case 'plugins_locked': return `Module changes are off in the config. ${message}`;
-    case 'catalogue_changed': return 'The catalogue now offers another version. Check the new entry and confirm again.';
-    case 'verify_failed': return `The file did not pass the checks: ${message}`;
-    case 'incompatible': return `This version does not run on this corsarr: ${message}`;
-    case 'no_previous': return 'There is no previous version to go back to.';
-    case 'modules_unavailable': return 'Plugin modules are switched off on this server.';
-    case 'catalogue_unreachable': return `The catalogue is not reachable: ${message}`;
-    default: return message;
-  }
+  const words = changeErrors.get(code);
+  return words ? words(message) : message;
 }
+
+/** "1 host", "2 secrets". */
+const counted = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
+
+/** How many hosts and secrets a module may reach, with the word for one of each. */
+const accessCounts = (p: ModulePermissions | undefined): [number, string][] => [
+  [p?.http?.hosts?.length ?? 0, 'host'],
+  [p?.secrets?.length ?? 0, 'secret'],
+];
 
 /** "2 hosts · 1 secret", "No access". */
 export function permissionSummary(p: ModulePermissions | undefined): string {
-  const h = p?.http?.hosts?.length ?? 0;
-  const s = p?.secrets?.length ?? 0;
-  if (!h && !s) return 'No access';
-  return [h ? `${h} ${h === 1 ? 'host' : 'hosts'}` : '', s ? `${s} ${s === 1 ? 'secret' : 'secrets'}` : ''].filter(Boolean).join(' · ');
+  const parts = accessCounts(p).filter(([n]) => n > 0).map(([n, one]) => counted(n, one));
+  return parts.length ? parts.join(' · ') : 'No access';
 }
 
 /** Field labels by key, for permission wording. */
